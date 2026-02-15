@@ -7,6 +7,8 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #4781 | 5:10 AM | 🔵 | Dashboard.tsx reveals comprehensive cron job management and agent monitoring UI | ~504 |
+| #4777 | 5:09 AM | 🟣 | ErisMornStatus component for real-time backend connection monitoring | ~442 |
 | #4760 | 4:32 AM | 🔴 | Fixed Optional Chaining in CronTrigger Component | ~137 |
 | #4759 | " | 🔴 | QuickActions CronTrigger optional chaining safety fix | ~192 |
 | #4693 | 4:21 AM | 🔵 | AgentControl component provides agent lifecycle management interface | ~510 |

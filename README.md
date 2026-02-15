@@ -27,6 +27,7 @@ A neon-soaked, brutalist interface for managing distributed AI agents, cognitive
 ### Prerequisites
 - Node.js 18+
 - npm or yarn
+- Anthropic API Key (for ErisMorn integration)
 
 ### Installation
 
@@ -35,16 +36,48 @@ A neon-soaked, brutalist interface for managing distributed AI agents, cognitive
 git clone https://github.com/QRcode1337/volta-os.git
 cd volta-os
 
-# Install dependencies
+# Install frontend dependencies
 npm install
 
-# Start development server
+# Install backend dependencies
+cd server
+npm install
+cd ..
+```
+
+### Running the Full Stack
+
+**Option 1 - Quick Start (Recommended):**
+```bash
+./start-dev.sh
+```
+This launches both backend and frontend in one command.
+
+**Option 2 - Manual Launch:**
+
+**Terminal 1 - Backend Server:**
+```bash
+cd server
+npm run dev
+```
+
+**Terminal 2 - Frontend:**
+```bash
 npm run dev
 ```
 
 **URLs**:
 - Frontend: http://localhost:5173
 - Backend API: http://localhost:3001
+
+### Environment Setup
+
+Create `.env` file in the `server/` directory:
+
+```env
+ANTHROPIC_API_KEY=your_api_key_here
+ERISMORN_ROOT=/path/to/your/ErisMorn
+```
 
 ### Build for Production
 
@@ -54,6 +87,24 @@ npm run preview
 ```
 
 ---
+
+## 🔌 ErisMorn Connection
+
+Volta OS connects directly to **ErisMorn**, your COO AI agent, providing real-time operational intelligence:
+
+**Live Data Streams:**
+- ⚡ **13 Autonomous Agents** - SENTINEL, SCOUT, CURATOR, SYNTHESIZER, and more
+- 📊 **Heartbeat Monitoring** - Critical alerts, strategic opportunities, system health
+- 💰 **Financial Tracking** - BTC price, portfolio margin, trading status
+- 🎯 **Decision Feed** - Real-time operational decisions and delegations
+- 📝 **Memory Access** - Read/search across daily logs and agent outputs
+- 🤖 **Agent Control** - Trigger jobs, view outputs, manage automation
+
+**Communication Channels:**
+- Direct chat with ErisMorn's Claude Code session
+- Tool use monitoring (agent status, BTC price, memory search)
+- Standing orders and automation rules
+- Task delegation and triage systems
 
 ## 🧠 Core Features
 

@@ -19,6 +19,7 @@ import IdeasPage from './components/IdeasPage'
 import PrototypesPage from './components/PrototypesPage'
 import ReviewsPage from './components/ReviewsPage'
 import IdeationPage from './components/IdeationPage'
+import { ErisMornStatus } from './components/ErisMornStatus'
 
 type Section = 'brain' | 'labs' | 'ops' | 'command'
 type Tab =

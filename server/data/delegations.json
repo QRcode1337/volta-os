@@ -1,0 +1,14 @@
+{
+  "delegations": [
+    {
+      "id": "1771130100426-hay321",
+      "task": "build CASCADE-DEMO-MATERIALS-OUTLINE-2026-02-14.md",
+      "agentId": "be751e0c-2d14-446a-9061-b6172f6fdfc7",
+      "agentName": "be751e0c-2d14-446a-9061-b6172f6fdfc7",
+      "priority": "normal",
+      "status": "pending",
+      "createdAt": "2026-02-15T04:35:00.426Z",
+      "completedAt": null
+    }
+  ]
+}

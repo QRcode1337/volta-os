@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-dark-border;
+  }
+
+  body {
+    @apply bg-dark-bg text-gray-100;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-dark-card rounded-lg p-4 shadow-lg border border-dark-border;
+  }
+
+  .card-todo {
+    @apply bg-status-todo/10 border-status-todo/30 hover:border-status-todo/50 transition-colors;
+  }
+
+  .card-progress {
+    @apply bg-status-progress/10 border-status-progress/30 hover:border-status-progress/50 transition-colors;
+  }
+
+  .card-done {
+    @apply bg-status-done/10 border-status-done/30 hover:border-status-done/50 transition-colors;
+  }
+
+  .card-archived {
+    @apply bg-status-archived/10 border-status-archived/30 hover:border-status-archived/50 transition-colors;
+  }
+}

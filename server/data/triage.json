@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "id": "1771128635384-yqli45",
+      "source": "heartbeat-strategic",
+      "message": "CASCADE demo window OPEN (Feb 14-16)",
+      "priority": "important",
+      "reasoning": "Auto-populated from heartbeat strategic opportunities",
+      "timestamp": "2026-02-15T04:10:35.384Z"
+    },
+    {
+      "id": "1771128635384-g55k23",
+      "source": "heartbeat-strategic",
+      "message": "VOLTA OS dashboard operational",
+      "priority": "important",
+      "reasoning": "Auto-populated from heartbeat strategic opportunities",
+      "timestamp": "2026-02-15T04:10:35.384Z"
+    },
+    {
+      "id": "1771128635384-ah08fy",
+      "source": "heartbeat-strategic",
+      "message": "13 sub-agents running on local models ($0 cost)",
+      "priority": "important",
+      "reasoning": "Auto-populated from heartbeat strategic opportunities",
+      "timestamp": "2026-02-15T04:10:35.384Z"
+    }
+  ]
+}

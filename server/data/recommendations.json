@@ -1,0 +1,31 @@
+{
+  "recommendations": [
+    {
+      "id": "1771128963947-d81ros",
+      "title": "CASCADE demo window OPEN (Feb 14-16)",
+      "description": "CASCADE demo window OPEN (Feb 14-16)",
+      "source": "heartbeat-auto",
+      "priority": "important",
+      "status": "active",
+      "createdAt": "2026-02-15T04:16:03.947Z"
+    },
+    {
+      "id": "1771128963947-coy7hj",
+      "title": "VOLTA OS dashboard operational",
+      "description": "VOLTA OS dashboard operational",
+      "source": "heartbeat-auto",
+      "priority": "important",
+      "status": "active",
+      "createdAt": "2026-02-15T04:16:03.947Z"
+    },
+    {
+      "id": "1771128963947-ug00fd",
+      "title": "13 sub-agents running on local models ($0 cost)",
+      "description": "13 sub-agents running on local models ($0 cost)",
+      "source": "heartbeat-auto",
+      "priority": "important",
+      "status": "active",
+      "createdAt": "2026-02-15T04:16:03.947Z"
+    }
+  ]
+}

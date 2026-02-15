@@ -7,5 +7,7 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #4847 | 11:13 AM | 🟣 | CASCADE API routes implemented with comprehensive lead and booking management endpoints | ~501 |
+| #4846 | 11:06 AM | 🟣 | Swarm coordination API routes implemented with agent lifecycle management | ~428 |
 | #4836 | 9:07 AM | 🟣 | Memory API routes implemented for AgentForge integration | ~410 |
 </claude-mem-context>

@@ -279,7 +279,7 @@ export default function SynthesisView() {
         return
       }
       const data = await res.json()
-      setPatterns(data.patterns || data || [])
+      setPatterns(Array.isArray(data.patterns) ? data.patterns : Array.isArray(data) ? data : [])
     } catch {
       // Network error or server down — graceful fallback
       setPatterns([])

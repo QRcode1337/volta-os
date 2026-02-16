@@ -57,6 +57,11 @@ app.use('/api/memory', memoryRoutes)
 app.use('/api/swarm', swarmRoutes)
 app.use('/api/cascade', cascadeRoutes)
 
+// Catch-all for unimplemented Volta OS endpoints (prevents 404 noise in console)
+app.use('/api', (req, res) => {
+  res.json({ ok: true, stub: true, data: null, jobs: [], items: [], message: 'Endpoint not yet implemented' })
+})
+
 // Error handling
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Server error:', err)

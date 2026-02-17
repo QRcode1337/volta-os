@@ -87,7 +87,29 @@ class ApiClient {
       body: JSON.stringify(data)
     }),
 
-    reinforce: (memoryId: string, strengthDelta = 0.1) => 
+    unifiedSearch: (data: {
+      query: string
+      agentId?: string
+      threshold?: number
+      limit?: number
+    }) => this.request<{
+      success: boolean
+      results: Array<{
+        id: string
+        source: 'vector' | 'filesystem'
+        content: string
+        similarity: number | null
+        strength: number | null
+        metadata: Record<string, any>
+        created_at: string
+      }>
+      count: number
+    }>('/api/memory/unified-search', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+
+    reinforce: (memoryId: string, strengthDelta = 0.1) =>
       this.request(`/api/memory/reinforce/${memoryId}`, {
         method: 'POST',
         body: JSON.stringify({ strengthDelta })

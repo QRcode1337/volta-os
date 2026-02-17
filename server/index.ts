@@ -13,9 +13,12 @@ import memoryRoutes from './routes/memory.js'
 import swarmRoutes from './routes/swarm.js'
 import cascadeRoutes from './routes/cascade.js'
 import erismornRoutes from './routes/erismorn.js'
+import { startNurtureScheduler } from './jobs/nurtureScheduler.js'
+import { startEmbedder } from './jobs/embedder.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
+const API_STUB_MODE = (process.env.API_STUB_MODE ?? 'true').toLowerCase() === 'true'
 
 // Middleware
 app.use(cors())
@@ -44,6 +47,14 @@ app.use('/api/cascade', cascadeRoutes)
 
 // Catch-all for unimplemented Volta OS endpoints (prevents 404 noise in console)
 app.use('/api', (req, res) => {
+  if (!API_STUB_MODE) {
+    return res.status(404).json({
+      ok: false,
+      error: 'Not Found',
+      path: req.originalUrl
+    })
+  }
+
   res.json({ ok: true, stub: true, data: null, jobs: [], items: [], message: 'Endpoint not yet implemented' })
 })
 
@@ -63,6 +74,9 @@ app.listen(PORT, () => {
   console.log(`🧠 Memory API: http://localhost:${PORT}/api/memory`)
   console.log(`🤖 Swarm API: http://localhost:${PORT}/api/swarm`)
   console.log(`📞 CASCADE API: http://localhost:${PORT}/api/cascade`)
+  console.log(`🧪 API stub mode: ${API_STUB_MODE}`)
+  startNurtureScheduler()
+  startEmbedder()
 })
 
 export default app

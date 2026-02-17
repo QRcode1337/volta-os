@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Monitor, Users, Briefcase, FileText, TrendingUp, RefreshCw, Mic, Brain, FlaskConical, Wrench, FolderOpen, ClipboardList, Lightbulb, Layers, Star, BookOpen, Radio, MessageSquare, GitBranch, ShieldCheck, Sparkles, Activity, Cpu, Target, ArrowRightLeft, DollarSign, Eye, Code } from 'lucide-react'
+import { Monitor, Users, Briefcase, FileText, TrendingUp, RefreshCw, Mic, Brain, FlaskConical, Wrench, FolderOpen, ClipboardList, Lightbulb, Layers, Star, BookOpen, Radio, MessageSquare, GitBranch, ShieldCheck, Sparkles, Activity, Cpu, Target, ArrowRightLeft, DollarSign, Eye, Code, Orbit, Search, Phone } from 'lucide-react'
 import TaskManager from './components/TaskManager'
 import OrgChart from './components/OrgChart'
 import Workspaces from './components/Workspaces'
@@ -20,8 +20,9 @@ import PrototypesPage from './components/PrototypesPage'
 import ReviewsPage from './components/ReviewsPage'
 import IdeationPage from './components/IdeationPage'
 import { ErisMornStatus } from './components/ErisMornStatus'
+import AgentForgePage from './pages/AgentForgePage'
 
-type Section = 'brain' | 'labs' | 'ops' | 'command'
+type Section = 'brain' | 'labs' | 'ops' | 'command' | 'forge'
 type Tab =
   // Brain tabs
   | 'memory' | 'briefs' | 'files' | 'projects' | 'claude-code'
@@ -33,6 +34,8 @@ type Tab =
   | 'task-manager' | 'org-chart' | 'workspaces' | 'docs' | 'agents' | 'observability'
   // Command tabs
   | 'console' | 'decisions' | 'orders' | 'triage' | 'delegations' | 'tokens'
+  // AgentForge tabs
+  | 'vector-galaxy' | 'memory-search' | 'cascade-leads'
 
 interface SidebarItem {
   id: Section
@@ -92,6 +95,16 @@ const sidebarSections: SidebarItem[] = [
       { id: 'triage', label: 'Triage', icon: <Target className="w-4 h-4" /> },
       { id: 'delegations', label: 'Delegations', icon: <ArrowRightLeft className="w-4 h-4" /> },
     ]
+  },
+  {
+    id: 'forge',
+    icon: <Orbit className="w-5 h-5" />,
+    label: 'Forge',
+    tabs: [
+      { id: 'vector-galaxy', label: 'Vector Galaxy', icon: <Sparkles className="w-4 h-4" /> },
+      { id: 'memory-search', label: 'Memory Search', icon: <Search className="w-4 h-4" /> },
+      { id: 'cascade-leads', label: 'CASCADE', icon: <Phone className="w-4 h-4" /> },
+    ]
   }
 ]
 
@@ -101,6 +114,7 @@ const sectionAccent: Record<Section, { border: string; text: string; bg: string;
   labs: { border: 'border-emerald-400/60', text: 'text-emerald-300', bg: 'bg-emerald-500/15', glow: '0 0 20px rgba(0,255,128,0.3)' },
   ops: { border: 'border-cyan-400/60', text: 'text-cyan-300', bg: 'bg-cyan-500/15', glow: '0 0 20px rgba(0,255,255,0.3)' },
   command: { border: 'border-rose-500/60', text: 'text-rose-300', bg: 'bg-rose-500/15', glow: '0 0 20px rgba(255,0,100,0.3)' },
+  forge: { border: 'border-orange-400/60', text: 'text-orange-300', bg: 'bg-orange-500/15', glow: '0 0 20px rgba(255,165,0,0.3)' },
 }
 
 export default function App() {
@@ -196,7 +210,7 @@ export default function App() {
                 <div
                   className="absolute left-0 top-2 bottom-2 w-[2px] rounded-r"
                   style={{
-                    background: `linear-gradient(180deg, transparent, ${section.id === 'brain' ? '#FF00FF' : section.id === 'labs' ? '#00FF80' : section.id === 'ops' ? '#00FFFF' : '#FF006E'}, transparent)`,
+                    background: `linear-gradient(180deg, transparent, ${section.id === 'brain' ? '#FF00FF' : section.id === 'labs' ? '#00FF80' : section.id === 'ops' ? '#00FFFF' : section.id === 'forge' ? '#FFA500' : '#FF006E'}, transparent)`,
                     boxShadow: sAccent.glow,
                   }}
                 />
@@ -268,7 +282,7 @@ export default function App() {
                         <div
                           className="absolute bottom-0 left-2 right-2 h-[1px]"
                           style={{
-                            background: `linear-gradient(90deg, transparent, ${activeSection === 'brain' ? '#FF00FF' : activeSection === 'labs' ? '#00FF80' : activeSection === 'ops' ? '#00FFFF' : '#FF006E'}, transparent)`,
+                            background: `linear-gradient(90deg, transparent, ${activeSection === 'brain' ? '#FF00FF' : activeSection === 'labs' ? '#00FF80' : activeSection === 'ops' ? '#00FFFF' : activeSection === 'forge' ? '#FFA500' : '#FF006E'}, transparent)`,
                             boxShadow: accent.glow,
                           }}
                         />
@@ -365,6 +379,11 @@ export default function App() {
             {activeTab === 'orders' && <StandingOrders />}
             {activeTab === 'triage' && <TriageView />}
             {activeTab === 'delegations' && <DelegationBoard />}
+
+            {/* FORGE Section -- AgentForge x CASCADE */}
+            {(activeTab === 'vector-galaxy' || activeTab === 'memory-search' || activeTab === 'cascade-leads') && (
+              <AgentForgePage initialTab={activeTab} />
+            )}
           </div>
         </main>
 

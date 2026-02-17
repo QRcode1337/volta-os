@@ -1,486 +1,400 @@
-# ⚡ VOLTA OS - Cyberpunk AI Command Center
+# AgentForge x Volta OS x CASCADE Integration
 
-> **Cyberpunk Brutalism dashboard for AI agent orchestration and real-time monitoring**
+**Complete integration of AgentForge persistent memory engine, multi-agent swarm coordination, and CASCADE business automation into Volta OS.**
 
-A neon-soaked, brutalist interface for managing distributed AI agents, cognitive workflows, and intelligent automation. Built with React 19, TypeScript, and a custom cyberpunk design system featuring sharp geometric shapes, RGB split effects, and holographic accents.
+## 🎯 What We Built
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-19.2-61DAFB?style=flat&logo=react&logoColor=black)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-7.3-646CFF?style=flat&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38B2AC?style=flat&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+This integration combines three powerful systems into one unified platform:
 
----
+1. **AgentForge** - Persistent memory engine with vector embeddings and semantic search
+2. **Swarm Coordination** - Multi-agent orchestration with hierarchical/mesh/adaptive topologies
+3. **CASCADE** - Business workflow automation for lead management and nurture sequences
 
-## 🎨 Design System
+## 🏗️ Architecture
 
-**Cyberpunk Brutalism** aesthetic with:
-- **Neon Color Palette**: Pink (#FF00FF), Cyan (#00FFFF), Green (#00FF00) on pure dark (#0D0D0D)
-- **Sharp Geometric Shapes**: Angular clip-paths, no rounded corners (except intentional circles)
-- **Glitch Effects**: RGB split, scanlines, holographic shimmer
-- **GPU-Accelerated Animations**: Transform/opacity only for 60fps performance
-- **Accessibility**: WCAG 2.1 AA compliant, `prefers-reduced-motion` support
+```
+┌─────────────────────────────────────────────────────────┐
+│                     Volta OS Frontend                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │  Vector      │  │  Memory      │  │   CASCADE    │  │
+│  │  Galaxy 3D   │  │  Search UI   │  │  Dashboard   │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+└─────────────────────────────────────────────────────────┘
+                           │
+                    REST API (port 3001)
+                           │
+┌─────────────────────────────────────────────────────────┐
+│                  Express Backend Server                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │   Memory     │  │    Swarm     │  │   CASCADE    │  │
+│  │   Service    │  │  Coordinator │  │   Service    │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+└─────────────────────────────────────────────────────────┘
+                           │
+                   Supabase PostgreSQL
+                           │
+┌─────────────────────────────────────────────────────────┐
+│                  Database with pgvector                  │
+│  ┌──────────┐  ┌────────┐  ┌─────────────────────────┐ │
+│  │ memories │  │ swarms │  │  cascade_leads          │ │
+│  │ agents   │  │        │  │  cascade_bookings       │ │
+│  │          │  │        │  │  cascade_nurture_seq    │ │
+│  └──────────┘  └────────┘  └─────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+```
 
----
+## 🚀 Features
 
-## 🚀 Quick Start
+### 🧠 Memory Engine
+- **Vector Embeddings** - OpenAI text-embedding-3-small (1536 dimensions)
+- **Semantic Search** - HNSW indexing for fast similarity search
+- **Memory Lifecycle** - Store, reinforce, decay, and prune memories
+- **3D Visualization** - Interactive Three.js galaxy view of memory space
+- **Natural Language Search** - Search memories conversationally
+
+### 🤖 Swarm Coordinator
+- **Multi-Agent Orchestration** - Coordinate teams of AI agents
+- **Topology Support** - Hierarchical, mesh, and adaptive strategies
+- **Task Assignment** - Distribute work across swarm members
+- **Performance Tracking** - Monitor agent metrics and optimize
+- **Dynamic Scaling** - Add/remove agents as needed
+
+### 📞 CASCADE Business Automation
+- **Lead Capture** - Missed calls, web forms, referrals
+- **Lead Pipeline** - Track progress from new → contacted → qualified → booked → completed
+- **Conversation History** - Full conversation tracking with timestamps
+- **Booking Management** - Schedule and manage appointments
+- **Nurture Sequences** - Automated multi-channel follow-ups (SMS/email/voice)
+- **Analytics Dashboard** - Real-time conversion metrics
+
+## 📦 Database Schema
+
+**AgentForge Tables:**
+- `memories` - Vector embeddings with HNSW search
+- `agents` - Agent registry
+
+**Swarm Tables:**
+- `swarms` - Swarm configurations and status
+- `swarm_agents` - Agent-swarm relationships and tasks
+
+**CASCADE Tables:**
+- `cascade_leads` - Lead management and pipeline
+- `cascade_bookings` - Appointment scheduling
+- `cascade_nurture_sequences` - Automated follow-up campaigns
+
+## 🛠️ Tech Stack
+
+**Frontend:**
+- React 19 with TypeScript
+- Three.js for 3D visualization
+- Tailwind CSS for styling
+- Lucide React for icons
+- Vite for build tooling
+
+**Backend:**
+- Node.js with Express
+- TypeScript with ES modules
+- Supabase client for database
+- OpenAI API for embeddings
+
+**Database:**
+- PostgreSQL with pgvector extension
+- Supabase for hosting and management
+- HNSW indexing for vector similarity
+
+## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js 18+
-- npm or yarn
-- Anthropic API Key (for ErisMorn integration)
+
+1. **Supabase Project** - Already configured at `https://sezdqsyywtkcgmntdqig.supabase.co`
+2. **OpenAI API Key** - For generating embeddings
+3. **Node.js 18+** - For running the application
 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/QRcode1337/volta-os.git
-cd volta-os
-
-# Install frontend dependencies
+# Install dependencies
 npm install
 
-# Install backend dependencies
-cd server
-npm install
-cd ..
+# Environment is already configured in server/.env
+# (Supabase URL, keys, OpenAI API key)
 ```
 
-### Running the Full Stack
+### Running the Application
 
-**Option 1 - Quick Start (Recommended):**
+**Option 1: Run everything together (recommended)**
 ```bash
-./start-dev.sh
+npm run dev:all
 ```
-This launches both backend and frontend in one command.
-
-**Option 2 - Manual Launch:**
-
-**Terminal 1 - Backend Server:**
-```bash
-cd server
-npm run dev
-```
-
-**Terminal 2 - Frontend:**
-```bash
-npm run dev
-```
-
-**URLs**:
 - Frontend: http://localhost:5173
-- Backend API: http://localhost:3001
+- Backend: http://localhost:3001
 
-### Environment Setup
+**Option 2: Run separately**
+```bash
+# Terminal 1 - Frontend
+npm run dev
 
-Create `.env` file in the `server/` directory:
-
-```env
-ANTHROPIC_API_KEY=your_api_key_here
-ERISMORN_ROOT=/path/to/your/ErisMorn
+# Terminal 2 - Backend
+npm run dev:server
 ```
 
-### Build for Production
+### First-Time Setup
+
+The database schema is already applied to Supabase. To verify:
 
 ```bash
+# Check database schema
+node server/db/verify-schema.mjs
+```
+
+Expected output:
+```
+✅ "memories" table EXISTS
+✅ "agents" table EXISTS
+✅ "swarms" table EXISTS
+✅ "swarm_agents" table EXISTS
+✅ "cascade_leads" table EXISTS
+✅ "cascade_bookings" table EXISTS
+✅ "cascade_nurture_sequences" table EXISTS
+```
+
+## 📡 API Endpoints
+
+### Memory API (`/api/memory`)
+
+```typescript
+POST   /api/memory/store           - Store new memory with embedding
+POST   /api/memory/search          - Semantic similarity search
+POST   /api/memory/reinforce/:id   - Strengthen memory
+POST   /api/memory/decay/:agentId  - Apply temporal decay
+POST   /api/memory/prune/:agentId  - Remove weak memories
+```
+
+### Swarm API (`/api/swarm`)
+
+```typescript
+POST   /api/swarm/create                - Create new swarm
+POST   /api/swarm/add-agent             - Add agent to swarm
+PUT    /api/swarm/:id/status            - Update swarm status
+POST   /api/swarm/assign-task           - Assign task to agent
+GET    /api/swarm/:id                   - Get swarm with agents
+GET    /api/swarm/:id/agents/:status    - Get agents by status
+PUT    /api/swarm/agent/:id/performance - Update performance metrics
+POST   /api/swarm/agent/:id/complete    - Complete task
+```
+
+### CASCADE API (`/api/cascade`)
+
+```typescript
+POST   /api/cascade/lead               - Create new lead
+PUT    /api/cascade/lead/:id           - Update lead
+POST   /api/cascade/lead/:id/message   - Add conversation message
+POST   /api/cascade/booking            - Create booking
+PUT    /api/cascade/booking/:id        - Update booking status
+POST   /api/cascade/nurture            - Schedule nurture message
+GET    /api/cascade/nurture/pending    - Get pending messages
+PUT    /api/cascade/nurture/:id/sent   - Mark message sent
+GET    /api/cascade/lead/phone/:phone  - Get lead by phone
+GET    /api/cascade/leads/:status      - Get leads by status
+GET    /api/cascade/leads              - Get all leads
+```
+
+## 💻 Usage Examples
+
+### Storing a Memory
+
+```typescript
+import { api } from './lib/api'
+
+await api.memory.store({
+  agentId: 'agent-123',
+  content: 'User prefers morning appointments',
+  strength: 1.0,
+  tags: ['preference', 'scheduling'],
+  metadata: { category: 'user-preference' }
+})
+```
+
+### Searching Memories
+
+```typescript
+const results = await api.memory.search({
+  query: 'What time does the user prefer appointments?',
+  agentId: 'agent-123',
+  threshold: 0.7,
+  limit: 10
+})
+
+console.log(results.results) // Array of similar memories
+```
+
+### Creating a Lead
+
+```typescript
+await api.cascade.createLead({
+  phone: '+1-555-0123',
+  name: 'John Doe',
+  source: 'missed_call'
+})
+```
+
+### Creating a Swarm
+
+```typescript
+await api.swarm.create({
+  name: 'Customer Support Team',
+  strategy: 'hierarchical',
+  topology: {
+    type: 'hierarchical',
+    agents: [
+      { id: 'leader-1', role: 'coordinator', connections: [] },
+      { id: 'worker-1', role: 'responder', connections: ['leader-1'] },
+      { id: 'worker-2', role: 'responder', connections: ['leader-1'] }
+    ]
+  }
+})
+```
+
+## 🎨 UI Components
+
+### VectorGalaxy
+3D visualization of memory space using Three.js. Memories are rendered as spheres in 3D space, positioned based on their vector embeddings. Color and opacity represent memory strength.
+
+**Props:**
+- `memories` - Array of memory objects
+- `onMemoryClick` - Callback when memory is clicked
+- `selectedMemoryId` - Currently selected memory
+
+### MemorySearch
+Semantic search interface with filtering and result ranking.
+
+**Props:**
+- `onSearch` - Function to perform search
+- `onResultClick` - Callback for result selection
+
+### LeadDashboard
+Complete lead management interface with pipeline tracking and analytics.
+
+**Props:**
+- `onLoadLeads` - Function to load leads
+- `onLeadClick` - Callback for lead selection
+
+## 📊 Database Functions
+
+### `search_memories()`
+
+PostgreSQL function for vector similarity search:
+
+```sql
+search_memories(
+  query_embedding vector(1536),
+  match_threshold float DEFAULT 0.7,
+  match_count integer DEFAULT 10,
+  filter_agent_id text DEFAULT NULL
+)
+```
+
+Returns memories ranked by cosine similarity with the query embedding.
+
+## 🔐 Environment Variables
+
+**Server (server/.env):**
+```env
+SUPABASE_URL=https://sezdqsyywtkcgmntdqig.supabase.co
+SUPABASE_ANON_KEY=<key>
+SUPABASE_SERVICE_KEY=<key>
+OPENAI_API_KEY=<key>
+ANTHROPIC_API_KEY=<key>
+PORT=3001
+```
+
+**Frontend (.env):**
+```env
+VITE_API_URL=http://localhost:3001
+```
+
+## 🚢 Deployment
+
+### Backend Deployment
+
+The backend can be deployed to any Node.js hosting platform:
+
+```bash
+# Build TypeScript
 npm run build
+
+# Start production server
+NODE_ENV=production node dist/server/index.js
+```
+
+### Frontend Deployment
+
+```bash
+# Build for production
+npm run build
+
+# Preview production build
 npm run preview
 ```
 
----
+The `dist/` folder can be deployed to any static hosting service.
 
-## 🔌 ErisMorn Connection
+## 🧪 Testing
 
-Volta OS connects directly to **ErisMorn**, your COO AI agent, providing real-time operational intelligence:
-
-**Live Data Streams:**
-- ⚡ **13 Autonomous Agents** - SENTINEL, SCOUT, CURATOR, SYNTHESIZER, and more
-- 📊 **Heartbeat Monitoring** - Critical alerts, strategic opportunities, system health
-- 💰 **Financial Tracking** - BTC price, portfolio margin, trading status
-- 🎯 **Decision Feed** - Real-time operational decisions and delegations
-- 📝 **Memory Access** - Read/search across daily logs and agent outputs
-- 🤖 **Agent Control** - Trigger jobs, view outputs, manage automation
-
-**Communication Channels:**
-- Direct chat with ErisMorn's Claude Code session
-- Tool use monitoring (agent status, BTC price, memory search)
-- Standing orders and automation rules
-- Task delegation and triage systems
-
-## 🧠 Core Features
-
-Volta OS is organized into **4 main sections**, each with specialized capabilities:
-
-### 1. **Brain** - Knowledge & Context Management
-
-**Memory**
-- 📚 Long-term agent memory storage and retrieval
-- 🔍 Semantic search across memory archives
-- 📊 Memory usage analytics and optimization
-
-**Claude Code Integration**
-- 💻 Direct integration with Claude Code sessions
-- 🎯 Task orchestration and workflow management
-- 📝 Real-time code collaboration
-
-**Briefs**
-- 📋 Project briefs and context summaries
-- 🎯 Mission objectives and success criteria
-- 📈 Progress tracking and milestones
-
-**Files & Projects**
-- 📁 Integrated file browser with live updates
-- 🗂️ Project workspace management
-- 🔗 Cross-project reference linking
-
----
-
-### 2. **Labs** - Intelligence & Experimentation
-
-**Synthesis**
-- ✨ Cross-agent pattern recognition and insights
-- 🧩 Multi-source data fusion and analysis
-- 📊 Emergent behavior detection
-
-**Intelligence Panel**
-- 🤖 Agent capability mapping and skill trees
-- 📈 Performance metrics and trend analysis
-- 🎯 Strategic recommendations
-
-**Ideas**
-- 💡 Collaborative ideation workspace
-- 🌟 Idea scoring and prioritization
-- 🔄 Iteration tracking and versioning
-
-**Prototypes**
-- 🛠️ Rapid prototyping environment
-- ⚡ A/B testing and experimentation
-- 📊 Results analysis and validation
-
-**Reviews**
-- ⭐ CURATOR synthesis and verdict management
-- 📝 Cross-agent review coordination
-- ✅ Quality gates and approval workflows
-
-**Ideation**
-- 🎨 Creative brainstorming interface
-- 🔀 Concept remixing and combination
-- 🎯 Goal-oriented ideation sessions
-
----
-
-### 3. **Ops** - Operations & Monitoring
-
-**Task Manager**
-- 📋 Multi-agent task orchestration
-- 🔄 Real-time task status (13 agents)
-- ⚡ Priority queuing and load balancing
-- 📊 Task completion analytics
-
-**Agent Control**
-- 🤖 Agent lifecycle management (start/stop/restart)
-- 📊 Health monitoring and diagnostics
-- ⚙️ Configuration and parameter tuning
-- 🔄 Auto-scaling and resource allocation
-
-**Observability Dashboard**
-- 📈 Real-time performance metrics
-- 🎯 System health indicators (CPU, memory, network)
-- ⚡ API latency and token rate monitoring
-- 🚨 Anomaly detection and alerting
-
-**Org Chart**
-- 🏗️ Hierarchical agent structure visualization
-- 👥 Department and role assignments
-- 🔗 Inter-agent dependency mapping
-- 📊 Organizational analytics
-
-**Workspaces**
-- 📁 Project-specific work environments
-- 🌳 File tree navigation with live updates
-- 📊 Activity streams and change logs
-- 🔍 Cross-workspace search
-
-**Token & Cost Tracking**
-- 💰 Real-time token usage monitoring
-- 📊 Cost breakdown by agent and operation
-- 📈 Usage trends and forecasting
-- ⚠️ Budget alerts and optimization suggestions
-
-**Documentation**
-- 📚 Auto-generated system documentation
-- 📝 API reference and usage examples
-- 🎯 Quick reference guides
-- 🔄 Live documentation updates
-
----
-
-### 4. **Command** - Control & Decision Making
-
-**ErisMorn Console**
-- 💬 Direct communication with ErisMorn main session
-- ⚡ Command execution and scripting
-- 📊 Console history and replay
-- 🎯 Macro and automation support
-
-**Decision Feed**
-- 🎯 Real-time decision stream from all agents
-- 📊 Decision impact analysis
-- 🔄 Decision replay and reversal
-- 📈 Decision quality metrics
-
-**Standing Orders**
-- 📜 Persistent agent directives and policies
-- ⚙️ Rule-based automation triggers
-- 🔄 Order versioning and audit trails
-- 🎯 Priority and conflict resolution
-
-**Triage**
-- 🚨 Critical issue prioritization
-- 🎯 Intelligent routing and assignment
-- ⏱️ SLA tracking and escalation
-- 📊 Triage metrics and patterns
-
-**Delegations**
-- 🔀 Task delegation and assignment
-- 👥 Workload distribution across agents
-- 📊 Delegation effectiveness tracking
-- ⚡ Auto-delegation rules
-
----
-
-## 🎨 Component Library
-
-### Core Cyber Components
-
-**CyberCard**
-```tsx
-import { CyberCard } from './components/cyber'
-
-<CyberCard variant="cyan" glow scanlines holographic>
-  Content here
-</CyberCard>
-```
-- Variants: `pink` | `cyan` | `green`
-- Props: `glow`, `scanlines`, `holographic`
-
-**CyberButton**
-```tsx
-import { CyberButton } from './components/cyber'
-
-<CyberButton variant="primary" glitch onClick={handleClick}>
-  EXECUTE
-</CyberButton>
-```
-- Variants: `primary` | `secondary` | `danger`
-- Props: `glitch` (enables hover effect)
-
-**StatusBadge**
-```tsx
-import { StatusBadge } from './components/cyber'
-
-<StatusBadge status="active" pulse>
-  ONLINE
-</StatusBadge>
-```
-- Status: `active` | `idle` | `error` | `warning`
-- Pulsing neon indicator
-
-**CyberInput**
-```tsx
-import { CyberInput } from './components/cyber'
-
-<CyberInput
-  label="API Key"
-  placeholder="Enter key..."
-  error={validationError}
-/>
-```
-
-### Loading States
-
-**SkeletonCard** - Neon-pulsing placeholder
-**CyberSpinner** - Holographic dual-ring spinner
-**CyberProgress** - Gradient animated progress bar
-
-### Data Visualization
-
-**RealtimeChart**
-```tsx
-import { RealtimeChart } from './components/charts'
-
-<RealtimeChart
-  title="System Load"
-  color="cyan"
-  dataSource={() => getMetric()}
-/>
-```
-
-**AgentStatusGrid** - 13 agent monitoring cards with live status
-**MetricsDashboard** - 6-panel performance metrics with sparklines
-
----
-
-## 🛠️ Tech Stack
-
-### Frontend
-- **React 19.2** - Latest features including `use()` hook
-- **TypeScript 5.9** - Full type safety
-- **Vite 7.3** - Lightning-fast HMR
-- **Tailwind CSS 3.4** - Utility-first styling
-- **Framer Motion 12** - Fluid animations
-- **ApexCharts 5.4** - Real-time data visualization
-- **Lucide React** - Icon system
-
-### Backend
-- **Express** - RESTful API server
-- **TypeScript** - Type-safe backend
-- **ErisMorn Integration** - Direct AI agent communication
-
-### Development
-- **ESLint** - Code quality
-- **PostCSS** - CSS processing
-- **Autoprefixer** - Browser compatibility
-
----
-
-## 📁 Project Structure
-
-```
-volta-os/
-├── src/
-│   ├── components/
-│   │   ├── cyber/              # Cyberpunk component library
-│   │   │   ├── CyberCard.tsx
-│   │   │   ├── CyberButton.tsx
-│   │   │   ├── StatusBadge.tsx
-│   │   │   ├── CyberInput.tsx
-│   │   │   └── LoadingStates.tsx
-│   │   ├── charts/             # Data visualization
-│   │   │   ├── RealtimeChart.tsx
-│   │   │   ├── AgentStatusGrid.tsx
-│   │   │   └── MetricsDashboard.tsx
-│   │   ├── Brain section/      # Memory, files, projects
-│   │   ├── Labs section/       # Intelligence, synthesis
-│   │   ├── Ops section/        # Tasks, agents, monitoring
-│   │   └── Command section/    # Console, decisions, triage
-│   ├── styles/
-│   │   ├── cyberpunk.css       # Animations & utilities
-│   │   └── index.css           # Global styles
-│   ├── hooks/                  # React hooks
-│   ├── lib/                    # Utilities
-│   ├── App.tsx                 # Main app shell
-│   └── main.tsx                # Entry point
-├── server/                     # Backend API
-├── docs/
-│   └── CYBERPUNK_DESIGN_SYSTEM.md
-├── tailwind.config.js          # Cyberpunk color tokens
-└── package.json
-```
-
----
-
-## 🎯 API Endpoints
-
-### Agent Operations
-- `GET /api/cron-jobs` - Fetch all agent statuses (SENTINEL, SCOUT, CURATOR, etc.)
-- `POST /api/trigger-job/:jobId` - Execute agent task
-- `GET /api/heartbeat-state` - Current system state
-
-### Data & Metrics
-- `GET /api/btc-price` - Real-time BTC price ticker
-- `GET /api/token-usage` - Token consumption analytics
-- `GET /api/decisions` - Decision feed
-- `GET /api/delegations` - Task delegation status
-
-### Communication
-- `POST /api/send-message` - Send message to ErisMorn main session
-- `GET /api/chat-history` - Conversation history
-
----
-
-## 🎨 Design System Documentation
-
-See [docs/CYBERPUNK_DESIGN_SYSTEM.md](docs/CYBERPUNK_DESIGN_SYSTEM.md) for:
-- Complete color palette and usage
-- Typography scale (Fira Code + Fira Sans)
-- Animation keyframes and effects
-- Component patterns and examples
-- Accessibility guidelines
-- Performance optimization
-
----
-
-## 🧪 Development
-
-### Available Scripts
-
+Health check endpoint:
 ```bash
-npm run dev          # Start dev server (port 5173)
-npm run build        # Production build
-npm run preview      # Preview production build
-npm run lint         # Run ESLint
+curl http://localhost:3001/health
 ```
 
-### Environment Variables
-
-Create `.env` file:
-```env
-VITE_API_URL=http://localhost:3001
-VITE_ERISMORN_ENDPOINT=...
+Expected response:
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-02-15T...",
+  "services": {
+    "memory": "ready",
+    "swarm": "ready",
+    "cascade": "ready"
+  }
+}
 ```
 
-### Adding New Components
+## 📝 Git Commits
 
-1. Create component in `src/components/cyber/`
-2. Export from `src/components/cyber/index.ts`
-3. Use cyberpunk design tokens from `tailwind.config.js`
-4. Follow GPU-accelerated animation patterns
+Complete implementation history:
 
----
+1. `8bfbc29` - Supabase setup and environment
+2. `d4b0430` - Agent memories schema (discovered already exists)
+3. `d48491d` - Swarms and CASCADE schema + migration
+4. `b202b05` - Memory Engine implementation
+5. `3ff4bc7` - Swarm and CASCADE services
+6. `cb466d7` - Frontend components
+7. `8c00055` - API integration and server
+8. `93edb9d` - Final integration with working server
 
-## 📸 Screenshots
+## 🎯 What's Next
 
-> **Coming Soon**: Screenshots showcasing the cyberpunk aesthetic
+Potential enhancements:
 
----
+- **Real-time Updates** - Supabase WebSocket subscriptions
+- **Authentication** - User accounts and permissions
+- **Swarm Visualization** - 3D topology viewer
+- **Advanced Analytics** - Conversion funnels and metrics
+- **Mobile App** - React Native implementation
+- **Voice Integration** - Twilio for CASCADE phone calls
+- **Email Integration** - SendGrid for nurture sequences
 
-## 🤝 Contributing
+## 🙏 Credits
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-This project is private and proprietary.
-
----
-
-## 🙏 Acknowledgments
-
-- **Design Inspiration**: Cyberpunk 2077, Blade Runner, Ghost in the Shell
-- **UI/UX Research**: [UI/UX Pro Max](https://github.com/yourusername/ui-ux-pro-max) design intelligence toolkit
-- **Typography**: Fira Code & Fira Sans font families
+Built using:
+- [Supabase](https://supabase.com) - Database and backend
+- [OpenAI](https://openai.com) - Embeddings API
+- [Three.js](https://threejs.org) - 3D visualization
+- [React](https://react.dev) - UI framework
+- [Tailwind CSS](https://tailwindcss.com) - Styling
 
 ---
 
-## 🔮 Roadmap
-
-- [ ] GitHub Pages deployment
-- [ ] Real-time WebSocket updates
-- [ ] Agent swarm visualization (3D graph)
-- [ ] Voice command interface
-- [ ] Mobile-responsive breakpoints
-- [ ] Dark/Light mode toggle (with cyberpunk light variant)
-- [ ] Export metrics to external monitoring (Grafana, Datadog)
-- [ ] Plugin system for custom agent types
-
----
-
-**⚡ VOLTA OS** - Where AI meets Cyberpunk Brutalism
-
-🍎 *All hail Discordia*
+**Status:** ✅ Complete and working
+**Branch:** `feature/agentforge-cascade-integration`
+**Date:** February 15, 2026

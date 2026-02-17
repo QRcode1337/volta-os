@@ -1,0 +1,66 @@
+{
+  "workspace": "~/ErisMorn",
+  "memoryRoot": "~/ErisMorn/memory",
+  "agents": [
+    {
+      "id": "scout",
+      "name": "SCOUT",
+      "directory": "scout",
+      "type": "discovery",
+      "description": "Discovers new opportunities and information"
+    },
+    {
+      "id": "sentinel",
+      "name": "SENTINEL",
+      "directory": "sentinel",
+      "type": "monitoring",
+      "description": "Monitors systems and detects anomalies"
+    },
+    {
+      "id": "synthesizer",
+      "name": "SYNTHESIZER",
+      "directory": "synthesis",
+      "type": "analysis",
+      "description": "Synthesizes patterns from raw data"
+    },
+    {
+      "id": "curator",
+      "name": "CURATOR",
+      "directory": "curated",
+      "type": "curation",
+      "description": "Reviews and curates information"
+    },
+    {
+      "id": "builder",
+      "name": "BUILDER",
+      "directory": "builder",
+      "type": "creation",
+      "description": "Builds prototypes and implementations"
+    }
+  ],
+  "dataSources": [
+    {
+      "type": "filesystem",
+      "path": "~/ErisMorn/memory",
+      "dirs": ["scout", "sentinel", "synthesis", "curated", "builder", "shared", "strategy"]
+    },
+    {
+      "type": "claude-code",
+      "path": "~/.claude"
+    },
+    {
+      "type": "openclaw",
+      "path": "~/ErisMorn/.openclaw-flow"
+    }
+  ],
+  "vectorStore": {
+    "provider": "supabase",
+    "embeddingModel": "text-embedding-3-small",
+    "dimensions": 1536
+  },
+  "embedder": {
+    "enabled": true,
+    "pollIntervalMs": 60000,
+    "maxContentLength": 8000
+  }
+}

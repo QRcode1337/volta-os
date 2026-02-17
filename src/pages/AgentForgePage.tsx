@@ -43,9 +43,31 @@ export default function AgentForgePage({ initialTab }: AgentForgePageProps) {
     try {
       await api.health()
       setConnected(true)
+      fetchMemories()
     } catch (error) {
       console.error('Backend not connected:', error)
       setConnected(false)
+    }
+  }
+
+  const fetchMemories = async () => {
+    setLoading(true)
+    try {
+      const response = await api.memory.list({ limit: 200 })
+      setMemories(response.memories.map(m => ({
+        id: m.id,
+        agent_id: m.agent_id,
+        content: m.content,
+        embedding: [], // not fetched — VectorGalaxy uses random projection for position
+        strength: m.strength,
+        tags: m.tags || [],
+        created_at: m.created_at,
+        last_accessed: m.last_accessed
+      })))
+    } catch (error) {
+      console.error('Failed to fetch memories:', error)
+    } finally {
+      setLoading(false)
     }
   }
 

@@ -1,4 +1,5 @@
 import express from 'express'
+import { supabase } from '../lib/supabase'
 import {
   storeMemory,
   searchMemories,
@@ -8,6 +9,38 @@ import {
 } from '../services/memory'
 
 const router = express.Router()
+
+/**
+ * GET /api/memory/all
+ * List all memories (without raw embeddings to save bandwidth)
+ */
+router.get('/all', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 200, 1000)
+    const agentId = req.query.agentId as string | undefined
+
+    let query = supabase
+      .from('agent_memories')
+      .select('id, agent_id, content, strength, metadata, tags, created_at, last_accessed, decay_rate')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+
+    if (agentId) {
+      query = query.eq('agent_id', agentId)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      return res.status(500).json({ error: error.message })
+    }
+
+    res.json({ success: true, memories: data || [], count: data?.length || 0 })
+  } catch (error: any) {
+    console.error('List memories error:', error)
+    res.status(500).json({ error: error.message })
+  }
+})
 
 /**
  * POST /api/memory/store

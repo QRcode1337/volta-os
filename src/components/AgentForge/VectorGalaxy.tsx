@@ -17,13 +17,31 @@ interface VectorGalaxyProps {
   selectedMemoryId?: string
 }
 
+// Deterministic hash for positioning when embeddings are absent
+function hashString(str: string): number {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0
+  }
+  return hash
+}
+
+function seededRandom(seed: number): () => number {
+  let s = seed
+  return () => {
+    s = (s * 16807 + 0) % 2147483647
+    return (s - 1) / 2147483646
+  }
+}
+
 export default function VectorGalaxy({ memories, onMemoryClick, selectedMemoryId }: VectorGalaxyProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<THREE.Scene | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const controlsRef = useRef<OrbitControls | null>(null)
-  const pointsRef = useRef<THREE.Points[]>([])
+  const meshesRef = useRef<THREE.Mesh[]>([])
+  const rafRef = useRef<number>(0)
   const [hoveredMemory, setHoveredMemory] = useState<Memory | null>(null)
 
   useEffect(() => {
@@ -68,7 +86,7 @@ export default function VectorGalaxy({ memories, onMemoryClick, selectedMemoryId
 
     // Animation loop
     const animate = () => {
-      requestAnimationFrame(animate)
+      rafRef.current = requestAnimationFrame(animate)
       controls.update()
       renderer.render(scene, camera)
     }
@@ -85,56 +103,71 @@ export default function VectorGalaxy({ memories, onMemoryClick, selectedMemoryId
 
     // Cleanup
     return () => {
+      cancelAnimationFrame(rafRef.current)
       window.removeEventListener('resize', handleResize)
+      controls.dispose()
       renderer.dispose()
-      containerRef.current?.removeChild(renderer.domElement)
+      if (containerRef.current?.contains(renderer.domElement)) {
+        containerRef.current.removeChild(renderer.domElement)
+      }
     }
   }, [])
 
   // Render memory points
   useEffect(() => {
-    if (!sceneRef.current || memories.length === 0) return
+    if (!sceneRef.current) return
 
-    // Clear existing points
-    pointsRef.current.forEach(point => sceneRef.current?.remove(point))
-    pointsRef.current = []
+    // Dispose and remove old meshes
+    for (const mesh of meshesRef.current) {
+      sceneRef.current.remove(mesh)
+      mesh.geometry.dispose()
+      const mat = mesh.material
+      if (Array.isArray(mat)) mat.forEach(m => m.dispose())
+      else mat.dispose()
+    }
+    meshesRef.current = []
 
-    // Use PCA to reduce embeddings to 3D (simplified - just take first 3 dimensions)
+    if (memories.length === 0) return
+
+    // Shared geometry for all points (reuse instead of creating per-memory)
+    const sharedGeometry = new THREE.SphereGeometry(0.5, 16, 16)
+
     memories.forEach(memory => {
-      const geometry = new THREE.SphereGeometry(0.5, 16, 16)
-      
       // Color based on strength (weak = blue, strong = cyan)
       const color = new THREE.Color().setHSL(0.55, 1, 0.3 + memory.strength * 0.4)
+      const isSelected = memory.id === selectedMemoryId
       const material = new THREE.MeshPhongMaterial({
         color,
         emissive: color,
-        emissiveIntensity: memory.strength,
+        emissiveIntensity: isSelected ? 1.5 : memory.strength,
         transparent: true,
-        opacity: 0.6 + memory.strength * 0.4
+        opacity: isSelected ? 1 : 0.6 + memory.strength * 0.4
       })
 
-      const mesh = new THREE.Mesh(geometry, material)
+      const mesh = new THREE.Mesh(sharedGeometry, material)
 
-      // Position based on embedding (simplified 3D projection)
+      // Position: use embedding if available, otherwise deterministic hash
       const scale = 30
-      mesh.position.x = (memory.embedding[0] || 0) * scale
-      mesh.position.y = (memory.embedding[1] || 0) * scale
-      mesh.position.z = (memory.embedding[2] || 0) * scale
-
-      // Store memory data
-      mesh.userData = { memory }
-
-      sceneRef.current?.add(mesh)
-      pointsRef.current.push(mesh as any)
-
-      // Highlight selected memory
-      if (memory.id === selectedMemoryId) {
-        const selectedMaterial = material.clone()
-        selectedMaterial.emissiveIntensity = 1.5
-        selectedMaterial.opacity = 1
-        mesh.material = selectedMaterial
+      if (memory.embedding && memory.embedding.length >= 3) {
+        mesh.position.x = memory.embedding[0] * scale
+        mesh.position.y = memory.embedding[1] * scale
+        mesh.position.z = memory.embedding[2] * scale
+      } else {
+        const rng = seededRandom(hashString(memory.id || memory.content))
+        mesh.position.x = (rng() - 0.5) * scale * 2
+        mesh.position.y = (rng() - 0.5) * scale * 2
+        mesh.position.z = (rng() - 0.5) * scale * 2
       }
+
+      mesh.userData = { memory }
+      sceneRef.current?.add(mesh)
+      meshesRef.current.push(mesh)
     })
+
+    // Cleanup shared geometry when effect reruns (materials disposed above per-mesh)
+    return () => {
+      sharedGeometry.dispose()
+    }
   }, [memories, selectedMemoryId])
 
   // Handle click interaction
@@ -200,7 +233,7 @@ export default function VectorGalaxy({ memories, onMemoryClick, selectedMemoryId
             Strength: {(hoveredMemory.strength * 100).toFixed(0)}%
           </p>
           <p className="text-gray-300 text-sm line-clamp-3">{hoveredMemory.content}</p>
-          {hoveredMemory.tags.length > 0 && (
+          {hoveredMemory.tags && hoveredMemory.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
               {hoveredMemory.tags.map(tag => (
                 <span key={tag} className="text-xs text-cyan-400 bg-cyan-900/30 px-2 py-1 rounded">
@@ -209,6 +242,16 @@ export default function VectorGalaxy({ memories, onMemoryClick, selectedMemoryId
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {memories.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="text-center">
+            <p className="text-gray-500 text-lg font-mono">No memories stored yet</p>
+            <p className="text-gray-600 text-sm mt-1">Use the Memory API to store your first memory</p>
+          </div>
         </div>
       )}
 
@@ -222,6 +265,9 @@ export default function VectorGalaxy({ memories, onMemoryClick, selectedMemoryId
         <div className="flex items-center gap-2 text-xs text-gray-400 mt-1">
           <div className="w-3 h-3 rounded-full bg-cyan-400" />
           <span>Strong</span>
+        </div>
+        <div className="text-xs text-gray-500 mt-2 font-mono">
+          {memories.length} memories
         </div>
       </div>
     </div>

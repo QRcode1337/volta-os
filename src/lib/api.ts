@@ -31,6 +31,27 @@ class ApiClient {
 
   // Memory API
   memory = {
+    list: (options?: { agentId?: string; limit?: number }) =>
+      this.request<{
+        success: boolean
+        memories: Array<{
+          id: string
+          agent_id: string
+          content: string
+          strength: number
+          tags: string[] | null
+          metadata: Record<string, any>
+          created_at: string
+          last_accessed: string
+          decay_rate: number
+        }>
+        count: number
+      }>(`/api/memory/all${options ? `?${new URLSearchParams(
+        Object.fromEntries(
+          Object.entries(options).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])
+        )
+      ).toString()}` : ''}`),
+
     store: (data: {
       agentId: string
       content: string

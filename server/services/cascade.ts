@@ -1,10 +1,18 @@
 import { supabase } from '../lib/supabase'
+import type { Database } from '../types/supabase'
 
 export type LeadSource = 'missed_call' | 'web_form' | 'referral'
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'booking' | 'booked' | 'completed' | 'lost'
 export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled'
 export type NurtureChannel = 'sms' | 'email' | 'voice'
 export type SequenceType = 'booking_reminder' | 'follow_up' | 'reengagement'
+type Lead = Database['public']['Tables']['cascade_leads']['Row']
+type NurtureMessage = Database['public']['Tables']['cascade_nurture_sequences']['Row']
+
+function isMissingRpcFunctionError(error: { message?: string } | null): boolean {
+  if (!error?.message) return false
+  return /could not find the function|schema cache/i.test(error.message)
+}
 
 export interface CreateLeadOptions {
   phone: string
@@ -95,7 +103,20 @@ export async function addConversationMessage(
   leadId: string,
   message: { role: 'user' | 'assistant'; content: string; timestamp: string }
 ) {
-  // Get current conversation history
+  const { data, error } = await supabase.rpc('append_cascade_conversation_message', {
+    p_lead_id: leadId,
+    p_message: message
+  })
+
+  if (error && !isMissingRpcFunctionError(error)) {
+    throw new Error(`Failed to add message: ${error.message}`)
+  }
+
+  if (!error && data) {
+    return data as Lead
+  }
+
+  // Backward-compatible fallback when migration 003 has not been applied yet.
   const { data: lead, error: fetchError } = await supabase
     .from('cascade_leads')
     .select('conversation_history')
@@ -109,8 +130,7 @@ export async function addConversationMessage(
   const history = (lead.conversation_history as any[]) || []
   history.push(message)
 
-  // Update with new history
-  const { data, error } = await supabase
+  const { data: updated, error: updateError } = await supabase
     .from('cascade_leads')
     .update({
       conversation_history: history,
@@ -120,11 +140,11 @@ export async function addConversationMessage(
     .select()
     .single()
 
-  if (error) {
-    throw new Error(`Failed to add message: ${error.message}`)
+  if (updateError) {
+    throw new Error(`Failed to add message: ${updateError.message}`)
   }
 
-  return data
+  return updated
 }
 
 /**
@@ -222,21 +242,34 @@ export async function getPendingNurtureMessages() {
  * Mark nurture message as sent with response
  */
 export async function markMessageSent(messageId: string, response?: Record<string, any>) {
-  const { data, error } = await supabase
-    .from('cascade_nurture_sequences')
-    .update({
-      sent: true,
-      response
-    })
-    .eq('id', messageId)
-    .select()
-    .single()
+  const { data, error } = await supabase.rpc('mark_nurture_message_sent_if_pending', {
+    p_message_id: messageId,
+    p_response: response || null
+  })
 
-  if (error) {
+  if (error && !isMissingRpcFunctionError(error)) {
     throw new Error(`Failed to mark message sent: ${error.message}`)
   }
 
-  return data
+  if (!error) {
+    return (data as NurtureMessage | null) || null
+  }
+
+  const { data: updatedRows, error: fallbackError } = await supabase
+    .from('cascade_nurture_sequences')
+    .update({
+      sent: true,
+      response: response || null
+    })
+    .eq('id', messageId)
+    .eq('sent', false)
+    .select()
+
+  if (fallbackError) {
+    throw new Error(`Failed to mark message sent: ${fallbackError.message}`)
+  }
+
+  return updatedRows?.[0] || null
 }
 
 /**
@@ -268,6 +301,22 @@ export async function getLeadsByStatus(status: LeadStatus) {
 
   if (error) {
     throw new Error(`Failed to get leads: ${error.message}`)
+  }
+
+  return data
+}
+
+/**
+ * Get all leads in one query
+ */
+export async function getAllLeads() {
+  const { data, error } = await supabase
+    .from('cascade_leads')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(`Failed to get all leads: ${error.message}`)
   }
 
   return data

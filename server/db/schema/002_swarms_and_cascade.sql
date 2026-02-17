@@ -78,11 +78,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS swarms_updated_at ON swarms;
 CREATE TRIGGER swarms_updated_at
   BEFORE UPDATE ON swarms
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS cascade_leads_updated_at ON cascade_leads;
 CREATE TRIGGER cascade_leads_updated_at
   BEFORE UPDATE ON cascade_leads
   FOR EACH ROW

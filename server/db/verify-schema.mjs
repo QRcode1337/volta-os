@@ -15,8 +15,7 @@ async function verifySchema() {
   console.log('🔍 Verifying AgentForge x CASCADE schema in Supabase...\n')
 
   const tables = [
-    'memories',
-    'agents',
+    'agent_memories',
     'swarms',
     'swarm_agents',
     'cascade_leads',

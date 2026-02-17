@@ -153,10 +153,11 @@ async function runEmbedderTick() {
  */
 export function startEmbedder() {
   const manifest = loadManifest()
-  const enabled = (process.env.FORGE_EMBEDDER_ENABLED || 'false').toLowerCase() === 'true' || manifest.embedder.enabled
+  const envEnabled = process.env.FORGE_EMBEDDER_ENABLED?.toLowerCase()
+  const enabled = envEnabled === 'true' ? true : envEnabled === 'false' ? false : manifest.embedder.enabled
 
   if (!enabled) {
-    console.log('⏸️  FORGE embedder disabled (set FORGE_EMBEDDER_ENABLED=true or enable in manifest)')
+    console.log('⏸️  FORGE embedder disabled (set FORGE_EMBEDDER_ENABLED=true to force-enable)')
     return () => undefined
   }
 

@@ -7,7 +7,8 @@ import {
   searchMemories,
   reinforceMemory,
   applyDecay,
-  pruneWeakMemories
+  pruneWeakMemories,
+  resolveMemoryTableName
 } from '../services/memory'
 
 const ERISMORN_ROOT = process.env.ERISMORN_ROOT || '/Users/patrickgallowaypro/ErisMorn'
@@ -23,9 +24,10 @@ router.get('/all', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit as string) || 200, 1000)
     const agentId = req.query.agentId as string | undefined
+    const memoryTable = await resolveMemoryTableName()
 
-    let query = supabase
-      .from('agent_memories')
+    let query = (supabase as any)
+      .from(memoryTable)
       .select('id, agent_id, content, strength, metadata, tags, created_at, last_accessed, decay_rate')
       .order('created_at', { ascending: false })
       .limit(limit)

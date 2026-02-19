@@ -198,6 +198,27 @@ export interface Database {
       }
     }
     Functions: {
+      append_cascade_conversation_message: {
+        Args: {
+          p_lead_id: string
+          p_message: Json
+        }
+        Returns: Database['public']['Tables']['cascade_leads']['Row'] | null
+      }
+      mark_nurture_message_sent_if_pending: {
+        Args: {
+          p_message_id: string
+          p_response?: Json
+        }
+        Returns: Database['public']['Tables']['cascade_nurture_sequences']['Row'] | null
+      }
+      reinforce_agent_memory: {
+        Args: {
+          p_memory_id: string
+          p_strength_delta: number
+        }
+        Returns: Database['public']['Tables']['agent_memories']['Row'] | null
+      }
       search_memories: {
         Args: {
           query_embedding: number[]

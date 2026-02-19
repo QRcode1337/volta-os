@@ -6,6 +6,38 @@ type Memory = Database['public']['Tables']['agent_memories']['Row']
 type MemoryInsert = Database['public']['Tables']['agent_memories']['Insert']
 type MemoryUpdate = Database['public']['Tables']['agent_memories']['Update']
 
+function isMissingRpcFunctionError(error: { message?: string } | null): boolean {
+  if (!error?.message) return false
+  return /could not find the function|schema cache/i.test(error.message)
+}
+
+let resolvedMemoryTable: 'agent_memories' | 'memories' | null = null
+
+function isMissingTableError(error: { message?: string } | null): boolean {
+  if (!error?.message) return false
+  return /could not find the table|relation .* does not exist|schema cache/i.test(error.message)
+}
+
+export async function resolveMemoryTableName(): Promise<'agent_memories' | 'memories'> {
+  if (resolvedMemoryTable) {
+    return resolvedMemoryTable
+  }
+
+  const preferredCheck = await supabase.from('agent_memories').select('id').limit(1)
+  if (!preferredCheck.error) {
+    resolvedMemoryTable = 'agent_memories'
+    return resolvedMemoryTable
+  }
+
+  const legacyCheck = await (supabase as any).from('memories').select('id').limit(1)
+  if (!legacyCheck.error) {
+    resolvedMemoryTable = 'memories'
+    return resolvedMemoryTable
+  }
+
+  throw new Error(preferredCheck.error?.message || legacyCheck.error?.message || 'No memory table found')
+}
+
 export interface StoreMemoryOptions {
   agentId: string
   content: string
@@ -35,12 +67,14 @@ export async function storeMemory(options: StoreMemoryOptions): Promise<Memory> 
     decayRate = 0.1
   } = options
 
+  const memoryTable = await resolveMemoryTableName()
+
   // Generate embedding for the content
   const embedding = await generateEmbedding(content)
 
   // Insert into database
-  const { data, error } = await supabase
-    .from('agent_memories')
+  const { data, error } = await (supabase as any)
+    .from(memoryTable)
     .insert({
       agent_id: agentId,
       content,
@@ -93,9 +127,23 @@ export async function searchMemories(options: SearchMemoriesOptions) {
  * Update memory strength (for reinforcement)
  */
 export async function reinforceMemory(memoryId: string, strengthDelta: number): Promise<Memory> {
-  // Get current memory
-  const { data: current, error: fetchError } = await supabase
-    .from('agent_memories')
+  const { data, error } = await supabase.rpc('reinforce_agent_memory', {
+    p_memory_id: memoryId,
+    p_strength_delta: strengthDelta
+  })
+
+  if (error && !isMissingRpcFunctionError(error)) {
+    throw new Error(`Failed to reinforce memory: ${error.message}`)
+  }
+
+  if (!error && data) {
+    return data as Memory
+  }
+
+  // Backward-compatible fallback when migration 003 has not been applied yet.
+  const memoryTable = await resolveMemoryTableName()
+  const { data: current, error: fetchError } = await (supabase as any)
+    .from(memoryTable)
     .select('strength')
     .eq('id', memoryId)
     .single()
@@ -104,12 +152,10 @@ export async function reinforceMemory(memoryId: string, strengthDelta: number): 
     throw new Error(`Failed to fetch memory: ${fetchError.message}`)
   }
 
-  // Calculate new strength (capped at 1.0)
   const newStrength = Math.min(1.0, current.strength + strengthDelta)
 
-  // Update memory
-  const { data, error } = await supabase
-    .from('agent_memories')
+  const { data: updated, error: updateError } = await (supabase as any)
+    .from(memoryTable)
     .update({
       strength: newStrength,
       last_accessed: new Date().toISOString()
@@ -118,19 +164,20 @@ export async function reinforceMemory(memoryId: string, strengthDelta: number): 
     .select()
     .single()
 
-  if (error) {
-    throw new Error(`Failed to reinforce memory: ${error.message}`)
+  if (updateError) {
+    throw new Error(`Failed to reinforce memory: ${updateError.message}`)
   }
 
-  return data
+  return updated
 }
 
 /**
  * Apply temporal decay to memories
  */
 export async function applyDecay(agentId: string): Promise<number> {
-  const { data: memories, error: fetchError } = await supabase
-    .from('agent_memories')
+  const memoryTable = await resolveMemoryTableName()
+  const { data: memories, error: fetchError } = await (supabase as any)
+    .from(memoryTable)
     .select('id, strength, decay_rate, last_accessed')
     .eq('agent_id', agentId)
 
@@ -160,7 +207,7 @@ export async function applyDecay(agentId: string): Promise<number> {
   // Batch update
   for (const update of updates) {
     await supabase
-      .from('agent_memories')
+      .from(memoryTable as any)
       .update({ strength: update.strength })
       .eq('id', update.id)
   }
@@ -172,8 +219,9 @@ export async function applyDecay(agentId: string): Promise<number> {
  * Delete weak memories below threshold
  */
 export async function pruneWeakMemories(agentId: string, threshold: number = 0.1): Promise<number> {
-  const { data, error } = await supabase
-    .from('agent_memories')
+  const memoryTable = await resolveMemoryTableName()
+  const { data, error } = await (supabase as any)
+    .from(memoryTable)
     .delete()
     .eq('agent_id', agentId)
     .lt('strength', threshold)

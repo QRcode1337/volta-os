@@ -9,8 +9,10 @@ import {
   getPendingNurtureMessages,
   markMessageSent,
   getLeadByPhone,
-  getLeadsByStatus
+  getLeadsByStatus,
+  getAllLeads
 } from '../services/cascade'
+import { storeMemory } from '../services/memory'
 
 const router = express.Router()
 
@@ -183,9 +185,72 @@ router.put('/nurture/:id/sent', async (req, res) => {
     const { response } = req.body
 
     const message = await markMessageSent(id, response)
+    if (!message) {
+      return res.status(409).json({ success: false, error: 'Message already sent or not found' })
+    }
+
     res.json({ success: true, message })
   } catch (error: any) {
     console.error('Mark sent error:', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+/**
+ * POST /api/cascade/trigger/missed-call
+ * Trigger workflow: create/reuse lead, bridge memory, schedule nurture
+ */
+router.post('/trigger/missed-call', async (req, res) => {
+  try {
+    const { phone, name, source = 'missed_call' } = req.body as {
+      phone?: string
+      name?: string
+      source?: 'missed_call' | 'web_form' | 'referral'
+    }
+
+    if (!phone) {
+      return res.status(400).json({ error: 'Missing required field: phone' })
+    }
+
+    let lead = await getLeadByPhone(phone)
+    let created = false
+
+    if (!lead) {
+      lead = await createLead({ phone, name, source })
+      created = true
+    }
+
+    let memoryId: string | undefined
+    try {
+      const memory = await storeMemory({
+        agentId: 'cascade',
+        content: `Missed call trigger for ${phone}${name ? ` (${name})` : ''}`,
+        metadata: { leadId: lead.id, source, phone },
+        tags: ['cascade', 'lead', 'missed_call']
+      })
+      memoryId = memory.id
+      await updateLead(lead.id, { memoryId: memory.id })
+    } catch (memoryError) {
+      console.warn('Memory bridge skipped:', memoryError)
+    }
+
+    await scheduleNurtureMessage({
+      leadId: lead.id,
+      sequenceType: 'follow_up',
+      channel: 'sms',
+      step: 1,
+      scheduledTime: new Date(Date.now() + 60_000)
+    })
+
+    res.json({
+      ok: true,
+      leadId: lead.id,
+      created,
+      scheduledNurture: true,
+      ...(memoryId && { memoryId })
+    })
+  } catch (error: any) {
+    console.error('Missed call trigger error:', error)
     res.status(500).json({ error: error.message })
   }
 })
@@ -231,16 +296,12 @@ router.get('/leads/:status', async (req, res) => {
  */
 router.get('/leads', async (req, res) => {
   try {
-    // Get all leads by querying each status
-    const statuses = ['new', 'contacted', 'qualified', 'booking', 'booked', 'completed', 'lost']
-    const allLeads = []
-    
-    for (const status of statuses) {
-      const leads = await getLeadsByStatus(status as any)
-      allLeads.push(...leads)
-    }
-
-    res.json({ success: true, leads: allLeads })
+    const leads = await getAllLeads()
+    const counts = leads.reduce<Record<string, number>>((acc, lead) => {
+      acc[lead.status] = (acc[lead.status] || 0) + 1
+      return acc
+    }, {})
+    res.json({ success: true, leads, counts })
   } catch (error: any) {
     console.error('Get all leads error:', error)
     res.status(500).json({ error: error.message })

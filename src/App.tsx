@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Monitor, Users, Briefcase, FileText, TrendingUp, RefreshCw, Mic, Brain, FlaskConical, Wrench, FolderOpen, ClipboardList, Lightbulb, Layers, Star, BookOpen, Radio, MessageSquare, GitBranch, ShieldCheck, Sparkles, Activity, Cpu, Target, ArrowRightLeft, DollarSign, Eye, Code, Orbit, Search, Phone } from 'lucide-react'
+import { Monitor, Users, Briefcase, FileText, TrendingUp, RefreshCw, Mic, Brain, FlaskConical, Wrench, FolderOpen, ClipboardList, Lightbulb, Layers, Star, BookOpen, Radio, MessageSquare, GitBranch, ShieldCheck, Sparkles, Activity, Cpu, Target, ArrowRightLeft, DollarSign, Eye, Code, Orbit, Search, Phone, Bookmark, GraduationCap } from 'lucide-react'
 import TaskManager from './components/TaskManager'
 import OrgChart from './components/OrgChart'
 import Workspaces from './components/Workspaces'
 import { MemoryTab, BriefsTab, FilesTab, ProjectsTab } from './components/BrainSection'
+import { BookmarksTab, LearningTab, NetworkTab } from './components/KnowledgeBase'
 import { ClaudeCodePanel } from './components/ClaudeCodePanel'
 import ErisMornConsole from './components/ErisMornConsole'
 import AgentCouncil from './components/AgentCouncil'
@@ -26,7 +27,7 @@ import AgentForgePage from './pages/AgentForgePage'
 type Section = 'brain' | 'labs' | 'ops' | 'command' | 'forge'
 type Tab =
   // Brain tabs
-  | 'memory' | 'briefs' | 'files' | 'projects' | 'claude-code'
+  | 'memory' | 'briefs' | 'files' | 'projects' | 'claude-code' | 'bookmarks' | 'learning' | 'network'
   // Labs tabs
   | 'ideas' | 'prototypes' | 'reviews' | 'ideation'
   // Intelligence tabs (Labs)
@@ -52,6 +53,9 @@ const sidebarSections: SidebarItem[] = [
     label: 'Brain',
     tabs: [
       { id: 'memory', label: 'Memory', icon: <BookOpen className="w-4 h-4" /> },
+      { id: 'bookmarks', label: 'Bookmarks', icon: <Bookmark className="w-4 h-4" /> },
+      { id: 'learning', label: 'Learning', icon: <GraduationCap className="w-4 h-4" /> },
+      { id: 'network', label: 'Network', icon: <Users className="w-4 h-4" /> },
       { id: 'claude-code', label: 'Claude Code', icon: <Code className="w-4 h-4" /> },
       { id: 'briefs', label: 'Briefs', icon: <ClipboardList className="w-4 h-4" /> },
       { id: 'files', label: 'Files', icon: <FolderOpen className="w-4 h-4" /> },
@@ -357,6 +361,9 @@ export default function App() {
 
             {/* BRAIN Section */}
             {activeTab === 'memory' && <MemoryTab />}
+            {activeTab === 'bookmarks' && <BookmarksTab />}
+            {activeTab === 'learning' && <LearningTab />}
+            {activeTab === 'network' && <NetworkTab />}
             {activeTab === 'claude-code' && <ClaudeCodePanel />}
             {activeTab === 'briefs' && <BriefsTab />}
             {activeTab === 'files' && <FilesTab />}

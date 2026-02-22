@@ -13,6 +13,7 @@ import memoryRoutes from './routes/memory.js'
 import swarmRoutes from './routes/swarm.js'
 import cascadeRoutes from './routes/cascade.js'
 import erismornRoutes from './routes/erismorn.js'
+import knowledgeRoutes from './routes/knowledge.js'
 import { startNurtureScheduler } from './jobs/nurtureScheduler.js'
 import { startEmbedder } from './jobs/embedder.js'
 
@@ -44,6 +45,7 @@ app.use('/api', erismornRoutes)
 app.use('/api/memory', memoryRoutes)
 app.use('/api/swarm', swarmRoutes)
 app.use('/api/cascade', cascadeRoutes)
+app.use('/api/knowledge', knowledgeRoutes)
 
 // Catch-all for unimplemented Volta OS endpoints (prevents 404 noise in console)
 app.use('/api', (req, res) => {

@@ -189,7 +189,7 @@ export function MemoryTab() {
             <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 px-2">
               Agent Outputs
             </div>
-            <div className="space-y-0.5">
+            <div className="space-y-0.5 max-h-60 overflow-auto">
               {memoryList?.subdirs.map(dir => (
                 <div key={dir.name}>
                   <button
@@ -291,7 +291,7 @@ export function MemoryTab() {
                 ← Back
               </button>
             </div>
-            <MarkdownPreview content={fileContent} className="max-h-[600px] overflow-auto" />
+            <MarkdownPreview content={fileContent} className="" />
           </>
         ) : (
           // MEMORY.md view
@@ -300,7 +300,7 @@ export function MemoryTab() {
               <Brain className="w-4 h-4" />
               MEMORY.md — Long-Term Memory
             </h3>
-            <MarkdownPreview content={memoryMd || 'No MEMORY.md found'} className="max-h-[600px] overflow-auto" />
+            <MarkdownPreview content={memoryMd || 'No MEMORY.md found'} className="" />
           </>
         )}
       </div>
@@ -551,7 +551,7 @@ export function FilesTab() {
               <FileText className="w-4 h-4" />
               {selectedFile}
             </h3>
-            <MarkdownPreview content={fileContent} className="max-h-[600px] overflow-auto" />
+            <MarkdownPreview content={fileContent} className="" />
           </>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">

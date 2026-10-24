@@ -3,6 +3,23 @@ import { NextResponse } from 'next/server';
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
 
+// Optional Tailscale access (`tailscale serve` → 127.0.0.1:50000). The tailnet hostname is allowed only when
+// serve vouches for the caller: it sets Tailscale-User-Login for tailnet users, and that login must be listed.
+const TAILNET_HOST = (process.env.VOLTA_TAILNET_HOST ?? '').toLowerCase();
+const TAILNET_USERS = new Set(
+  (process.env.VOLTA_TAILNET_USERS ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+function isAllowedHost(hostname: string, req: Request): boolean {
+  if (LOCAL_HOSTS.has(hostname)) return true;
+  if (!TAILNET_HOST || hostname !== TAILNET_HOST || TAILNET_USERS.size === 0) return false;
+  const login = (req.headers.get('tailscale-user-login') ?? '').toLowerCase();
+  return TAILNET_USERS.has(login);
+}
+
 /**
  * Guard for routes that expose private data (screen OCR, vault notes).
  * Rejects requests whose Host header isn't loopback — blocks LAN access if the
@@ -12,8 +29,8 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
 export function rejectNonLocal(req: Request): NextResponse | null {
   const host = (req.headers.get('host') ?? '').toLowerCase();
   const hostname = host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : host.split(':')[0];
-  if (LOCAL_HOSTS.has(hostname)) return null;
-  return NextResponse.json({ error: 'Private memory routes are only served to localhost.' }, { status: 403 });
+  if (isAllowedHost(hostname, req)) return null;
+  return NextResponse.json({ error: 'Private memory routes are only served to localhost (or your tailnet login).' }, { status: 403 });
 }
 
 /**
@@ -32,7 +49,7 @@ export function rejectCrossSite(req: Request): NextResponse | null {
     let ok = false;
     try {
       const u = new URL(origin);
-      ok = LOCAL_HOSTS.has(u.hostname.toLowerCase()) && u.host.toLowerCase() === (req.headers.get('host') ?? '').toLowerCase();
+      ok = isAllowedHost(u.hostname.toLowerCase(), req) && u.host.toLowerCase() === (req.headers.get('host') ?? '').toLowerCase();
     } catch {
       ok = false; // "null" (sandboxed iframe, file://) or malformed
     }

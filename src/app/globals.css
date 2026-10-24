@@ -1,0 +1,144 @@
+@import url('https://fonts.googleapis.com/css2?family=Doto:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+/* ───────────── /robo "Ink Well Soft" tokens ───────────── */
+:root {
+  /* Core Surfaces ("Ink Well Soft") */
+  --bg-obsidian: #0A0A0A;
+  --bg-panel: #141413;
+  --bg-panel-elevated: #1C1B19;
+  --bg-panel-hover: #24221F;
+  --border-subtle: #262522;
+  --border-highlight: #3A3834;
+
+  /* Text Hierarchy ("Paper") */
+  --text-paper: #F5F2EB;
+  --text-secondary: #A39E93;
+  --text-muted: #6E6A61;
+
+  /* Brand Accents */
+  --accent-orange: #FF5500;
+  --accent-orange-glow: rgba(255, 85, 0, 0.22);
+  --accent-amber: #F5A623;
+  --accent-green: #22C55E;
+  --accent-purple: #A855F7;
+  --accent-teal: #14B8A6;
+
+  /* Semantic Department Node Colors (Second Brain & Today's Mix) */
+  --dept-skills: #FFFFFF;
+  --dept-business: #FF6B2B;
+  --dept-content: #EF4444;
+  --dept-personal: #06B6D4;
+  --dept-product: #3B82F6;
+  --dept-community: #10B981;
+  --dept-routines: #F5A623;
+  --dept-apps: #8B5CF6;
+
+  /* Font Families */
+  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-doto: 'Doto', monospace;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-serif: 'Newsreader', Georgia, serif;
+}
+
+/* Tailwind utilities mapped to the tokens: bg-obsidian, bg-panel, text-paper, text-secondary,
+   border-subtle, text-orange, bg-orange, font-doto, font-mono, font-serif, ... */
+@theme inline {
+  --color-obsidian: var(--bg-obsidian);
+  --color-panel: var(--bg-panel);
+  --color-panel-elevated: var(--bg-panel-elevated);
+  --color-panel-hover: var(--bg-panel-hover);
+  --color-subtle: var(--border-subtle);
+  --color-highlight: var(--border-highlight);
+  --color-paper: var(--text-paper);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-orange: var(--accent-orange);
+  --color-amber: var(--accent-amber);
+  --color-green: var(--accent-green);
+  --color-purple: var(--accent-purple);
+  --color-teal: var(--accent-teal);
+  --color-dept-skills: var(--dept-skills);
+  --color-dept-business: var(--dept-business);
+  --color-dept-content: var(--dept-content);
+  --color-dept-personal: var(--dept-personal);
+  --color-dept-product: var(--dept-product);
+  --color-dept-community: var(--dept-community);
+  --color-dept-routines: var(--dept-routines);
+  --color-dept-apps: var(--dept-apps);
+  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-doto: 'Doto', monospace;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-serif: 'Newsreader', Georgia, serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--bg-obsidian);
+  color: var(--text-paper);
+  font-family: var(--font-sans);
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Inputs and editable areas stay selectable even though the HUD body is not. */
+input,
+textarea,
+[contenteditable='true'],
+.selectable {
+  user-select: text;
+}
+
+.font-doto {
+  font-family: var(--font-doto);
+  letter-spacing: 0.03em;
+}
+
+.hud-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.hud-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+}
+
+/* Thin dark scrollbars for internal scroll regions */
+.hud-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-highlight) transparent;
+}
+.hud-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.hud-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-highlight);
+  border-radius: 3px;
+}
+
+@keyframes robo-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-orange-glow); }
+  50% { box-shadow: 0 0 0 6px rgba(255, 85, 0, 0); }
+}
+.robo-pulse {
+  animation: robo-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes robo-spin {
+  to { transform: rotate(360deg); }
+}
+.robo-spin {
+  animation: robo-spin 0.9s linear infinite;
+}

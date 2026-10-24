@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jev Router Benchmarks</title>
+<style>
+  :root{--ob:#0A0A0A;--pa:#141413;--el:#1C1B19;--bd:#262522;--paper:#F5F2EB;--sec:#A39E93;--mut:#6E6A61;--or:#FF5500;--gr:#22C55E;--te:#14B8A6;--pu:#A855F7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ob);color:var(--paper);font-family:Outfit,-apple-system,sans-serif;padding:48px 24px}
+  .wrap{max-width:1000px;margin:0 auto}
+  .label{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--sec)}
+  h1{font-size:40px;margin:12px 0 28px}
+  .doto{font-family:Doto,'JetBrains Mono',monospace;color:var(--or)}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .s{background:var(--pa);border:1px solid var(--bd);border-radius:10px;padding:18px}
+  .v{font-family:Doto,'JetBrains Mono',monospace;font-size:34px;font-weight:700;margin-top:6px}
+  .mix{display:flex;height:14px;border-radius:99px;overflow:hidden;margin:28px 0 10px;border:1px solid var(--bd)}
+  .legend{display:flex;gap:18px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--sec)}
+  .legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+  table{width:100%;border-collapse:collapse;margin-top:28px;font-size:14px}
+  th{text-align:left;padding:8px 0;border-bottom:1px solid var(--bd)}
+  td{padding:10px 0;border-bottom:1px solid var(--bd);color:var(--sec)}
+  td.n{text-align:right;font-family:'JetBrains Mono',monospace;color:var(--paper)}
+  @media (max-width:720px){.stats{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="label">RUBRIC · Product · Week 43</div>
+  <h1>Jev routed <span class="doto">4,451</span> calls for 18 cents</h1>
+  <div class="stats">
+    <div class="s"><div class="label">Calls</div><div class="v">4,451</div></div>
+    <div class="s"><div class="label">Total cost</div><div class="v">$0.18</div></div>
+    <div class="s"><div class="label">Median latency</div><div class="v">6ms</div></div>
+    <div class="s"><div class="label">Override rate</div><div class="v">23%</div></div>
+  </div>
+  <div class="mix"><span style="width:41%;background:var(--gr)"></span><span style="width:37%;background:var(--te)"></span><span style="width:22%;background:var(--pu)"></span></div>
+  <div class="legend"><span><i style="background:var(--gr)"></i>HAIKU 41%</span><span><i style="background:var(--te)"></i>SONNET 37%</span><span><i style="background:var(--pu)"></i>OPUS 22%</span></div>
+  <table>
+    <tr><th class="label">Skill</th><th class="label">Requested</th><th class="label">Jev pick</th><th class="label" style="text-align:right">Confidence</th><th class="label" style="text-align:right">Saved / wk</th></tr>
+    <tr><td>/grammar</td><td>SONNET</td><td>HAIKU</td><td class="n">0.97</td><td class="n">$3.10</td></tr>
+    <tr><td>/note</td><td>SONNET</td><td>HAIKU</td><td class="n">0.97</td><td class="n">$3.10</td></tr>
+    <tr><td>/call-recap</td><td>SONNET</td><td>HAIKU</td><td class="n">0.86</td><td class="n">$4.40</td></tr>
+    <tr><td>/animate</td><td>SONNET</td><td>OPUS</td><td class="n">0.91</td><td class="n">—</td></tr>
+  </table>
+</div>
+</body>
+</html>

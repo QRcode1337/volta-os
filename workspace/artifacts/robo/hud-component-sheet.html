@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>/robo HUD Component Sheet</title>
+<style>
+  :root{--ob:#0A0A0A;--pa:#141413;--el:#1C1B19;--bd:#262522;--hi:#3A3834;--paper:#F5F2EB;--sec:#A39E93;--mut:#6E6A61;--or:#FF5500;--glow:rgba(255,85,0,.22);--gr:#22C55E}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ob);color:var(--paper);font-family:Outfit,-apple-system,sans-serif;padding:40px 24px}
+  .grid{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+  .label{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--sec)}
+  .panel{background:var(--pa);border:1px solid var(--bd);border-radius:10px;overflow:hidden}
+  .panel header{height:36px;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--bd)}
+  .dot{width:14px;height:14px;border:2px solid var(--or);border-radius:3px}
+  .acts{margin-left:auto;display:flex;gap:6px}
+  .pill{height:24px;display:inline-flex;align-items:center;padding:0 10px;border-radius:999px;border:1px solid var(--bd);background:var(--el);color:var(--sec);font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.08em}
+  .pill.p{background:var(--or);border-color:var(--or);color:var(--ob)}
+  .body{padding:14px}
+  .stat{font-family:Doto,'JetBrains Mono',monospace;font-size:36px;font-weight:700}
+  .delta{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--gr)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;padding:6px 0;border-bottom:1px solid var(--bd)}
+  td{padding:8px 0;border-bottom:1px solid var(--bd);color:var(--sec)}
+  td.n{text-align:right;font-family:'JetBrains Mono',monospace;color:var(--paper)}
+  .tog{width:34px;height:20px;border-radius:999px;background:var(--or);position:relative;display:inline-block;vertical-align:middle}
+  .tog::after{content:"";position:absolute;top:3px;left:17px;width:14px;height:14px;border-radius:50%;background:var(--ob)}
+  .tog.off{background:var(--hi)} .tog.off::after{left:3px;background:var(--sec)}
+  .rowc{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bd);font-size:14px}
+  .meter{height:6px;background:var(--el);border-radius:99px;overflow:hidden;margin-top:10px}
+  .meter i{display:block;height:100%;width:68%;background:var(--or)}
+</style>
+</head>
+<body>
+<div class="grid">
+  <section class="panel">
+    <header><span class="dot"></span><span class="label">HudPanel</span><span class="acts"><span class="pill">EXPAND</span><span class="pill p">+ ADD</span></span></header>
+    <div class="body"><div class="label">Weekly usage left</div><div class="stat">68%</div><div class="meter"><i></i></div><div class="delta" style="margin-top:8px">5h window 84% left</div></div>
+  </section>
+  <section class="panel">
+    <header><span class="dot"></span><span class="label">Table</span></header>
+    <div class="body"><table>
+      <tr><th class="label">Routine</th><th class="label" style="text-align:right">Tok/wk</th><th class="label" style="text-align:right">$/wk</th></tr>
+      <tr><td>Brand watch</td><td class="n">18.2M</td><td class="n">$9.44</td></tr>
+      <tr><td>Inbox digest</td><td class="n">6.4M</td><td class="n">$3.10</td></tr>
+      <tr><td>Lead enrichment</td><td class="n">4.1M</td><td class="n">$2.05</td></tr>
+    </table></div>
+  </section>
+  <section class="panel">
+    <header><span class="dot"></span><span class="label">Toggle</span></header>
+    <div class="body">
+      <div class="rowc">Gmail MCP <span class="tog"></span></div>
+      <div class="rowc">Slack MCP <span class="tog"></span></div>
+      <div class="rowc">Excalidraw MCP <span class="tog off"></span></div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

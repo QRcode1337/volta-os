@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>/robo Brand Book — Ink Well Soft</title>
+<style>
+  :root{--ob:#0A0A0A;--pa:#141413;--el:#1C1B19;--hv:#24221F;--bd:#262522;--hi:#3A3834;--paper:#F5F2EB;--sec:#A39E93;--mut:#6E6A61;--or:#FF5500;--glow:rgba(255,85,0,.22);--am:#F5A623;--gr:#22C55E;--pu:#A855F7;--te:#14B8A6}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ob);color:var(--paper);font-family:Outfit,-apple-system,BlinkMacSystemFont,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1120px;margin:0 auto;padding:48px 24px 80px}
+  header{display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--bd);padding-bottom:24px}
+  h1{font-size:44px;font-weight:700;margin:0}
+  .doto{font-family:Doto,'JetBrains Mono',monospace;color:var(--or);letter-spacing:.02em}
+  .label{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--sec)}
+  h2{font-size:13px;font-family:'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--sec);margin:48px 0 16px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
+  .sw{background:var(--pa);border:1px solid var(--bd);border-radius:10px;overflow:hidden}
+  .sw i{display:block;height:72px}
+  .sw div{padding:10px 12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--sec);line-height:1.6}
+  .sw b{color:var(--paper);font-weight:600}
+  .type{display:grid;gap:12px}
+  .t{background:var(--pa);border:1px solid var(--bd);border-radius:10px;padding:18px 20px;display:flex;justify-content:space-between;align-items:baseline;gap:16px}
+  .t small{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mut);white-space:nowrap}
+  .pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 10px;border-radius:999px;border:1px solid;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.06em}
+  .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+  .rules{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .rule{background:var(--pa);border:1px solid var(--bd);border-radius:10px;padding:16px 18px;font-size:15px;color:var(--sec);line-height:1.6}
+  .rule .label{display:block;margin-bottom:8px}
+  .do .label{color:var(--gr)} .dont .label{color:#EF4444}
+  svg{shape-rendering:crispEdges}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg width="40" height="40" viewBox="0 0 8 8" aria-label="RUBRIC mascot" role="img" fill="#FF5500">
+      <rect x="3" y="0" width="2" height="1"/><rect x="2" y="1" width="4" height="1"/><rect x="0" y="2" width="8" height="1"/>
+      <rect x="0" y="3" width="1" height="1"/><rect x="2" y="3" width="1" height="1"/><rect x="5" y="3" width="1" height="1"/><rect x="7" y="3" width="1" height="1"/>
+      <rect x="0" y="4" width="8" height="1"/><rect x="0" y="5" width="2" height="1"/><rect x="6" y="5" width="2" height="1"/>
+      <rect x="1" y="6" width="6" height="1"/><rect x="1" y="7" width="1" height="1"/><rect x="3" y="7" width="2" height="1"/><rect x="6" y="7" width="1" height="1"/>
+    </svg>
+    <div>
+      <div class="label">Design system · v1.4 · 21 Oct 2026</div>
+      <h1>/robo <span class="doto">Ink Well</span> Soft</h1>
+    </div>
+  </header>
+
+  <h2>Surfaces</h2>
+  <div class="grid">
+    <div class="sw"><i style="background:#0A0A0A"></i><div><b>Obsidian</b><br>#0A0A0A · page</div></div>
+    <div class="sw"><i style="background:#141413"></i><div><b>Panel</b><br>#141413 · cards</div></div>
+    <div class="sw"><i style="background:#1C1B19"></i><div><b>Elevated</b><br>#1C1B19 · pills, inputs</div></div>
+    <div class="sw"><i style="background:#24221F"></i><div><b>Hover</b><br>#24221F</div></div>
+    <div class="sw"><i style="background:#262522"></i><div><b>Border subtle</b><br>#262522 · 1px</div></div>
+    <div class="sw"><i style="background:#3A3834"></i><div><b>Border highlight</b><br>#3A3834 · focus</div></div>
+  </div>
+
+  <h2>Paper &amp; accents</h2>
+  <div class="grid">
+    <div class="sw"><i style="background:#F5F2EB"></i><div><b>Paper</b><br>#F5F2EB · primary text</div></div>
+    <div class="sw"><i style="background:#A39E93"></i><div><b>Secondary</b><br>#A39E93 · labels</div></div>
+    <div class="sw"><i style="background:#6E6A61"></i><div><b>Muted</b><br>#6E6A61 · meta</div></div>
+    <div class="sw"><i style="background:#FF5500;box-shadow:inset 0 0 0 6px rgba(255,85,0,.22)"></i><div><b>Orange</b><br>#FF5500 · the only loud color</div></div>
+    <div class="sw"><i style="background:#F5A623"></i><div><b>Amber</b><br>#F5A623 · warn, FABLE</div></div>
+    <div class="sw"><i style="background:#22C55E"></i><div><b>Green</b><br>#22C55E · ok, HAIKU</div></div>
+    <div class="sw"><i style="background:#14B8A6"></i><div><b>Teal</b><br>#14B8A6 · SONNET</div></div>
+    <div class="sw"><i style="background:#A855F7"></i><div><b>Purple</b><br>#A855F7 · OPUS</div></div>
+  </div>
+
+  <h2>Model tiers</h2>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <span class="pill" style="color:#22C55E;border-color:#22C55E55;background:#22C55E14">HAIKU · LOW</span>
+    <span class="pill" style="color:#14B8A6;border-color:#14B8A655;background:#14B8A614">SONNET · MEDIUM</span>
+    <span class="pill" style="color:#A855F7;border-color:#A855F755;background:#A855F714">OPUS · HIGH</span>
+    <span class="pill" style="color:#F5A623;border-color:#F5A62355;background:#F5A62314">FABLE · MAX</span>
+  </div>
+
+  <h2>Type</h2>
+  <div class="type">
+    <div class="t"><span style="font-size:36px;font-weight:700">Outfit 700 — Agentic OS</span><small>UI · titles</small></div>
+    <div class="t"><span style="font-family:Doto,monospace;font-size:40px;font-weight:800;color:#FF5500">424,846</span><small>Doto · hero numbers</small></div>
+    <div class="t"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">4,451 calls · $0.18 · 41% HAIKU</span><small>JetBrains Mono · data</small></div>
+    <div class="t"><span style="font-family:Newsreader,Georgia,serif;font-style:italic;font-size:24px;color:#A39E93">"It's just plain text files Claude can route."</span><small>Newsreader italic · quotes</small></div>
+  </div>
+
+  <h2>Rules</h2>
+  <div class="rules">
+    <div class="rule do"><span class="label">Do</span>HTML first. 1px #262522 borders, 10px radius. Numbers in mono. One Doto accent word per title. Glow only on the matched element.</div>
+    <div class="rule dont"><span class="label">Don't</span>No gradients, no drop shadows, no second accent color, no emoji in client artifacts, no pure white on pure black, no stock photos.</div>
+  </div>
+</div>
+</body>
+</html>

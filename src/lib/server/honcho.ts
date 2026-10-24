@@ -136,6 +136,73 @@ async function request<T>(method: 'GET' | 'POST', path: string, opts: RequestOpt
 
 const W = (w: string) => `/v3/workspaces/${enc(w)}`;
 
+/**
+ * Opens a streaming (SSE) Honcho response. Resolves once headers arrive, with the upstream body
+ * left unread; errors map to the same Offline/Api/Timeout classes as `request`. The deadline and the
+ * caller's signal stay attached to the body read, so aborting either cancels the upstream stream.
+ */
+async function openStream(path: string, body: unknown, opts: { timeoutMs: number; signal?: AbortSignal }): Promise<Response> {
+  const timeout = AbortSignal.timeout(opts.timeoutMs);
+  const signal = opts.signal ? AbortSignal.any([timeout, opts.signal]) : timeout;
+  let res: Response;
+  try {
+    res = await fetch(buildUrl(path), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
+      body: JSON.stringify(body),
+      signal,
+      cache: 'no-store',
+    });
+  } catch (err) {
+    if (opts.signal?.aborted) throw err;
+    if (timeout.aborted) throw new HonchoTimeoutError(`Honcho did not answer within ${Math.round(opts.timeoutMs / 1000)}s`);
+    if (isConnectionFailure(err)) {
+      const code = (err as { cause?: { code?: string } }).cause?.code;
+      throw new HonchoOfflineError(`Cannot reach Honcho at ${HONCHO_URL}${code ? ` (${code})` : ''}`);
+    }
+    throw err;
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    let parsed: unknown = null;
+    try {
+      parsed = text ? JSON.parse(text) : null;
+    } catch {
+      parsed = null;
+    }
+    if ((res.status === 502 || res.status === 504) && parsed == null) throw new HonchoOfflineError(`Honcho is starting (HTTP ${res.status})`);
+    throw new HonchoApiError(detailOf(parsed, res.status), res.status);
+  }
+  if (!res.body) throw new HonchoApiError('Honcho returned an empty stream', 502);
+  return res;
+}
+
+/** Streaming dialectic answer (workspace-level chat also supports `stream: true`). Honcho emits SSE frames
+ *  `data: {"delta":{"content":"…"},"done":false}` and a final `data: {"done":true}`. */
+export function workspaceChatStream(
+  w: string,
+  opts: { query: string; session?: string; reasoning_level?: HonchoReasoningLevel; signal?: AbortSignal },
+) {
+  return openStream(
+    `${W(w)}/chat`,
+    { query: opts.query, session_id: opts.session ?? null, reasoning_level: opts.reasoning_level ?? 'low', stream: true },
+    { timeoutMs: CHAT_TIMEOUT_MS, signal: opts.signal },
+  );
+}
+
+export function peerChatStream(
+  w: string,
+  peer: string,
+  opts: { query: string; target?: string; session?: string; reasoning_level?: HonchoReasoningLevel; signal?: AbortSignal },
+) {
+  return openStream(
+    `${W(w)}/peers/${enc(peer)}/chat`,
+    { query: opts.query, target: opts.target ?? null, session_id: opts.session ?? null, reasoning_level: opts.reasoning_level ?? 'low', stream: true },
+    { timeoutMs: CHAT_TIMEOUT_MS, signal: opts.signal },
+  );
+}
+
+
 // ── Health / status ──
 
 export async function health(): Promise<{ latencyMs: number }> {

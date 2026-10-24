@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Copy, CornerDownLeft, Loader2, MessageCircleQuestion, Square, Trash2 } from 'lucide-react';
 import { HONCHO_REASONING_LEVELS, type HonchoChatResponse, type HonchoPeer, type HonchoReasoningLevel } from '@/types/honcho';
 import { cn } from '@/lib/cn';
-import { hPost, isAbort, isOffline, peerColor, shortId, wsUrl } from './honcho-client';
+import { HonchoClientError, hPost, isAbort, isOffline, peerColor, shortId, wsUrl } from './honcho-client';
 import { useReportOffline } from './useHoncho';
 import { RichText } from './RichText';
 
@@ -14,6 +14,43 @@ interface Turn {
   answer: string | null;
   error: string | null;
   elapsedMs: number | null;
+  streaming?: boolean;
+}
+
+/** Reads the proxy's SSE stream (`data: {delta}` … `data: {done,elapsedMs}` / `{error}`), calling onDelta per chunk. */
+async function streamAnswer(url: string, body: unknown, signal: AbortSignal, onDelta: (t: string) => void): Promise<number | null> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const e = (await res.json().catch(() => ({}))) as { error?: string; offline?: boolean; url?: string };
+    throw new HonchoClientError(e.error ?? `HTTP ${res.status}`, res.status, !!e.offline, e.url ?? null);
+  }
+  if (!res.body || !/text\/event-stream/i.test(res.headers.get('content-type') ?? '')) throw new Error('not a stream');
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  let elapsed: number | null = null;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i: number;
+    while ((i = buf.indexOf('\n\n')) >= 0) {
+      const raw = buf.slice(0, i);
+      buf = buf.slice(i + 2);
+      if (!raw.startsWith('data:')) continue;
+      const ev = JSON.parse(raw.slice(5).trim()) as { delta?: string; done?: boolean; elapsedMs?: number; error?: string };
+      if (ev.error) throw new HonchoClientError(ev.error, 502);
+      if (ev.delta) onDelta(ev.delta);
+      if (ev.done) elapsed = ev.elapsedMs ?? null;
+    }
+  }
+  return elapsed;
 }
 
 interface Props {
@@ -69,23 +106,37 @@ export function AskPanel({ workspace, peers, selectedPeer, session, onCopy, clas
     setTurns((t) => [...t, { id, query, label, answer: null, error: null, elapsedMs: null }]);
     setInput('');
     setPending(id);
+    const payload = {
+      query,
+      peer: peerMode ? selectedPeer : undefined,
+      target: peerMode && target ? target : undefined,
+      session: scopeSession && session ? session : undefined,
+      reasoning_level: level,
+    };
+    const t0 = performance.now();
+    const patch = (f: (x: Turn) => Turn) => setTurns((t) => t.map((x) => (x.id === id ? f(x) : x)));
     try {
-      const r = await hPost<HonchoChatResponse>(
-        wsUrl(workspace, ['chat']),
-        {
-          query,
-          peer: peerMode ? selectedPeer : undefined,
-          target: peerMode && target ? target : undefined,
-          session: scopeSession && session ? session : undefined,
-          reasoning_level: level,
-        },
-        ac.signal,
-      );
-      setTurns((t) => t.map((x) => (x.id === id ? { ...x, answer: r.content ?? '', elapsedMs: r.elapsedMs } : x)));
+      let got = false;
+      try {
+        const ms = await streamAnswer(wsUrl(workspace, ['chat']), { ...payload, stream: true }, ac.signal, (d) => {
+          got = true;
+          patch((x) => ({ ...x, answer: (x.answer ?? '') + d, streaming: true }));
+        });
+        patch((x) => ({ ...x, answer: x.answer ?? '', streaming: false, elapsedMs: ms ?? Math.round(performance.now() - t0) }));
+      } catch (err) {
+        // Real HTTP/API errors and cancels surface as-is; only a broken stream falls back to the JSON path.
+        if (isAbort(err) || err instanceof HonchoClientError) {
+          if (got && !isAbort(err)) patch((x) => ({ ...x, streaming: false }));
+          throw err;
+        }
+        if (got) throw err;
+        const r = await hPost<HonchoChatResponse>(wsUrl(workspace, ['chat']), payload, ac.signal);
+        patch((x) => ({ ...x, answer: r.content ?? '', elapsedMs: r.elapsedMs }));
+      }
     } catch (err) {
       if (isOffline(err)) reportOffline((err as Error).message);
       const msg = isAbort(err) ? 'Cancelled' : (err as Error).message;
-      setTurns((t) => t.map((x) => (x.id === id ? { ...x, error: msg } : x)));
+      setTurns((t) => t.map((x) => (x.id === id ? { ...x, error: msg, streaming: false } : x)));
     } finally {
       setPending(null);
       abortRef.current = null;
@@ -175,7 +226,13 @@ export function AskPanel({ workspace, peers, selectedPeer, session, onCopy, clas
             </div>
             <div className="mr-2 rounded-xl rounded-tl-sm border border-subtle bg-panel px-3 py-2">
               {t.error ? (
-                <div className={cn('font-mono text-[11px]', t.error === 'Cancelled' ? 'text-muted' : 'text-[#F87171]')}>{t.error}</div>
+                <>
+                  {t.answer && <RichText text={t.answer} className="text-[12.5px]" />}
+                  <div className={cn('font-mono text-[11px]', t.answer && 'mt-1.5', t.error === 'Cancelled' ? 'text-muted' : 'text-[#F87171]')}>
+                    {t.error}
+                    {t.answer ? ' (partial answer)' : ''}
+                  </div>
+                </>
               ) : t.answer == null ? (
                 <div className="flex items-center gap-2 font-mono text-[10.5px] text-secondary">
                   <Loader2 className="h-3.5 w-3.5 robo-spin text-orange" /> Thinking… {elapsed}s
@@ -190,9 +247,22 @@ export function AskPanel({ workspace, peers, selectedPeer, session, onCopy, clas
               ) : t.answer ? (
                 <>
                   <RichText text={t.answer} className="text-[12.5px]" />
-                  <div className="mt-1.5 flex items-center font-mono text-[9px] text-muted">
-                    {t.elapsedMs != null && `${(t.elapsedMs / 1000).toFixed(1)}s`}
-                    <button type="button" onClick={() => onCopy(t.answer!, 'answer')} className="ml-auto hover:text-paper" title="Copy answer">
+                  <div className="mt-1.5 flex items-center gap-2 font-mono text-[9px] text-muted">
+                    {t.streaming ? (
+                      <>
+                        <Loader2 className="h-3 w-3 robo-spin text-orange" /> {elapsed}s
+                        <button
+                          type="button"
+                          onClick={() => abortRef.current?.abort()}
+                          className="flex items-center gap-1 rounded-full border border-subtle px-2 py-0.5 text-[9px] uppercase text-muted hover:text-paper"
+                        >
+                          <Square className="h-2.5 w-2.5" /> Stop
+                        </button>
+                      </>
+                    ) : (
+                      t.elapsedMs != null && `${(t.elapsedMs / 1000).toFixed(1)}s`
+                    )}
+                    <button type="button" disabled={t.streaming} onClick={() => onCopy(t.answer!, 'answer')} className="ml-auto disabled:opacity-40 hover:text-paper" title="Copy answer">
                       <Copy className="h-3 w-3" />
                     </button>
                   </div>

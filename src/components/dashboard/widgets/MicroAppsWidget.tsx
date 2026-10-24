@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, LayoutGrid } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, ChevronUp, LayoutGrid } from 'lucide-react';
 import { HudPanel } from '@/components/robo-ui';
 import { MICRO_APPS } from '@/lib/mock-data';
 import type { ObsidianVault } from '@/types/ltm';
@@ -72,6 +72,8 @@ function useMoreBelow<T extends HTMLElement>() {
 
 export function MicroAppsWidget({ className }: { className?: string }) {
   const [expanded, setExpanded] = useState(false);
+  // Sample-data tool apps stay behind "More" so the home list shows only apps on real data.
+  const [showSamples, setShowSamples] = useState(false);
   const [flash, setFlash] = useFlash();
   const brainSubtitle = useVaultSubtitle();
   const [scrollRef, moreBelow] = useMoreBelow<HTMLDivElement>();
@@ -101,7 +103,7 @@ export function MicroAppsWidget({ className }: { className?: string }) {
     >
       <div ref={scrollRef} className="hud-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">
         <ul className="flex flex-col">
-          {[...REAL_APPS, ...SAMPLE_APPS].map((app, i) => (
+          {(showSamples ? [...REAL_APPS, ...SAMPLE_APPS] : REAL_APPS).map((app, i) => (
             <li
               key={app.id}
               // Hairline between the real-data group and the sample-data tool apps.
@@ -135,6 +137,19 @@ export function MicroAppsWidget({ className }: { className?: string }) {
               </Link>
             </li>
           ))}
+          {SAMPLE_APPS.length > 0 && (
+            <li className={cn(!showSamples && 'mt-1 border-t border-subtle pt-1')}>
+              <button
+                type="button"
+                onClick={() => setShowSamples((v) => !v)}
+                title={SAMPLE_TIP}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-[5px] font-mono text-[10px] uppercase tracking-[0.08em] text-muted transition-colors hover:bg-panel-hover hover:text-secondary"
+              >
+                {showSamples ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                {showSamples ? 'Hide sample apps' : `More · ${SAMPLE_APPS.length} sample apps`}
+              </button>
+            </li>
+          )}
         </ul>
       </div>
       <div

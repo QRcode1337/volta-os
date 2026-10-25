@@ -3,13 +3,14 @@
 // the server validates them again and builds the argv from config/studio-projects.json.
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, Loader2, Play, Plus, X } from 'lucide-react';
-import type { ArgSpecPublic, GenerationInput, PresetPublic, StudioOutput, StudioProject, StudioStorage } from '@/types/studio';
+import type { ArgSpecPublic, GenerationInput, MusicInput, PresetPublic, StudioOutput, StudioProject, StudioStorage } from '@/types/studio';
 import { cn } from '@/lib/cn';
 import { api, fmtDur } from './studio-client';
 
 export interface InputsData {
   outputs: (StudioOutput & { projectName: string })[];
   generations: GenerationInput[];
+  music?: MusicInput[];
 }
 
 type Values = Record<string, unknown>;
@@ -43,30 +44,50 @@ function FileSelect({
 }) {
   const outs = (inputs?.outputs ?? []).filter((o) => kinds.includes(o.media));
   const gens = (inputs?.generations ?? []).filter((g) => kinds.includes(g.media));
+  const tracks = (inputs?.music ?? []).filter((m) => kinds.includes(m.media));
+  const missing = tracks.filter((m) => m.offline);
   return (
-    <select className={field} value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">{inputs ? placeholder : 'Loading files...'}</option>
-      {outs.length > 0 && (
-        <optgroup label="Project outputs">
-          {outs.map((o) => (
-            <option key={o.id} value={o.id} disabled={o.offline}>
-              {o.projectName} · {o.name}
-              {o.durationSec ? ` · ${fmtDur(o.durationSec)}` : ''}
-              {o.offline ? ' (iCloud, not downloaded)' : ''}
-            </option>
-          ))}
-        </optgroup>
+    <>
+      <select className={field} value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{inputs ? placeholder : 'Loading files...'}</option>
+        {outs.length > 0 && (
+          <optgroup label="Project outputs">
+            {outs.map((o) => (
+              <option key={o.id} value={o.id} disabled={o.offline}>
+                {o.projectName} · {o.name}
+                {o.durationSec ? ` · ${fmtDur(o.durationSec)}` : ''}
+                {o.offline ? ' (iCloud, not downloaded)' : ''}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        {gens.length > 0 && (
+          <optgroup label="Generations manifest">
+            {gens.map((g) => (
+              <option key={g.id} value={g.id}>
+                Generations · {g.media === 'audio' ? 'voice' : 'video'} · {g.prompt.length > 48 ? `${g.prompt.slice(0, 45)}...` : g.prompt}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        {tracks.length > 0 && (
+          <optgroup label="VANTA VECTOR">
+            {tracks.map((m) => (
+              <option key={m.id} value={m.id} disabled={m.offline}>
+                VANTA VECTOR · {m.prompt.length > 48 ? `${m.prompt.slice(0, 45)}...` : m.prompt}
+                {m.offline ? ' (iCloud, not downloaded)' : ''}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+      {missing.length > 0 && (
+        <p className="mt-1 text-[10.5px] leading-snug text-muted">
+          {missing.length} VANTA VECTOR track{missing.length === 1 ? ' is' : 's are'} in iCloud and can&apos;t be picked yet. To download, run{' '}
+          <code className="font-mono text-secondary">{missing[0].brctl}</code>
+        </p>
       )}
-      {gens.length > 0 && (
-        <optgroup label="Generations manifest">
-          {gens.map((g) => (
-            <option key={g.id} value={g.id}>
-              Generations · {g.media === 'audio' ? 'voice' : 'video'} · {g.prompt.length > 48 ? `${g.prompt.slice(0, 45)}...` : g.prompt}
-            </option>
-          ))}
-        </optgroup>
-      )}
-    </select>
+    </>
   );
 }
 
@@ -160,7 +181,8 @@ function Field({
         const o = inputs?.outputs.find((x) => x.id === fid);
         if (o) return `${o.projectName} · ${o.name}`;
         const g = inputs?.generations.find((x) => x.id === fid);
-        return g ? `Generations · ${g.name}` : fid;
+        const m = inputs?.music?.find((x) => x.id === fid);
+        return g ? `Generations · ${g.name}` : m ? `VANTA VECTOR · ${m.prompt}` : fid;
       };
       const move = (i: number, d: number) => {
         const next = [...ids];

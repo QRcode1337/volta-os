@@ -5,6 +5,7 @@ import type { StudioOutput } from '@/types/studio';
 import type { EditorMediaGroup, EditorMediaItem, EditorMediaKind, EditorMediaList } from '@/types/editor';
 import type { GenItemRecord } from '@/types/media';
 import { MediaError } from '../media/config';
+import { MusicError, getLibrary, loadConfig as musicLoadConfig, resolveTrack, type RawTrack } from '../music';
 import { readManifest, resolveFile } from '../media/storage';
 import { getProject, loadConfig, projectExists, type Project } from '../studio/config';
 import { OUTPUT_SCAN_LIMIT, probeFile, projectOutputs, resolveOutputFile } from '../studio/index-projects';
@@ -23,6 +24,36 @@ export function brctlCommand(file: string): string {
 
 const studioUrl = (id: string) => `/api/studio/file?id=${encodeURIComponent(id)}`;
 const genUrl = (id: string) => `/api/media/file?id=${encodeURIComponent(id)}`;
+const musicUrl = (id: string) => `/api/music/file?id=${encodeURIComponent(id)}`;
+
+/** A VANTA VECTOR track as a bin item. iCloud placeholders stay listed (offline + brctl) but are never opened. */
+function musicItem(band: string, t: RawTrack): EditorMediaItem {
+  const offline = t.storage === 'icloud';
+  return {
+    id: t.id,
+    source: 'music',
+    group: 'music',
+    groupName: band,
+    projectId: null,
+    projectKind: null,
+    projectPath: null,
+    name: t.fileName,
+    path: t.path,
+    media: 'audio',
+    ext: t.fileName.split('.').pop()?.toLowerCase() ?? '',
+    size: t.bytes,
+    mtime: t.mtime,
+    durationSec: offline ? null : t.durationSec,
+    fps: null,
+    width: null,
+    height: null,
+    hasAudio: true,
+    offline,
+    url: musicUrl(t.id),
+    brctl: offline ? brctlCommand(t.path) : null,
+    canSaveNotes: false,
+  };
+}
 
 function studioItem(project: Project, o: StudioOutput, hasAudio: boolean): EditorMediaItem {
   return {
@@ -119,7 +150,18 @@ export async function listEditorMedia(opts: { refresh?: boolean } = {}): Promise
   }
   const gens: EditorMediaGroup = { id: 'generations', name: 'Generations', kind: null, source: 'generations', path: null, exists: true, total: genItems.length, items: genItems };
 
-  const groups = [...studioGroups.filter((g) => g.items.length > 0 || g.exists), gens].sort((a, b) => {
+  let musicGroup: EditorMediaGroup | null = null;
+  try {
+    const lib = await getLibrary({ refresh: opts.refresh });
+    if (lib.tracks.length > 0) {
+      const items = lib.tracks.map((t) => musicItem(lib.band, t)).sort((a, b) => (a.mtime < b.mtime ? 1 : -1));
+      musicGroup = { id: 'music', name: lib.band, kind: null, source: 'music', path: lib.roots[0]?.path ?? null, exists: true, total: items.length, items };
+    }
+  } catch (err) {
+    errors.push(`Music library: ${(err as Error).message}`);
+  }
+
+  const groups = [...studioGroups.filter((g) => g.items.length > 0 || g.exists), gens, ...(musicGroup ? [musicGroup] : [])].sort((a, b) => {
     const am = a.items[0]?.mtime ?? '';
     const bm = b.items[0]?.mtime ?? '';
     return am < bm ? 1 : am > bm ? -1 : 0;
@@ -163,6 +205,14 @@ export async function describeEditorMedia(id: string): Promise<EditorMediaItem> 
     const item = await genItem(rec);
     if (!item) throw new StudioError('File is missing (is the Windsor drive mounted?).', 404);
     return item;
+  }
+  if (/^m_[0-9a-f]{16}$/.test(id)) {
+    try {
+      return musicItem(musicLoadConfig().band, (await resolveTrack(id)).track);
+    } catch (err) {
+      if (err instanceof MusicError) throw new StudioError(err.message, err.status);
+      throw err;
+    }
   }
   throw new StudioError('Bad file id.', 400);
 }

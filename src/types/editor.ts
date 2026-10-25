@@ -1,13 +1,13 @@
 // Shared (client + server) shapes for the VOLTA Editor: real media bin, per-file feedback, live skill targets.
 
 export type EditorMediaKind = 'video' | 'audio' | 'image';
-export type EditorSource = 'studio' | 'generations';
+export type EditorSource = 'studio' | 'generations' | 'music';
 export type EditorSkillTag = '/animate' | '/cut' | 'audio' | '/robo';
 export type EditorClipStatus = 'NEEDS REVIEW' | 'CHANGES REQUESTED' | 'APPROVED';
 /** Studio project kinds (see config/studio-projects.json), or null for Generations files. */
 export type EditorProjectKind = 'remotion' | 'hyperframes' | 'ffmpeg' | 'pipeline' | null;
 
-/** One real file in the media bin. `id` is the fileKey: `o_<16 hex>` (Studio output) or `g_<manifest id>` (Generations). */
+/** One real file in the media bin. `id` is the fileKey: `o_<16 hex>` (Studio output), `g_<manifest id>` (Generations) or `m_<16 hex>` (VANTA VECTOR track). */
 export interface EditorMediaItem {
   id: string;
   source: EditorSource;

@@ -84,6 +84,13 @@ export interface GenerationInput {
   prompt: string;
 }
 
+/** A VANTA VECTOR track as an audio input (`m_<hash>`). iCloud placeholders are listed but cannot be picked. */
+export interface MusicInput extends GenerationInput {
+  offline: boolean;
+  /** `brctl download "<folder>"` for placeholders. */
+  brctl: string | null;
+}
+
 export type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'canceled' | 'interrupted';
 
 export interface StudioJob {

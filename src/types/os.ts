@@ -212,13 +212,13 @@ export interface EditorInboxItem {
   title: string;
   kind: 'ANIMATION' | 'A-ROLL CUT';
   durationSec: number;
-  source: 'generations' | 'scripts' | 'carousels' | 'studio';
+  source: 'generations' | 'scripts' | 'carousels' | 'studio' | 'music';
   sceneKey?: string;
   /** Notion page the cues were built from (Scripts). */
   notion?: { title: string; url: string };
   cues?: { atSec: number; voiceover: string; visualCue: string }[];
   createdAt: string; // ISO
-  /** Real generated file (Generations): absolute path on disk and the /api/media/file URL that serves it. */
+  /** Real file (Generations / Studio / Music): absolute path on disk and the /api/{media,studio,music}/file URL that serves it. */
   file?: string;
   mediaUrl?: string;
 }

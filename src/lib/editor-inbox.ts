@@ -1,5 +1,5 @@
 'use client';
-// Cross-app hand-off into VOLTA Editor. Producers: Generations and Studio (real files: `mediaUrl` = /api/media/file or /api/studio/file),
+// Cross-app hand-off into VOLTA Editor. Producers: Generations, Studio and Music (real files: `mediaUrl` = /api/media/file, /api/studio/file or /api/music/file),
 // plus Scripts and Carousels (no file: the Editor lists them as hand-offs without media). Consumer: Editor.
 import type { EditorInboxItem } from '@/types/os';
 

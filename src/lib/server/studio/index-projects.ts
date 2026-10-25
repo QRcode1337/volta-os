@@ -3,9 +3,11 @@ import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { CompositionInfo, GenerationInput, MediaClass, StudioOutput, StudioProject } from '@/types/studio';
+import type { CompositionInfo, GenerationInput, MediaClass, MusicInput, StudioOutput, StudioProject } from '@/types/studio';
 import { readManifest, resolveFile } from '../media/storage';
 import { MediaError } from '../media/config';
+import { MusicError, assertLocal, getLibrary, musicInputs, resolveTrack } from '../music';
+import { brctlCommand } from '@/components/music/format';
 import {
   getProject,
   loadConfig,
@@ -344,7 +346,20 @@ export async function generationInputs(limit = 60): Promise<GenerationInput[]> {
   return out;
 }
 
-/** File arg value (an `o_` or `g_` id) -> verified path. The client never supplies paths. */
+// ───────────────────────── VANTA VECTOR music as input source ─────────────────────────
+
+/** Music-library tracks as audio inputs: downloaded ones are pickable, iCloud placeholders are listed as unavailable with the brctl hint. */
+export async function musicStudioInputs(): Promise<MusicInput[]> {
+  const [local, lib] = await Promise.all([musicInputs(), getLibrary()]);
+  const out: MusicInput[] = local.map((m) => ({ ...m, offline: false, brctl: null }));
+  for (const t of lib.tracks) {
+    if (t.storage !== 'icloud') continue;
+    out.push({ id: t.id, name: t.fileName, media: 'audio', size: t.bytes, created: t.mtime, prompt: t.title, offline: true, brctl: brctlCommand(t.folder) });
+  }
+  return out;
+}
+
+/** File arg value (an `o_`, `g_` or `m_` id) -> verified path. The client never supplies paths. */
 export async function resolveInput(id: string, kinds: MediaClass[]): Promise<{ path: string; media: MediaClass; name: string; probe: Probe }> {
   if (typeof id !== 'string') throw new StudioError('File id must be a string.', 400);
   let file: string;
@@ -352,7 +367,20 @@ export async function resolveInput(id: string, kinds: MediaClass[]): Promise<{ p
   let name: string;
   let size: number;
   let mtimeMs: number;
-  if (id.startsWith('g_')) {
+  if (id.startsWith('m_')) {
+    try {
+      const r = await resolveTrack(id);
+      assertLocal(r); // iCloud placeholder -> 409 with the brctl hint; never opened
+      file = r.path;
+      media = 'audio';
+      name = r.track.fileName;
+      size = r.size;
+      mtimeMs = r.mtimeMs;
+    } catch (err) {
+      if (err instanceof MusicError) throw new StudioError(err.status === 409 ? `${err.message} (${String(err.extra.command ?? '')})` : err.message, err.status);
+      throw err;
+    }
+  } else if (id.startsWith('g_')) {
     try {
       const { rec, file: f, size: s } = await resolveFile(id.slice(2));
       if (rec.kind !== 'video' && rec.kind !== 'voice') throw new StudioError('Only Generations video and voice items can be used here.', 400);

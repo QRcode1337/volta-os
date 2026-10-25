@@ -197,7 +197,7 @@ export function MusicApp() {
         title: t.title,
         kind: 'A-ROLL CUT',
         durationSec: t.durationSec ?? 0,
-        source: 'generations',
+        source: 'music',
         createdAt: new Date().toISOString(),
         file: t.path,
         mediaUrl: trackStreamUrl(t.id),

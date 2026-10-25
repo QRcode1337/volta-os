@@ -1,7 +1,7 @@
 // GET /api/studio/outputs?projectId=<id>[&limit=40][&refresh=1]   recent media of one project
-// GET /api/studio/outputs?scope=inputs                           pickable ffmpeg inputs: every project's newest outputs + Generations video/voice
+// GET /api/studio/outputs?scope=inputs                           pickable ffmpeg inputs: every project's newest outputs + Generations video/voice + VANTA VECTOR tracks
 import { studioGet } from '@/lib/server/studio/http';
-import { generationInputs, projectOutputs } from '@/lib/server/studio/index-projects';
+import { generationInputs, musicStudioInputs, projectOutputs } from '@/lib/server/studio/index-projects';
 import { getProject, loadConfig } from '@/lib/server/studio/config';
 import { StudioError } from '@/lib/server/studio/storage';
 
@@ -19,7 +19,12 @@ export const GET = studioGet(async (req) => {
       }),
     );
     const outputs = per.flat().sort((a, b) => (a.mtime < b.mtime ? 1 : -1)).slice(0, 80);
-    return { outputs, generations: await generationInputs(60) };
+    // the music library is optional here: a failure there must not empty the whole picker
+    const music = await musicStudioInputs().catch((err) => {
+      console.warn('[studio] music inputs unavailable:', (err as Error).message);
+      return [];
+    });
+    return { outputs, generations: await generationInputs(60), music };
   }
   const project = getProject(url.searchParams.get('projectId') ?? '');
   if (!project) throw new StudioError('Unknown project.', 404);

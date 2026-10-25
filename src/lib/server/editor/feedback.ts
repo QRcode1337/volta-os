@@ -12,7 +12,7 @@ export const FEEDBACK_DIR = '/Volumes/Windsor/VOLTA/editor/feedback';
 const MAX_PINS = 300;
 const SKILLS = new Set<string>(['/animate', '/cut', 'audio', '/robo']);
 const STATUSES = new Set<string>(['NEEDS REVIEW', 'CHANGES REQUESTED', 'APPROVED']);
-const KEY_RE = /^(?:o_[0-9a-f]{16}|g_[a-z0-9-]{6,40})$/i;
+const KEY_RE = /^(?:[om]_[0-9a-f]{16}|g_[a-z0-9-]{6,40})$/i;
 
 export function validFileKey(key: unknown): key is string {
   return typeof key === 'string' && KEY_RE.test(key);

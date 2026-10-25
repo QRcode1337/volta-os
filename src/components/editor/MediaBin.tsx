@@ -195,7 +195,7 @@ function GroupBlock({ group, query, openIds, expanded, onToggle, onOpen, onOffli
       <button type="button" onClick={onToggle} title={group.path ?? 'VOLTA Generations manifest'} className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left hover:bg-panel-hover">
         {show ? <ChevronDown size={12} className="shrink-0 text-muted" /> : <ChevronRight size={12} className="shrink-0 text-muted" />}
         <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-paper">{group.name}</span>
-        <span className="shrink-0 rounded bg-panel-hover px-1 font-mono text-[8.5px] uppercase text-secondary">{group.kind ?? 'generations'}</span>
+        <span className="shrink-0 rounded bg-panel-hover px-1 font-mono text-[8.5px] uppercase text-secondary">{group.kind ?? group.source}</span>
         {offline > 0 && <CloudOff size={10} className="shrink-0 text-amber" aria-label={`${offline} not downloaded`} />}
         <span className="shrink-0 font-mono text-[9.5px] text-muted">
           {items.length}

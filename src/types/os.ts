@@ -237,4 +237,7 @@ export interface EditorInboxItem {
   sceneKey?: string;
   cues?: { atSec: number; voiceover: string; visualCue: string }[];
   createdAt: string; // ISO
+  /** Real generated file (Generations): absolute path on disk and the /api/media/file URL that serves it. */
+  file?: string;
+  mediaUrl?: string;
 }

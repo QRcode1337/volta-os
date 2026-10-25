@@ -1,0 +1,133 @@
+// Shared (client + server) shapes for the Generations app: real xAI / ElevenLabs generation.
+
+export type MediaKind = 'image' | 'video' | 'voice';
+export type MediaProvider = 'xai' | 'elevenlabs';
+
+/** Validated request body for POST /api/media/quote. */
+export type GenRequest = ImageRequest | VideoRequest | VoiceRequest;
+
+export interface ImageRequest {
+  kind: 'image';
+  model: string;
+  prompt: string;
+  aspect: string;
+  count: number;
+  /** grok-imagine-image-2.0 only: price tier. */
+  quality?: 'low' | 'medium';
+  resolution?: string;
+}
+export interface VideoRequest {
+  kind: 'video';
+  model: string;
+  prompt: string;
+  aspect: string;
+  count: number;
+  duration: number;
+  resolution: string;
+}
+export interface VoiceRequest {
+  kind: 'voice';
+  model: string;
+  voiceId: string;
+  text: string;
+  stability: number;
+  similarity: number;
+}
+
+export interface ImageModelInfo {
+  id: string;
+  /** Per-image price in USD (default quality), from the xAI models endpoint. */
+  priceUsd: number;
+  /** Present for models with price tiers (quality x resolution). */
+  tiers?: { quality: string; resolution: string; priceUsd: number }[];
+  maxPromptLength: number;
+}
+export interface VideoModelInfo {
+  id: string;
+  /** USD per second by output resolution (published pricing; est.). */
+  perSecondUsd: Record<string, number>;
+  resolutions: string[];
+}
+export interface VoiceInfo {
+  id: string;
+  name: string;
+  category: string;
+  description?: string;
+  previewUrl?: string;
+}
+export interface VoiceModelInfo {
+  id: string;
+  name: string;
+  /** Credits per character (0.5 for Flash/Turbo models). */
+  creditMultiplier: number;
+  maxChars: number;
+}
+export interface ElevenQuota {
+  tier: string;
+  used: number;
+  limit: number;
+  remaining: number;
+  resetsAt: string | null;
+}
+
+export interface MediaStatus {
+  now: string;
+  storage: { ok: true; root: string; freeBytes: number } | { ok: false; root: string; reason: string };
+  todaySpendUsd: number;
+  xai:
+    | { configured: false; missing: 'XAI_API_KEY' }
+    | {
+        configured: true;
+        imageModels: ImageModelInfo[];
+        videoModels: VideoModelInfo[];
+        /** Why a family is empty (e.g. key has no video access); shown instead of faking it. */
+        imageError?: string;
+        videoError?: string;
+      };
+  elevenlabs:
+    | { configured: false; missing: 'ELEVENLABS_API_KEY' }
+    | { configured: true; voices: VoiceInfo[]; models: VoiceModelInfo[]; quota: ElevenQuota | null; error?: string };
+}
+
+export interface Quote {
+  quoteId: string;
+  expiresAt: string;
+  kind: MediaKind;
+  provider: MediaProvider;
+  model: string;
+  count: number;
+  estUsd: number;
+  /** Human breakdown, e.g. "2 images x $0.02". */
+  breakdown: string;
+  outputDir: string;
+  /** Voice: credits this request uses and the quota left after it. */
+  credits?: number;
+  creditsRemainingAfter?: number;
+  warnings: string[];
+}
+
+export interface GenItemRecord {
+  id: string;
+  kind: MediaKind;
+  provider: MediaProvider;
+  model: string;
+  prompt: string;
+  params: Record<string, unknown>;
+  file: string;
+  bytes: number;
+  mime: string;
+  estUsd: number;
+  created: string;
+}
+
+export type JobStatus = 'running' | 'done' | 'failed';
+export interface JobState {
+  id: string;
+  status: JobStatus;
+  kind: MediaKind;
+  startedAt: string;
+  /** Free-text progress, e.g. "video rendering (poll 4)". */
+  progress: string;
+  items: GenItemRecord[];
+  error?: string;
+}

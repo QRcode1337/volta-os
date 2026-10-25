@@ -47,8 +47,6 @@ export const ASPECT_BY_ID: Record<AspectId, AspectSpec> = Object.fromEntries(ASP
   AspectSpec
 >;
 
-export const BATCH_SIZES = [1, 2, 4, 5, 8, 10] as const;
-
 export interface GenItem {
   id: string;
   batchId: string;
@@ -62,11 +60,6 @@ export interface GenItem {
   createdAt: string; // ISO
   promoted?: boolean;
   sentToEditor?: boolean;
-}
-
-/** Exactly round(20%) of a batch when the wildcard toggle is on. */
-export function wildcardCount(batch: number, enabled: boolean): number {
-  return enabled ? Math.round(batch * 0.2) : 0;
 }
 
 const STOP = new Set([
@@ -86,54 +79,6 @@ export function headlineFromPrompt(prompt: string): string {
   const pick = words.slice(0, words.length > 5 ? 4 : 3);
   return (pick.length ? pick.join(' ') : 'UNTITLED').toUpperCase();
 }
-
-/** Cheap deterministic 32-bit hash for strings. */
-export function hashString(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-type SeedRow = [string, MediaModelId, AspectId, number, GenVariant, string];
-
-// prompt, model, aspect, seed, variant, createdAt
-const SEED_ROWS: SeedRow[] = [
-  ['"Claude 5.5 Changed Everything" — creator pointing at glowing terminal', 'flux-ultra', '16:9', 48213, 'standard', '2026-10-22T18:40:00Z'],
-  ['"I Replaced My Team" robot head HUD split screen', 'ideogram-3', '16:9', 77104, 'standard', '2026-10-22T18:40:00Z'],
-  ['"Agentic OS" orbital ring of artifacts, orange core', 'runway-gen4', '16:9', 31337, 'standard', '2026-10-22T16:05:00Z'],
-  ['"Wildcard 80/20" risograph poster of two overlapping minds', 'recraft-v3', '4:5', 90210, 'wildcard', '2026-10-22T16:05:00Z'],
-  ['"Prompt Cache Math" cold vs warm meter, dollars burning', 'flux-ultra', '16:9', 12045, 'standard', '2026-10-21T21:12:00Z'],
-  ['"MCP Bloat" context window filling with heavy blocks', 'kling-21', '9:16', 66012, 'standard', '2026-10-21T21:12:00Z'],
-  ['"ARMS Framework" stacked layers apps routines memory skills', 'ideogram-3', '4:5', 23999, 'standard', '2026-10-21T14:30:00Z'],
-  ['"Second Brain" 424k files vaporwave sunset grid', 'flux-ultra', '16:9', 51824, 'wildcard', '2026-10-21T14:30:00Z'],
-  ['"Jev Routing" 41% to Haiku, router switchboard', 'runway-gen4', '16:9', 40411, 'wildcard', '2026-10-20T19:48:00Z'],
-  ['"Skills Beat Prompts" chart arrow up, bold numerals', 'recraft-v3', '16:9', 87001, 'standard', '2026-10-20T19:48:00Z'],
-  ['"Build In Public" swiss poster grid, red numerals', 'ideogram-3', '4:5', 15562, 'wildcard', '2026-10-20T11:02:00Z'],
-  ['"$0.18 For 4,451 Calls" receipt close-up with orange glow', 'flux-ultra', '9:16', 70707, 'standard', '2026-10-19T22:16:00Z'],
-  ['"Delete Your MCPs" acid y2k chrome warning sign', 'kling-21', '9:16', 34343, 'wildcard', '2026-10-19T22:16:00Z'],
-  ['"One Local OS" mascot hero shot with terminal window', 'recraft-v3', '16:9', 99881, 'standard', '2026-10-18T17:55:00Z'],
-  ['"Routines Run While I Sleep" bauhaus clock shapes', 'flux-ultra', '16:9', 28871, 'wildcard', '2026-10-18T17:55:00Z'],
-  ['"Opus vs Haiku" side-by-side model duel, versus lockup', 'runway-gen4', '4:5', 61616, 'standard', '2026-10-18T09:20:00Z'],
-];
-
-export const SEED_GEN_ITEMS: GenItem[] = SEED_ROWS.map(([prompt, model, aspect, seed, variant, createdAt], i) => {
-  const spec = MODEL_BY_ID[model];
-  return {
-    id: `seed-${String(i + 1).padStart(2, '0')}`,
-    batchId: `seed-batch-${createdAt.slice(0, 13)}`,
-    prompt,
-    model,
-    aspect,
-    seed,
-    variant,
-    mediaType: spec.kind === 'video' ? 'animation' : 'thumbnail',
-    cost: spec.costPerItem,
-    createdAt,
-  };
-});
 
 // ───────────────────────── Carousels ─────────────────────────
 

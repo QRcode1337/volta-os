@@ -3,12 +3,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ArrowLeftRight, Minus, Pause, Play, Plus, RotateCcw, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import type { ScriptHook, ScriptTiming } from './script-model';
+import type { ScriptTiming } from './script-model';
 import { WPM, fmtClock } from './script-model';
 
 interface TeleprompterProps {
   title: string;
-  hook?: ScriptHook;
   timing: ScriptTiming;
   onClose: () => void;
 }
@@ -17,7 +16,6 @@ interface Segment {
   key: string;
   chapter?: string;
   text: string;
-  hook?: boolean;
 }
 
 const SPEED_MIN = 0.25;
@@ -29,7 +27,7 @@ const SPEED_STEP = 0.25;
  * reading line in exactly its computed 150 wpm runtime.
  * Keys: Space play/pause · ↑/↓ speed · M mirror · R restart · Esc exit.
  */
-export function Teleprompter({ title, hook, timing, onClose }: TeleprompterProps) {
+export function Teleprompter({ title, timing, onClose }: TeleprompterProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const segRefs = useRef<(HTMLParagraphElement | null)[]>([]);
   const pos = useRef(0);
@@ -46,10 +44,6 @@ export function Teleprompter({ title, hook, timing, onClose }: TeleprompterProps
   const segments: Segment[] = [];
   timing.chapters.forEach((c) => {
     let first = true;
-    if (c.index === 0 && hook) {
-      segments.push({ key: 'hook', chapter: c.title, text: hook.text, hook: true });
-      first = false;
-    }
     c.rows.forEach((r) => {
       if (r.voiceover.trim()) {
         segments.push({ key: r.id, chapter: first ? c.title : undefined, text: r.voiceover });
@@ -229,7 +223,6 @@ export function Teleprompter({ title, hook, timing, onClose }: TeleprompterProps
                   className={cn('mb-8 font-semibold transition-colors duration-300', i === activeIdx ? 'text-paper' : 'text-[#5b5850]')}
                   style={{ fontFamily: 'var(--font-sans)', fontSize: fontPx, lineHeight: 1.3, letterSpacing: '-0.01em' }}
                 >
-                  {s.hook && <span className="mr-3 align-middle font-mono text-[0.32em] font-bold uppercase tracking-[0.12em] text-orange">Hook</span>}
                   {s.text}
                 </p>
               </div>

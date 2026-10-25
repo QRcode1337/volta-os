@@ -4,6 +4,8 @@ import { AlertTriangle, ChevronDown, ChevronRight, CloudOff, Copy, FileAudio, Fi
 import { memo, useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/cn';
 import type { EditorMediaGroup, EditorMediaItem, EditorMediaList } from '@/types/editor';
+import type { NotionSection, VpEpisode } from '@/types/notion';
+import { outlineOptions } from '@/lib/notion-md';
 import type { EditorInboxItem } from '@/types/os';
 import { fmtDuration } from './spatial';
 import { clipMatchesFilter } from './state';
@@ -56,6 +58,11 @@ export interface MediaBinProps {
   notes: Record<string, NotesState>;
   bin: BinState;
   handoffs: EditorInboxItem[];
+  /** Notion episodes from the Video Production index (for tagging files). */
+  episodes: { status: 'loading' | 'ready' | 'error'; list: VpEpisode[]; error: string | null };
+  /** Outline chapters per outline page id, loaded on demand. */
+  outlines: Record<string, NotionSection[] | 'error'>;
+  onSetEpisode: (clipId: string, key: string | null, section?: string | null) => void;
   onSelect: (id: string) => void;
   onCycleStatus: (id: string) => void;
   onSetStatus: (id: string, s: ClipStatus) => void;
@@ -65,6 +72,63 @@ export interface MediaBinProps {
   onRefresh: () => void;
   onCopy: (text: string, label: string) => void;
   onDismissHandoff: (id: string) => void;
+}
+
+const SELECT = 'h-6 w-full min-w-0 rounded border border-subtle bg-obsidian px-1 font-mono text-[10px] text-secondary outline-none focus:border-orange/60';
+
+/** Tag an open file with a Notion episode (and the outline chapter / beat it shows). Saved with its pins on Windsor. */
+function EpisodeTag({ clip, episodes, outlines, onSet }: { clip: EditorClip; episodes: MediaBinProps['episodes']; outlines: MediaBinProps['outlines']; onSet: MediaBinProps['onSetEpisode'] }) {
+  if (clip.origin !== 'server') return null;
+  const ep = clip.episode;
+  const sections = ep?.outlineId ? outlines[ep.outlineId] : undefined;
+  const options = Array.isArray(sections) ? outlineOptions(sections) : [];
+  return (
+    <div className="mt-1.5 space-y-1" onClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.stopPropagation()}>
+      <div className="flex items-center gap-1">
+        <span className="w-[46px] shrink-0 font-mono text-[8.5px] font-semibold tracking-wide text-muted">EPISODE</span>
+        <select
+          aria-label={`Notion episode for ${clip.name}`}
+          value={ep?.key ?? ''}
+          disabled={episodes.status !== 'ready'}
+          onChange={(e) => onSet(clip.id, e.target.value || null)}
+          className={SELECT}
+          title={episodes.status === 'error' ? `Video Production index unavailable: ${episodes.error}` : 'Tag this file with a Video Production episode: the prompt then includes its title, Notion link and outline part'}
+        >
+          <option value="">{episodes.status === 'loading' ? 'loading…' : episodes.status === 'error' ? 'Notion unavailable' : 'No episode'}</option>
+          {episodes.list.map((e) => (
+            <option key={e.key} value={e.key}>
+              {e.title}
+            </option>
+          ))}
+        </select>
+      </div>
+      {ep && (
+        <div className="flex items-center gap-1">
+          <span className="w-[46px] shrink-0 font-mono text-[8.5px] font-semibold tracking-wide text-muted">PART</span>
+          <select
+            aria-label={`Outline part for ${clip.name}`}
+            value={ep.section ?? ''}
+            disabled={!ep.outlineId || !Array.isArray(sections)}
+            onChange={(e) => onSet(clip.id, ep.key, e.target.value || null)}
+            className={SELECT}
+          >
+            <option value="">{!ep.outlineId ? 'no outline yet' : sections === 'error' ? 'outline unavailable' : sections ? 'Whole outline (beat sheet)' : 'loading outline…'}</option>
+            {options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.depth ? `   ${o.label}` : o.label}
+              </option>
+            ))}
+            {ep.section && !options.some((o) => o.value === ep.section) && <option value={ep.section}>{ep.section}</option>}
+          </select>
+          {ep.outlineUrl && (
+            <a href={ep.outlineUrl} target="_blank" rel="noreferrer noopener" title="Open the outline in Notion" className="shrink-0 font-mono text-[9px] text-secondary hover:text-orange">
+              Notion↗
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function BinRow({ item, open, onOpen, onOffline, onCopy }: { item: EditorMediaItem; open: boolean; onOpen: () => void; onOffline: () => void; onCopy: (text: string, label: string) => void }) {
@@ -264,6 +328,7 @@ export const MediaBin = memo(function MediaBin(p: MediaBinProps) {
                   >
                     ● {c.status}
                   </button>
+                  <EpisodeTag clip={c} episodes={p.episodes} outlines={p.outlines} onSet={p.onSetEpisode} />
                 </li>
               );
             })}
@@ -338,6 +403,11 @@ export const MediaBin = memo(function MediaBin(p: MediaBinProps) {
                     {h.title}
                   </span>
                   <span className="shrink-0 font-mono text-[9px] uppercase text-muted">{h.source}</span>
+                  {h.notion && (
+                    <a href={h.notion.url} target="_blank" rel="noreferrer noopener" title={`From Notion: ${h.notion.title}`} className="shrink-0 font-mono text-[9px] text-secondary hover:text-orange">
+                      Notion↗
+                    </a>
+                  )}
                   <button type="button" onClick={() => p.onDismissHandoff(h.id)} aria-label="Dismiss hand-off" title="Dismiss" className="shrink-0 rounded p-0.5 text-muted hover:bg-panel-hover hover:text-paper">
                     <Trash2 size={10} />
                   </button>

@@ -98,70 +98,25 @@ export interface Slide {
 
 export interface Deck {
   id: string;
+  /** The short's number in its Notion page (S01 -> 1); the card shows it as "S01". */
   postNumber: number;
   title: string;
-  platform: 'INSTAGRAM' | 'LINKEDIN';
+  platform: 'YOUTUBE SHORTS' | 'TIKTOK' | 'INSTAGRAM' | 'LINKEDIN';
   handle: string;
   slides: Slide[];
+  /** Everything below comes straight from the Notion page. */
+  hook: string;
+  episode: string | null;
+  source: string | null;
+  /** Full voiceover, when the page has one. */
+  voiceover: string | null;
+  /** On-screen card text lines ("CARDS" field). */
+  cards: string[];
+  caption: string | null;
+  /** 1-based position in the page's suggested posting order, when it lists one. */
+  queue: number | null;
+  /** Marked "(bench)" in Notion: written but not in the first posting batch. */
+  bench: boolean;
+  notionUrl: string;
+  pageTitle: string;
 }
-
-const s = (id: string, kind: SlideKind, theme: SlideTheme, kicker: string, headline: string, body: string, stat?: string): Slide => ({
-  id,
-  kind,
-  theme,
-  kicker,
-  headline,
-  body,
-  stat,
-});
-
-export const DECKS: Deck[] = [
-  {
-    id: 'post-14',
-    postNumber: 14,
-    title: 'The ARMS Framework in 7 Slides',
-    platform: 'INSTAGRAM',
-    handle: '@robonuggets',
-    slides: [
-      s('p14-1', 'cover', 'dark', 'POST #14 · AGENTIC OS', 'The ARMS Framework', 'How I run an entire content business out of one folder of plain-text files that Claude can route.'),
-      s('p14-2', 'point', 'dark', 'THE PROBLEM', 'Prompts don’t compound.', 'Every chat starts from zero. You re-explain your brand, your tone, your tools. That context tax is paid on every single session.'),
-      s('p14-3', 'point', 'paper', 'A — APPS', 'Apps are the hands.', 'CLIs first, APIs second, MCPs last. Each connector gets a one-line note in applications/ so Claude knows the lightest tool for the job.'),
-      s('p14-4', 'point', 'dark', 'R — ROUTINES', 'Routines run while you sleep.', 'Inbox triage at 7am, brand-watch at noon, weekly recos on Sunday. Each routine is a markdown file with a schedule, a model and an output path.'),
-      s('p14-5', 'point', 'paper', 'M — MEMORY', 'Memory is an index, not a dump.', 'CLAUDE.md routes to department files. MEMORY.md holds one-line pointers. Claude reads 2k tokens to find what it needs instead of 200k.'),
-      s('p14-6', 'stat', 'dark', 'S — SKILLS', 'Skills are taste, written down.', 'Database skills like /thumb and /tone learn from every approved asset — with a 20% wildcard quota so they never overfit.', '80/20'),
-      s('p14-7', 'cta', 'dark', 'STEAL THIS', 'Apps. Routines. Memory. Skills.', 'Save this post, then create four folders tonight. Comment “ARMS” and I’ll send you my starter CLAUDE.md.'),
-    ],
-  },
-  {
-    id: 'post-15',
-    postNumber: 15,
-    title: 'Why MCPs Drain Your Context Window',
-    platform: 'INSTAGRAM',
-    handle: '@robonuggets',
-    slides: [
-      s('p15-1', 'cover', 'dark', 'POST #15 · CONTEXT', 'Your MCPs are eating your context.', 'Before you type a single word, your agent has already spent tens of thousands of tokens describing tools it won’t use.'),
-      s('p15-2', 'stat', 'dark', 'THE TAX', 'Preloaded before “hello”.', 'Calendar 9.8k + Gmail 12.4k + Slack 18.6k tool-schema tokens load into every session, whether you use them or not.', '40.8k'),
-      s('p15-3', 'point', 'paper', 'WHY IT HURTS', 'Bloat breaks the cache.', 'A heavier system prompt means more tokens to re-warm after every idle gap. Cold reloads on Opus cost real money — every morning.'),
-      s('p15-4', 'stat', 'dark', 'USAGE CHECK', 'Slack MCP: used 3× a week.', '18.6k tokens of tool definitions per chat for three calls a week. That’s the worst ratio in the whole stack.', '3×'),
-      s('p15-5', 'point', 'paper', 'THE LADDER', 'CLI → API → MCP.', 'Reach for a CLI first (zero schema cost), a thin API script second, and only keep an MCP when you truly need live, bidirectional tools.'),
-      s('p15-6', 'cta', 'dark', 'DO THIS TODAY', 'Audit. Disable. Measure.', 'List every MCP, its token weight and weekly uses. Disable anything under 5 uses/wk. Watch your warm-cache window stretch.'),
-    ],
-  },
-  {
-    id: 'post-16',
-    postNumber: 16,
-    title: 'Jev Routing Math',
-    platform: 'LINKEDIN',
-    handle: 'Jay E · RoboNuggets',
-    slides: [
-      s('p16-1', 'cover', 'dark', 'POST #16 · ROUTING', 'Stop sending everything to Opus.', 'A tiny classifier in front of your agent decides which model each job deserves. Here’s the math on 4,451 real calls.'),
-      s('p16-2', 'stat', 'dark', 'MEET JEV', 'Six milliseconds per decision.', 'Jev reads the prompt and the skill, then routes to HAIKU, SONNET or OPUS. Each classification costs $0.00004.', '0.006s'),
-      s('p16-3', 'stat', 'paper', 'THE SPLIT', '41% of calls never needed a big model.', 'Formatting, triage, summaries, file lookups — Haiku handles them at a fraction of the cost with no visible quality drop.', '41%'),
-      s('p16-4', 'stat', 'dark', 'ROUTER OVERHEAD', '4,451 routes. $0.18 total.', 'The router pays for itself on the first misrouted Opus call it prevents. Everything after that is pure savings.', '$0.18'),
-      s('p16-5', 'point', 'paper', 'WHERE OPUS EARNS IT', 'Keep Opus for taste and depth.', 'Brand design, proposals, long-form scripts and multi-file refactors stay on Opus at HIGH effort. Routing is about fit, not cheapness.'),
-      s('p16-6', 'cta', 'dark', 'YOUR MOVE', 'Log first. Route second.', 'Tag a week of calls with model + outcome. The routing rules write themselves. DM “JEV” for my classifier prompt.'),
-    ],
-  },
-];
-
-export const DECK_BY_ID: Record<string, Deck> = Object.fromEntries(DECKS.map((d) => [d.id, d]));

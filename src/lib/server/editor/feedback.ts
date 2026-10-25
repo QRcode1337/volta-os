@@ -2,7 +2,7 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { EditorClipStatus, EditorFeedbackDoc, EditorFeedbackResponse, EditorMediaItem, EditorPinRecord, EditorSkillTag } from '@/types/editor';
+import type { EditorClipStatus, EditorEpisodeRef, EditorEpisodeTag, EditorFeedbackDoc, EditorFeedbackResponse, EditorMediaItem, EditorPinRecord, EditorSkillTag } from '@/types/editor';
 import { StudioError, windsorMounted } from '../studio/storage';
 
 // Per-file review pins live on the Windsor drive, never on the boot disk:
@@ -71,6 +71,38 @@ export function validatePins(raw: unknown): EditorPinRecord[] {
   });
 }
 
+const EP_KEY = /^ep\d{1,3}$/;
+const NOTION_URL = /^https:\/\/www\.notion\.so\/[0-9a-f]{32}$/;
+
+/** `undefined` = leave the stored tag alone, `null` = clear it, object = tag with this episode (and outline part). */
+export function validateEpisodeTag(raw: unknown): EditorEpisodeTag | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null) return null;
+  const q = raw as Record<string, unknown>;
+  if (typeof raw !== 'object' || typeof q.key !== 'string' || !EP_KEY.test(q.key)) throw new StudioError('`episode.key` must look like "ep3".', 400);
+  const section = typeof q.section === 'string' && q.section.trim() ? q.section.trim().slice(0, 200) : null;
+  return { key: q.key, section };
+}
+
+/** A stored episode ref is data from disk: keep only well-formed fields (null when unusable). */
+export function sanitizeEpisode(raw: unknown): EditorEpisodeRef | null {
+  const q = raw as Record<string, unknown> | null;
+  if (!q || typeof q !== 'object' || typeof q.key !== 'string' || !EP_KEY.test(q.key)) return null;
+  const str = (v: unknown, max: number) => (typeof v === 'string' && v ? v.slice(0, max) : null);
+  const url = (v: unknown) => (typeof v === 'string' && NOTION_URL.test(v) ? v : null);
+  return {
+    key: q.key,
+    number: Number(q.key.slice(2)),
+    title: str(q.title, 200) ?? q.key,
+    section: str(q.section, 200),
+    outlineId: typeof q.outlineId === 'string' && /^[0-9a-f]{32}$/.test(q.outlineId) ? q.outlineId : null,
+    outlineTitle: str(q.outlineTitle, 300),
+    outlineUrl: url(q.outlineUrl),
+    ledgerUrl: url(q.ledgerUrl),
+    taggedAt: str(q.taggedAt, 40) ?? new Date(0).toISOString(),
+  };
+}
+
 const unmounted = 'The Windsor drive is not mounted, so review notes cannot be read or saved. Plug it in (nothing is written to the boot disk).';
 
 export async function readFeedback(fileKey: string): Promise<EditorFeedbackResponse> {
@@ -80,14 +112,14 @@ export async function readFeedback(fileKey: string): Promise<EditorFeedbackRespo
     const text = await fs.readFile(path.join(FEEDBACK_DIR, `${fileKey}.json`), 'utf8');
     const j = JSON.parse(text) as EditorFeedbackDoc;
     if (j?.v !== 1 || j.fileKey !== fileKey || !Array.isArray(j.pins)) throw new Error('unexpected shape');
-    return { doc: { ...j, status: validateStatus(j.status), pins: validatePins(j.pins) }, available: true, reason: null };
+    return { doc: { ...j, status: validateStatus(j.status), pins: validatePins(j.pins), episode: sanitizeEpisode(j.episode) }, available: true, reason: null };
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { doc: null, available: true, reason: null };
     throw new StudioError(`Saved notes for this file are unreadable: ${(err as Error).message}`, 500);
   }
 }
 
-export async function writeFeedback(item: EditorMediaItem, pins: EditorPinRecord[], status: EditorClipStatus): Promise<EditorFeedbackDoc> {
+export async function writeFeedback(item: EditorMediaItem, pins: EditorPinRecord[], status: EditorClipStatus, episode: EditorEpisodeRef | null = null): Promise<EditorFeedbackDoc> {
   const fileKey = requireFileKey(item.id);
   if (!(await windsorMounted())) throw new StudioError(unmounted, 507);
   const doc: EditorFeedbackDoc = {
@@ -97,6 +129,7 @@ export async function writeFeedback(item: EditorMediaItem, pins: EditorPinRecord
     savedAt: new Date().toISOString(),
     status,
     pins,
+    episode,
   };
   await fs.mkdir(FEEDBACK_DIR, { recursive: true });
   const dest = path.join(FEEDBACK_DIR, `${fileKey}.json`);

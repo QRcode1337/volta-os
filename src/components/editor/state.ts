@@ -1,5 +1,5 @@
 // VOLTA Editor: reducer, selectors and persistence helpers (pure; no DOM at module scope).
-import type { EditorMediaItem, EditorPinRecord } from '@/types/editor';
+import type { EditorEpisodeRef, EditorMediaItem, EditorPinRecord } from '@/types/editor';
 import type { EditorInboxItem } from '@/types/os';
 import { formatClock } from './spatial';
 import type { ClipFilter, ClipStatus, EditorClip, EditorPin, EditorState, GroupMode, InspectorTab, PinDraft, PinMode, PlaybackSpeed, SkillTag } from './types';
@@ -64,6 +64,7 @@ export function clipFromMedia(item: EditorMediaItem, extra: { durationOverride?:
     animationLabel: item.groupName,
     voiceover: extra.voiceover ?? [],
     canSaveNotes: item.canSaveNotes,
+    episode: null,
   };
 }
 
@@ -235,7 +236,8 @@ export type EditorAction =
   | { type: 'SET_CLIP_STATUS'; clipId: string; status: ClipStatus }
   | { type: 'CYCLE_CLIP_STATUS'; clipId: string }
   | { type: 'ADD_CLIPS'; clips: NewClip[]; select?: boolean }
-  | { type: 'LOAD_PINS'; clipId: string; records: EditorPinRecord[]; status?: ClipStatus }
+  | { type: 'LOAD_PINS'; clipId: string; records: EditorPinRecord[]; status?: ClipStatus; episode?: EditorEpisodeRef | null }
+  | { type: 'SET_EPISODE'; clipId: string; episode: EditorEpisodeRef | null }
   | { type: 'REMOVE_CLIP'; clipId: string }
   | { type: 'SET_EDITING'; id: string | null }
   | { type: 'CLEAR_TIMELINE' };
@@ -387,9 +389,11 @@ export function editorReducer(s: EditorState, a: EditorAction): EditorState {
       return {
         ...s,
         pins: [...others, ...loaded],
-        clips: a.status ? s.clips.map((c) => (c.id === clip.id ? { ...c, status: a.status as ClipStatus } : c)) : s.clips,
+        clips: a.status || a.episode !== undefined ? s.clips.map((c) => (c.id === clip.id ? { ...c, status: (a.status ?? c.status) as ClipStatus, episode: a.episode !== undefined ? a.episode : c.episode } : c)) : s.clips,
       };
     }
+    case 'SET_EPISODE':
+      return { ...s, clips: s.clips.map((c) => (c.id === a.clipId ? { ...c, episode: a.episode } : c)) };
     case 'REMOVE_CLIP': {
       const c = s.clips.find((x) => x.id === a.clipId);
       if (!c) return s;

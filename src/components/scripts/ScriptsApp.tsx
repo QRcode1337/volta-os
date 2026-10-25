@@ -1,256 +1,148 @@
 'use client';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Clapperboard, FileText, ListOrdered, MonitorPlay, Send, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ExternalLink, FileText, Library, MonitorPlay, RefreshCw, Send } from 'lucide-react';
+import type { NotionPageDoc, VpCatalog } from '@/types/notion';
 import { HudPanel } from '@/components/robo-ui';
+import { AppTopBar } from '@/components/elements/kit/AppTopBar';
+import { ToastStack, useToasts } from '@/components/elements/kit/toast';
+import { ExternalPill } from '@/components/notion/NotionBits';
+import { useRemote } from '@/components/notion/useRemote';
 import { pushToEditorInbox } from '@/lib/editor-inbox';
 import { isTypingTarget } from '@/lib/events';
 import { cn } from '@/lib/cn';
-import { AppTopBar } from '@/components/elements/kit/AppTopBar';
-import { ToastStack, useToasts } from '@/components/elements/kit/toast';
-import { AvScriptTable } from './AvScriptTable';
-import { ChapterOutline } from './ChapterOutline';
-import { HookLab } from './HookLab';
+import { CatalogRail, type Selection } from './CatalogRail';
+import { LedgerPanel } from './LedgerPanel';
+import { OutlineView } from './OutlineView';
 import { Teleprompter } from './Teleprompter';
-import type { ScriptDoc, ScriptRow } from './script-model';
-import {
-  SCRIPT_TOPICS,
-  SEED_SCRIPTS,
-  WPM,
-  activeHook,
-  buildEditorItems,
-  computeTiming,
-  fmtClock,
-  generateWildcards,
-  newRowId,
-  orderedRows,
-  seedById,
-} from './script-model';
+import { WPM, buildEditorItems, computeTiming, docFromOutline, fmtClock } from './script-model';
 
-const STORAGE_KEY = 'rubric:scripts:v1';
+const LAST_KEY = 'volta:scripts:last';
 
-interface PersistedState {
-  activeId: string;
-  docs: Record<string, ScriptDoc>;
-}
-
-function seedState(): PersistedState {
-  return { activeId: SEED_SCRIPTS[0].id, docs: Object.fromEntries(SEED_SCRIPTS.map((d) => [d.id, d])) };
-}
-
-function isValidState(v: unknown): v is PersistedState {
-  if (!v || typeof v !== 'object') return false;
-  const s = v as PersistedState;
-  return typeof s.activeId === 'string' && !!s.docs && typeof s.docs === 'object' && !!s.docs[s.activeId]?.chapters;
+function readUrlSelection(): Selection | null {
+  try {
+    const q = new URLSearchParams(window.location.search);
+    const ep = q.get('ep');
+    if (ep && /^\d{1,3}$/.test(ep)) return { type: 'ep', key: `ep${ep}` };
+    const page = q.get('page');
+    if (page && /^[0-9a-f]{32}$/i.test(page)) return { type: 'page', id: page.toLowerCase(), title: 'Notion page' };
+    const last = window.localStorage.getItem(LAST_KEY);
+    if (last) return JSON.parse(last) as Selection;
+  } catch {
+    // no URL / storage: fall through to the default
+  }
+  return null;
 }
 
 export function ScriptsApp() {
-  const [state, setState] = useState<PersistedState>(seedState);
-  const [hydrated, setHydrated] = useState(false);
+  const catalog = useRemote<VpCatalog>('/api/notion/catalog');
+  const [sel, setSel] = useState<Selection | null>(null);
+  const [evidenceId, setEvidenceId] = useState<string | null>(null);
   const [prompterOpen, setPrompterOpen] = useState(false);
-  const [flashChapter, setFlashChapter] = useState<string | null>(null);
   const { toasts, push, dismiss } = useToasts();
-  const tableScrollRef = useRef<HTMLDivElement>(null);
-  const chapterRefs = useRef(new Map<string, HTMLElement>());
 
-  // Load persisted drafts after mount (initial render = seed, so SSR and client match).
+  // restore the selection after mount (SSR renders the empty state)
+  useEffect(() => setSel(readUrlSelection()), []);
+
+  const cat = catalog.data;
+  const episode = sel?.type === 'ep' ? (cat?.episodes.find((e) => e.key === sel.key) ?? null) : null;
+
+  // default selection: the newest episode that has an outline
   useEffect(() => {
+    if (!cat || sel) return;
+    const pick = [...cat.episodes].reverse().find((e) => e.outline) ?? cat.episodes[cat.episodes.length - 1];
+    if (pick) setSel({ type: 'ep', key: pick.key });
+  }, [cat, sel]);
+
+  const select = useCallback((s: Selection) => {
+    setSel(s);
+    setEvidenceId(null);
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed: unknown = JSON.parse(raw);
-        if (isValidState(parsed)) {
-          // Merge so newly added seed scripts still appear.
-          setState({ activeId: parsed.activeId, docs: { ...seedState().docs, ...parsed.docs } });
-        }
-      }
+      window.localStorage.setItem(LAST_KEY, JSON.stringify(s));
+      const u = new URL(window.location.href);
+      u.search = s.type === 'ep' ? `?ep=${s.key.replace(/^ep/, '')}` : `?page=${s.id}`;
+      window.history.replaceState(null, '', u);
     } catch {
-      // corrupted storage — keep seed
+      // storage / history unavailable
     }
-    setHydrated(true);
   }, []);
 
-  useEffect(() => {
-    if (!hydrated) return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // quota / private mode — drafts just won't persist
-    }
-  }, [state, hydrated]);
+  const centerId = sel?.type === 'page' ? sel.id : (episode?.outline?.id ?? null);
+  const page = useRemote<NotionPageDoc>(centerId ? `/api/notion/page?id=${centerId}` : null);
+  const ledgerId = evidenceId ?? (episode ? (episode.ledger?.id ?? null) : null);
+  const ledger = useRemote<NotionPageDoc>(ledgerId ? `/api/notion/page?id=${ledgerId}` : null);
 
-  const doc = state.docs[state.activeId] ?? SEED_SCRIPTS[0];
-  const timing = useMemo(() => computeTiming(doc), [doc]);
-  const hook = activeHook(doc);
+  const doc = useMemo(() => (page.data ? docFromOutline(page.data) : null), [page.data]);
+  const timing = useMemo(() => (doc ? computeTiming(doc) : null), [doc]);
 
-  const updateDoc = useCallback((fn: (d: ScriptDoc) => ScriptDoc) => {
-    setState((s) => ({ ...s, docs: { ...s.docs, [s.activeId]: fn(s.docs[s.activeId]) } }));
-  }, []);
+  const title = episode?.title ?? (sel?.type === 'page' ? sel.title : 'Script');
 
-  // ── hooks ──
-  const selectHook = (id: string) => updateDoc((d) => ({ ...d, activeHookId: id }));
-  const regenerateWildcards = () => {
-    updateDoc((d) => {
-      const seed = d.wildcardSeed + 1;
-      const fresh = generateWildcards(seed, SCRIPT_TOPICS[d.id] ?? 'this system');
-      const oldWild = d.hooks.filter((h) => h.kind === 'wildcard');
-      const activeSlot = oldWild.findIndex((h) => h.id === d.activeHookId);
-      return {
-        ...d,
-        wildcardSeed: seed,
-        hooks: [...d.hooks.filter((h) => h.kind === 'tone'), ...fresh],
-        activeHookId: activeSlot >= 0 ? fresh[activeSlot].id : d.activeHookId,
-      };
-    });
-    push('Rolled 2 fresh /wildcard hooks (deterministic seed).');
-  };
-
-  // ── chapters ──
-  const moveChapter = useCallback(
-    (id: string, to: number) =>
-      updateDoc((d) => {
-        const from = d.chapters.findIndex((c) => c.id === id);
-        if (from < 0 || to < 0 || to >= d.chapters.length || from === to) return d;
-        const chapters = [...d.chapters];
-        const [m] = chapters.splice(from, 1);
-        chapters.splice(to, 0, m);
-        return { ...d, chapters };
-      }),
-    [updateDoc],
-  );
-  const renameChapter = (id: string, title: string) =>
-    updateDoc((d) => ({ ...d, chapters: d.chapters.map((c) => (c.id === id ? { ...c, title } : c)) }));
-  const addChapter = () => {
-    const chId = `ch-${newRowId()}`;
-    updateDoc((d) => ({
-      ...d,
-      chapters: [...d.chapters, { id: chId, title: 'New Chapter' }],
-      rows: [...d.rows, { id: newRowId(), chapterId: chId, voiceover: '', visualCue: '' }],
-    }));
-    setTimeout(() => jumpToChapter(chId), 50);
-  };
-  const jumpToChapter = (id: string) => {
-    const el = chapterRefs.current.get(id);
-    const scroller = tableScrollRef.current;
-    if (el && scroller) {
-      scroller.scrollTo({ top: el.offsetTop - 36, behavior: 'smooth' });
-      setFlashChapter(id);
-      setTimeout(() => setFlashChapter((c) => (c === id ? null : c)), 900);
-    }
-  };
-
-  // ── rows ──
-  const changeRow = (id: string, field: 'voiceover' | 'visualCue', value: string) =>
-    updateDoc((d) => ({ ...d, rows: d.rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)) }));
-  const addRow = (chapterId: string, afterRowId?: string) =>
-    updateDoc((d) => {
-      const row: ScriptRow = { id: newRowId(), chapterId, voiceover: '', visualCue: '' };
-      const rows = [...d.rows];
-      let at = afterRowId ? rows.findIndex((r) => r.id === afterRowId) + 1 : -1;
-      if (at <= 0) {
-        const lastInChapter = rows.map((r) => r.chapterId).lastIndexOf(chapterId);
-        at = lastInChapter >= 0 ? lastInChapter + 1 : rows.length;
-      }
-      rows.splice(at, 0, row);
-      return { ...d, rows };
-    });
-  const deleteRow = (id: string) => updateDoc((d) => ({ ...d, rows: d.rows.filter((r) => r.id !== id) }));
-  /** Moves within the flat AV order; crossing a chapter boundary re-parents the row into the neighbour chapter. */
-  const moveRow = (id: string, dir: -1 | 1) =>
-    updateDoc((d) => {
-      const flat = orderedRows(d).map((r) => ({ ...r }));
-      const i = flat.findIndex((r) => r.id === id);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= flat.length) return d;
-      if (flat[j].chapterId !== flat[i].chapterId) {
-        flat[i].chapterId = flat[j].chapterId; // hop into the adjacent chapter (lands at its edge)
-      } else {
-        [flat[i], flat[j]] = [flat[j], flat[i]];
-      }
-      return { ...d, rows: flat };
-    });
-
-  // ── hand-off ──
   const pushCues = () => {
-    const items = buildEditorItems(doc, timing, new Date().toISOString(), Date.now());
-    if (items.length === 0) {
-      push('Nothing to push — add some rows first.', { tone: 'error' });
+    if (!doc || !timing) {
+      push('This page has no voiceover sections to push (needs Cold open, Draft VO by beat or Ending).', { tone: 'error' });
       return;
     }
+    const items = buildEditorItems(doc, timing, new Date().toISOString(), Date.now());
     const cueCount = items.reduce((a, it) => a + (it.cues?.length ?? 0), 0);
     const queued = pushToEditorInbox(items);
-    push(`Pushed ${items.length} chapter clips (${cueCount} cues) to VOLTA Editor · ${queued} waiting in inbox.`, {
-      tone: 'success',
-      href: '/apps/editor',
-      linkLabel: 'Open VOLTA Editor',
-    });
+    push(`Pushed ${items.length} chapter hand-offs (${cueCount} cues) from “${doc.title}” to VOLTA Editor · ${queued} waiting.`, { tone: 'success', href: '/apps/editor', linkLabel: 'Open VOLTA Editor' });
   };
 
-  const resetDoc = () => {
-    const seed = seedById(doc.id);
-    if (!seed) return;
-    updateDoc(() => seed);
-    push(`Reset “${doc.title}” to the seed draft.`);
+  const refresh = () => {
+    catalog.reload(true);
+    page.reload(true);
+    ledger.reload(true);
+    push('Refreshing from Notion (forced reloads are limited to one per 30 s per page).');
   };
 
   // "T" opens the teleprompter when not typing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (prompterOpen || isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === 't' || e.key === 'T') {
+      if ((e.key === 't' || e.key === 'T') && doc) {
         e.preventDefault();
         setPrompterOpen(true);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [prompterOpen]);
+  }, [prompterOpen, doc]);
 
-  const rowCount = timing.flat.length;
+  const evidence = episode?.evidence ?? [];
+  const pageData = page.data;
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-obsidian text-paper">
       <AppTopBar
         accent="Scripts"
-        subtitle="YouTube script & retention architect"
-        center={
-          <div className="flex items-center gap-1 rounded-full border border-subtle bg-panel-elevated p-0.5" role="tablist" aria-label="Script">
-            {Object.values(state.docs).map((d) => (
-              <button
-                key={d.id}
-                type="button"
-                role="tab"
-                aria-selected={d.id === state.activeId}
-                onClick={() => setState((s) => ({ ...s, activeId: d.id }))}
-                className={cn(
-                  'inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors',
-                  d.id === state.activeId ? 'bg-paper text-obsidian' : 'text-secondary hover:text-paper',
-                )}
-              >
-                <FileText className="h-3.5 w-3.5" />
-                {d.title}
-              </button>
-            ))}
-          </div>
-        }
+        subtitle="Notion outlines & source ledgers"
+        center={cat ? <span className="hidden truncate font-mono text-[10px] text-muted lg:inline">Video Production · {cat.episodes.length} episodes · {cat.groups.reduce((n, g) => n + g.items.length, 0)} pages</span> : undefined}
         right={
           <>
-            <div className="mr-2 hidden items-center gap-4 2xl:flex">
-              <Stat label="Runtime" value={fmtClock(timing.totalSec)} />
-              <Stat label="Words" value={timing.totalWords.toLocaleString('en-US')} />
-              <Stat label="Pace" value={`${WPM}`} unit="wpm" />
-            </div>
+            {timing && (
+              <div className="mr-2 hidden items-center gap-4 2xl:flex">
+                <Stat label="VO runtime" value={fmtClock(timing.totalSec)} />
+                <Stat label="VO words" value={timing.totalWords.toLocaleString('en-US')} />
+                <Stat label="Pace" value={`${WPM}`} unit="wpm" />
+              </div>
+            )}
+            <button type="button" onClick={refresh} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-subtle bg-panel-elevated px-3 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary transition-colors hover:border-highlight hover:text-paper" title="Re-read from Notion (otherwise cached for 10 minutes)">
+              <RefreshCw className={cn('h-3.5 w-3.5', (page.status === 'loading' || catalog.status === 'loading') && 'robo-spin')} /> Refresh
+            </button>
             <button
               type="button"
+              disabled={!doc}
               onClick={() => setPrompterOpen(true)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-subtle bg-panel-elevated px-3 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary transition-colors hover:border-highlight hover:text-paper"
-              title="Teleprompter (T)"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-subtle bg-panel-elevated px-3 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary transition-colors hover:border-highlight hover:text-paper disabled:pointer-events-none disabled:opacity-40"
+              title={doc ? 'Teleprompter (T)' : 'This page has no voiceover sections'}
             >
               <MonitorPlay className="h-3.5 w-3.5" /> Teleprompter
             </button>
             <button
               type="button"
+              disabled={!doc}
               onClick={pushCues}
-              className="inline-flex h-8 items-center gap-1.5 rounded-full bg-orange px-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-obsidian shadow-[0_0_18px_rgba(255,85,0,0.35)] transition hover:brightness-110"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full bg-orange px-3.5 font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-obsidian shadow-[0_0_18px_rgba(255,85,0,0.35)] transition hover:brightness-110 disabled:pointer-events-none disabled:opacity-40"
+              title={doc ? 'Send each voiceover chapter to VOLTA Editor as cues' : 'This page has no voiceover sections'}
             >
               <Send className="h-3.5 w-3.5" /> Push Cues to VOLTA Editor
             </button>
@@ -258,82 +150,69 @@ export function ScriptsApp() {
         }
       />
 
-      <main className="grid min-h-0 flex-1 grid-cols-[minmax(320px,380px)_minmax(0,1fr)] gap-3 p-3">
-        {/* Left column */}
-        <div className="flex min-h-0 flex-col gap-3">
-          <HudPanel
-            title="Hook Lab"
-            icon={<Sparkles className="h-3.5 w-3.5" />}
-            className="min-h-0 flex-[1.35]"
-            bodyClassName="hud-scroll overflow-y-auto p-2.5"
-            headerExtra={<span className="font-mono text-[9px] text-muted">{doc.hooks.length} variants</span>}
-          >
-            <HookLab hooks={doc.hooks} activeHookId={doc.activeHookId} onSelect={selectHook} onRegenerate={regenerateWildcards} />
-          </HudPanel>
-          <HudPanel
-            title="Chapter Outline"
-            icon={<ListOrdered className="h-3.5 w-3.5" />}
-            className="min-h-0 flex-1"
-            bodyClassName="hud-scroll overflow-y-auto p-2.5"
-            headerExtra={<span className="font-mono text-[9px] text-muted">drag to reorder · {WPM} wpm</span>}
-          >
-            <ChapterOutline chapters={timing.chapters} totalSec={timing.totalSec} onMove={moveChapter} onJump={jumpToChapter} />
-          </HudPanel>
-          <button
-            type="button"
-            onClick={() => setPrompterOpen(true)}
-            className="hud-card group flex shrink-0 items-center gap-3 px-3 py-2.5 text-left transition-colors hover:border-orange/60"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange/10 text-orange transition-colors group-hover:bg-orange group-hover:text-obsidian">
-              <MonitorPlay className="h-4.5 w-4.5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[13px] font-semibold text-paper">Teleprompter mode</span>
-              <span className="block font-mono text-[9.5px] uppercase tracking-[0.06em] text-muted">Space pause · ↑↓ speed · M mirror · Esc exit</span>
-            </span>
-            <kbd className="rounded border border-subtle bg-obsidian px-1.5 py-0.5 font-mono text-[10px] text-secondary">T</kbd>
-          </button>
-        </div>
+      <main className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_minmax(320px,400px)] gap-0">
+        <CatalogRail catalog={catalog} selection={sel} onSelect={select} />
 
-        {/* Right column: AV script */}
+        <section className="flex min-h-0 min-w-0 flex-col border-r border-subtle" aria-label="Outline">
+          {sel && sel.type === 'ep' && cat && !episode ? (
+            <p className="m-4 text-[13px] text-muted">Episode not found in the Video Production index.</p>
+          ) : sel?.type === 'ep' && episode && !episode.outline ? (
+            <div className="m-4 rounded-lg border border-dashed border-subtle p-4 text-[13px] text-secondary">
+              <p className="font-semibold text-paper">No script outline for {episode.title} yet.</p>
+              <p className="mt-1 text-muted">The source ledger is on the right; the outline appears here as soon as a “Script Outline” page is added under Video Production.</p>
+            </div>
+          ) : !sel ? (
+            <div className="flex flex-1 items-center justify-center font-mono text-[11px] text-muted">{catalog.status === 'error' ? '' : 'Loading the Video Production index…'}</div>
+          ) : (
+            <OutlineView page={page} fallbackTitle={title} fallbackUrl={centerId ? `https://www.notion.so/${centerId}` : null} timing={timing} />
+          )}
+        </section>
+
         <HudPanel
-          title="AV Script"
-          icon={<Clapperboard className="h-3.5 w-3.5" />}
-          className="min-h-0"
-          bodyClassName="flex min-h-0 flex-col"
-          headerExtra={<span className="truncate font-mono text-[9.5px] text-muted">{doc.title}</span>}
-          actions={[{ label: 'Reset draft', onClick: resetDoc }]}
+          title={episode ? (evidenceId ? 'Evidence' : 'Source Ledger') : 'Linked pages'}
+          icon={episode ? <Library className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+          className="min-h-0 rounded-none border-0"
+          bodyClassName="flex min-h-0 flex-1 flex-col"
         >
-          <div ref={tableScrollRef} className="hud-scroll relative min-h-0 flex-1 overflow-y-auto">
-            <AvScriptTable
-              timing={timing}
-              hook={hook}
-              hookCue={doc.hookCue}
-              onHookCue={(v) => updateDoc((d) => ({ ...d, hookCue: v }))}
-              onRowChange={changeRow}
-              onAddRow={addRow}
-              onDeleteRow={deleteRow}
-              onMoveRow={moveRow}
-              onRenameChapter={renameChapter}
-              onAddChapter={addChapter}
-              chapterRefs={chapterRefs}
-              flashChapterId={flashChapter}
-            />
-          </div>
-          <footer className="flex h-11 shrink-0 items-center gap-5 border-t border-subtle bg-panel-elevated/60 px-3">
-            <Stat label="Total words" value={timing.totalWords.toLocaleString('en-US')} />
-            <Stat label="Runtime" value={fmtClock(timing.totalSec)} unit={`@ ${WPM} wpm`} />
-            <Stat label="Rows" value={String(rowCount + (hook ? 1 : 0))} />
-            <Stat label="Chapters" value={String(doc.chapters.length)} />
-            <span className={cn('ml-auto flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.08em]', hydrated ? 'text-muted' : 'text-muted/50')}>
-              <span className="h-1.5 w-1.5 rounded-full bg-green shadow-[0_0_6px_#22C55E]" /> Autosaved locally
-            </span>
-          </footer>
+          {episode ? (
+            <LedgerPanel ledger={ledger} evidence={evidence} evidenceId={evidenceId} onEvidence={setEvidenceId} fallbackTitle={episode.ledger?.title ?? `${episode.title} ledger`} fallbackUrl={ledgerId ? `https://www.notion.so/${ledgerId}` : null} />
+          ) : (
+            <LinkedPages page={pageData} onOpen={(id, t) => select({ type: 'page', id, title: t })} />
+          )}
         </HudPanel>
       </main>
 
-      {prompterOpen && <Teleprompter title={doc.title} hook={hook} timing={timing} onClose={() => setPrompterOpen(false)} />}
+      {prompterOpen && doc && timing && <Teleprompter title={doc.title} timing={timing} onClose={() => setPrompterOpen(false)} />}
       <ToastStack toasts={toasts} onDismiss={dismiss} />
+    </div>
+  );
+}
+
+function LinkedPages({ page, onOpen }: { page: NotionPageDoc | null; onOpen: (id: string, title: string) => void }) {
+  if (!page) return <p className="p-4 font-mono text-[11px] text-muted">Select a page on the left.</p>;
+  return (
+    <div className="hud-scroll min-h-0 flex-1 overflow-y-auto p-3">
+      <p className="px-1 text-[12.5px] font-semibold text-paper">{page.title}</p>
+      <p className="px-1 pb-2 font-mono text-[10px] text-muted">Only episodes have a source ledger. Pages linked from this one:</p>
+      {page.children.length === 0 ? (
+        <p className="px-1 font-mono text-[11px] text-muted">No linked pages.</p>
+      ) : (
+        <ul className="space-y-1">
+          {page.children.map((c) => (
+            <li key={c.id} className="flex items-center gap-1.5 rounded-md border border-subtle bg-obsidian/40 px-2.5 py-1.5">
+              <button type="button" onClick={() => onOpen(c.id, c.title)} className="min-w-0 flex-1 truncate text-left text-[12px] font-medium text-secondary hover:text-paper" title={c.title}>
+                {c.title}
+              </button>
+              <a href={c.url} target="_blank" rel="noreferrer noopener" aria-label={`Open ${c.title} in Notion`} className="shrink-0 text-muted hover:text-orange">
+                <ExternalLink size={11} />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-3">
+        <ExternalPill href={page.url} />
+      </div>
     </div>
   );
 }

@@ -3,8 +3,8 @@ import 'server-only';
 type Entry<T> = { at: number; value?: T; inflight?: Promise<T>; retryAt?: number };
 const store = ((globalThis as unknown as { __voltaCache?: Map<string, Entry<unknown>> }).__voltaCache ??= new Map());
 
-/** Least-recently-used keys beyond this are evicted (every key holds a full payload, e.g. a graph). */
-const MAX_KEYS = 32;
+/** Least-recently-used keys beyond this are evicted (every key holds a full payload, e.g. a graph; Notion pages are small text blobs, hence the headroom). */
+const MAX_KEYS = 128;
 /** After a failed background refresh the stale value is served without retrying for this long. */
 const RETRY_AFTER_FAIL_MS = 60_000;
 

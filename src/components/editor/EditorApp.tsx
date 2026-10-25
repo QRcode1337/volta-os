@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { EDITOR_INBOX_EVENT, readEditorInbox, replaceEditorInbox } from '@/lib/editor-inbox';
 import { isTypingTarget } from '@/lib/events';
-import type { EditorFeedbackResponse, EditorMediaItem, EditorReviewNoteResponse, EditorSkillsResponse } from '@/types/editor';
+import type { EditorEpisodeRef, EditorFeedbackResponse, EditorMediaItem, EditorReviewNoteResponse, EditorSkillsResponse } from '@/types/editor';
+import type { NotionPageDoc, NotionSection, VpCatalog, VpEpisode } from '@/types/notion';
+import { guessOutlineValue } from '@/lib/notion-md';
 import type { EditorInboxItem } from '@/types/os';
 import { DiffModal, EditorToast, PromptPreviewModal, type AppliedFile, type ToastState } from './EditorModals';
 import { EditorHeader } from './EditorHeader';
@@ -87,6 +89,7 @@ interface Backup {
   dirty: boolean;
   status: ClipStatus;
   pins: ReturnType<typeof recordsFromPins>;
+  episode?: EditorEpisodeRef | null;
 }
 function readBackup(id: string): Backup | null {
   try {
@@ -106,8 +109,9 @@ function writeBackup(id: string, b: Backup): void {
 }
 
 /** What the server stores for a file (numbers are session-local, so they are not part of the change signature). */
+const episodeSig = (e: EditorEpisodeRef | null | undefined) => (e ? [e.key, e.section] : null);
 function signature(clip: EditorClip, pins: EditorPin[]): string {
-  return JSON.stringify({ s: clip.status, p: recordsFromPins(pins, clip).map(({ number: _n, ...r }) => r).sort((a, b) => (a.id < b.id ? -1 : 1)) });
+  return JSON.stringify({ s: clip.status, p: recordsFromPins(pins, clip).map(({ number: _n, ...r }) => r).sort((a, b) => (a.id < b.id ? -1 : 1)), e: episodeSig(clip.episode) });
 }
 
 async function jsonFetch<T>(url: string, body?: unknown, keepalive = false): Promise<T> {
@@ -128,6 +132,8 @@ export function EditorApp() {
   const [skills, setSkills] = useState<EditorSkillsResponse | null>(null);
   const [notes, setNotes] = useState<Record<string, NoteInfo>>({});
   const [handoffs, setHandoffs] = useState<EditorInboxItem[]>([]);
+  const [episodes, setEpisodes] = useState<{ status: 'loading' | 'ready' | 'error'; list: VpEpisode[]; error: string | null }>({ status: 'loading', list: [], error: null });
+  const [outlines, setOutlines] = useState<Record<string, NotionSection[] | 'error'>>({});
   const toastSeq = useRef(0);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -170,7 +176,29 @@ export function EditorApp() {
     jsonFetch<EditorSkillsResponse>('/api/editor/skills')
       .then(setSkills)
       .catch(() => setSkills(null));
+    jsonFetch<VpCatalog>('/api/notion/catalog')
+      .then((c) => setEpisodes({ status: 'ready', list: c.episodes, error: null }))
+      .catch((err: Error) => setEpisodes({ status: 'error', list: [], error: err.message }));
   }, [loadBin]);
+
+  // outline text for every episode a file on the timeline is tagged with (the prompt compiler quotes the chosen section)
+  const outlineRequested = useRef<Set<string>>(new Set());
+  const loadOutline = useCallback(async (outlineId: string): Promise<NotionSection[] | null> => {
+    if (outlineRequested.current.has(outlineId)) return null;
+    outlineRequested.current.add(outlineId);
+    try {
+      const page = await jsonFetch<NotionPageDoc>(`/api/notion/page?id=${outlineId}`);
+      setOutlines((m) => ({ ...m, [outlineId]: page.sections }));
+      return page.sections;
+    } catch {
+      outlineRequested.current.delete(outlineId); // allow a retry on the next tag / open
+      setOutlines((m) => ({ ...m, [outlineId]: 'error' }));
+      return null;
+    }
+  }, []);
+  useEffect(() => {
+    for (const c of state.clips) if (c.episode?.outlineId && !(c.episode.outlineId in outlines)) void loadOutline(c.episode.outlineId);
+  }, [state.clips, outlines, loadOutline]);
 
   // ── per-file notes: load ──
   const loadNotes = useCallback(
@@ -182,11 +210,12 @@ export function EditorApp() {
         const useBackup = !!backup?.dirty && (backup.pins.length > 0 || backup.status !== 'NEEDS REVIEW');
         const records = useBackup ? backup!.pins : (r.doc?.pins ?? backup?.pins.filter(() => !r.available) ?? []);
         const status = useBackup ? backup!.status : (r.doc?.status ?? 'NEEDS REVIEW');
-        dispatch({ type: 'LOAD_PINS', clipId: clip.id, records, status });
+        const episode = useBackup && backup!.episode !== undefined ? backup!.episode : (r.doc?.episode ?? null);
+        dispatch({ type: 'LOAD_PINS', clipId: clip.id, records, status, episode });
         loadedRef.current.add(clip.id);
         // baseline = what the server holds; a recovered local backup differs from it, so it gets saved by the autosave pass
         if (useBackup || !r.available) sigRef.current.delete(clip.id);
-        else sigRef.current.set(clip.id, JSON.stringify({ s: status, p: records.map(({ number: _n, ...x }) => x).sort((a, b) => (a.id < b.id ? -1 : 1)) }));
+        else sigRef.current.set(clip.id, JSON.stringify({ s: status, p: records.map(({ number: _n, ...x }) => x).sort((a, b) => (a.id < b.id ? -1 : 1)), e: episodeSig(episode) }));
         if (!r.available) setNote(clip.id, 'error', r.reason);
         else {
           setNote(clip.id, useBackup ? 'dirty' : 'saved');
@@ -220,13 +249,15 @@ export function EditorApp() {
         return true;
       }
       const records = recordsFromPins(s.pins, clip);
-      writeBackup(id, { dirty: true, status: clip.status, pins: records });
+      writeBackup(id, { dirty: true, status: clip.status, pins: records, episode: clip.episode });
       savingRef.current.add(id);
       setNote(id, 'saving');
       try {
-        await jsonFetch('/api/editor/feedback', { fileKey: id, pins: records, status: clip.status }, keepalive);
+        const saved = await jsonFetch<{ episode?: EditorEpisodeRef | null }>('/api/editor/feedback', { fileKey: id, pins: records, status: clip.status, episode: clip.episode ? { key: clip.episode.key, section: clip.episode.section } : null }, keepalive);
         sigRef.current.set(id, sig);
-        writeBackup(id, { dirty: false, status: clip.status, pins: records });
+        writeBackup(id, { dirty: false, status: clip.status, pins: records, episode: clip.episode });
+        // the server fills in the title and Notion links: keep its copy
+        if (saved.episode && clip.episode && saved.episode.key === clip.episode.key && saved.episode.section === clip.episode.section) dispatch({ type: 'SET_EPISODE', clipId: id, episode: saved.episode });
         const cur = stateRef.current.clips.find((c) => c.id === id);
         setNote(id, cur && signature(cur, stateRef.current.pins) !== sig ? 'dirty' : 'saved');
         return true;
@@ -457,8 +488,45 @@ export function EditorApp() {
   // ── actions ──
   const compile = useCallback(() => {
     const s = stateRef.current;
-    return compilePrompt({ clips: s.clips, pins: s.pins.filter((p) => !p.resolved), teachCut: s.teachCut, teachAnimate: s.teachAnimate, skills });
-  }, [skills]);
+    const ready: Record<string, NotionSection[]> = {};
+    for (const [id, v] of Object.entries(outlines)) if (Array.isArray(v)) ready[id] = v;
+    return compilePrompt({ clips: s.clips, pins: s.pins.filter((p) => !p.resolved), teachCut: s.teachCut, teachAnimate: s.teachAnimate, skills, outlines: ready });
+  }, [skills, outlines]);
+
+  // tag a file with a Notion episode (and optionally the outline chapter / beat it is about); stored with its pins on Windsor
+  const setEpisode = useCallback(
+    async (clipId: string, key: string | null, section?: string | null) => {
+      const clip = stateRef.current.clips.find((c) => c.id === clipId);
+      if (!clip) return;
+      if (!key) {
+        dispatch({ type: 'SET_EPISODE', clipId, episode: null });
+        return;
+      }
+      const ep = episodes.list.find((e) => e.key === key);
+      if (!ep) return;
+      const same = clip.episode?.key === key;
+      const ref: EditorEpisodeRef = {
+        key,
+        number: ep.number,
+        title: ep.title,
+        section: section !== undefined ? section : same ? (clip.episode?.section ?? null) : null,
+        outlineId: ep.outline?.id ?? null,
+        outlineTitle: ep.outline?.title ?? null,
+        outlineUrl: ep.outline?.url ?? null,
+        ledgerUrl: ep.ledger?.url ?? null,
+        taggedAt: clip.episode?.taggedAt ?? new Date().toISOString(),
+      };
+      dispatch({ type: 'SET_EPISODE', clipId, episode: ref });
+      if (!same && section === undefined && ep.outline) {
+        // new episode, no explicit part: guess the chapter from the file name once the outline text is here
+        const known = outlines[ep.outline.id];
+        const secs = Array.isArray(known) ? known : await loadOutline(ep.outline.id);
+        const guess = secs ? guessOutlineValue(clip.name, secs) : null;
+        if (guess) dispatch({ type: 'SET_EPISODE', clipId, episode: { ...ref, section: guess } });
+      }
+    },
+    [episodes.list, outlines, loadOutline],
+  );
 
   const copyAll = useCallback(async () => {
     const s = stateRef.current;
@@ -575,6 +643,7 @@ export function EditorApp() {
         animationLabel: 'Local import',
         voiceover: [],
         canSaveNotes: false,
+        episode: null,
         thumbUrl: probe.thumb,
       };
       dispatch({ type: 'ADD_CLIPS', clips: [clip], select: true });
@@ -723,6 +792,9 @@ export function EditorApp() {
             handoffs={handoffs}
             onSelect={h.selectClip}
             onCycleStatus={h.cycleStatus}
+            episodes={episodes}
+            outlines={outlines}
+            onSetEpisode={setEpisode}
             onSetStatus={h.setStatus}
             onRemove={removeClip}
             onOpen={(item) => void openItem(item)}

@@ -71,6 +71,26 @@ export interface EditorPinRecord {
   scriptLine?: string;
 }
 
+/** What the browser sends: which Notion episode a file belongs to, and optionally which part of its outline. */
+export interface EditorEpisodeTag {
+  /** "ep3" (a key from /api/notion/catalog). */
+  key: string;
+  /** Outline chapter ("Cold open (full, ~56 s)") or "chapter › beat"; null = no specific part. */
+  section: string | null;
+}
+
+/** The tag as stored with the pins on Windsor: the server fills in the title and Notion links from the Video Production index. */
+export interface EditorEpisodeRef extends EditorEpisodeTag {
+  number: number;
+  /** "Ep 3 · CAIMEO" */
+  title: string;
+  outlineId: string | null;
+  outlineTitle: string | null;
+  outlineUrl: string | null;
+  ledgerUrl: string | null;
+  taggedAt: string;
+}
+
 export interface EditorFeedbackDoc {
   v: 1;
   fileKey: string;
@@ -78,6 +98,8 @@ export interface EditorFeedbackDoc {
   savedAt: string;
   status: EditorClipStatus;
   pins: EditorPinRecord[];
+  /** Notion episode this file is tagged with (absent / null = untagged). */
+  episode?: EditorEpisodeRef | null;
 }
 
 export interface EditorFeedbackResponse {

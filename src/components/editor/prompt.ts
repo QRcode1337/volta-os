@@ -1,6 +1,8 @@
 // Compiles the clipboard payload. Pure: safe to unit-test or call anywhere.
 // Every pin is stated against the REAL file (path, project, fps, frame size), with file-local timestamps.
 import type { EditorSkillsResponse, LiveSkillRef } from '@/types/editor';
+import type { NotionSection } from '@/types/notion';
+import { outlineText } from '@/lib/notion-md';
 import { deriveLesson, type RlPinInput, type SkillLesson } from './rl-rules';
 import { coordsLabel, formatClock, frameAt, pixelLabel, regionDescriptor } from './spatial';
 import type { EditorClip, EditorPin } from './types';
@@ -60,6 +62,8 @@ export interface CompileInput {
   teachAnimate: boolean;
   /** From GET /api/editor/skills; null while loading or when the route failed. */
   skills: EditorSkillsResponse | null;
+  /** Outline chapters per Notion outline page id (for files tagged with an episode). Missing = not loaded. */
+  outlines?: Record<string, NotionSection[]>;
 }
 
 export function lessonsFor(input: Pick<CompileInput, 'clips' | 'pins' | 'teachCut' | 'teachAnimate'>): { animate: SkillLesson | null; cut: SkillLesson | null } {
@@ -81,6 +85,30 @@ export function pickLiveSkills(skills: EditorSkillsResponse | null, clips: Edito
   return [...out.values()];
 }
 
+const OUTLINE_CAP = 2400;
+
+/** Episode context for a tagged file: title, Notion links and the outline chapter it belongs to (blockquote lines). */
+export function episodeLines(c: EditorClip, outlines: Record<string, NotionSection[]> | undefined): string[] {
+  const e = c.episode;
+  if (!e) return [];
+  const links = [e.outlineUrl ? `[${e.outlineTitle ?? 'Script outline'}](${e.outlineUrl})` : null, e.ledgerUrl ? `[Source ledger](${e.ledgerUrl})` : null].filter(Boolean);
+  const out = [`> **Notion episode:** ${e.title}${links.length ? ` | ${links.join(' | ')}` : ''}`];
+  const sections = e.outlineId ? outlines?.[e.outlineId] : undefined;
+  const wanted = e.section ?? (sections?.some((s) => /beat sheet/i.test(s.title)) ? sections.find((s) => /beat sheet/i.test(s.title))!.title : null);
+  if (!sections) {
+    out.push(`> **Outline section:** ${e.section ?? 'whole outline'} (outline text was not available from Notion when this was compiled; open the link above)`);
+    return out;
+  }
+  const text = wanted ? outlineText(sections, wanted) : null;
+  if (!wanted || !text) {
+    out.push(`> **Outline section:** ${e.section ? `“${e.section}” was not found in the outline anymore` : 'none chosen'}`);
+    return out;
+  }
+  const body = text.length > OUTLINE_CAP ? `${text.slice(0, OUTLINE_CAP).trimEnd()}\n[... cut here; the rest is on the Notion page]` : text;
+  out.push(`> **Outline section${e.section ? '' : ' (no part chosen, showing the beat sheet)'}:** ${wanted}`, '', '```md', body, '```');
+  return out;
+}
+
 function projectLine(clips: EditorClip[]): string {
   const seen = new Map<string, string>();
   for (const c of clips) {
@@ -90,8 +118,11 @@ function projectLine(clips: EditorClip[]): string {
   return [...seen.values()].join('; ') || 'none';
 }
 
+const byClipHas = (pins: EditorPin[], id: string) => pins.some((p) => p.clipId === id);
+
 export function compilePrompt(input: CompileInput): string {
   const { clips, pins, teachCut, teachAnimate, skills } = input;
+  const episodes = [...new Set(clips.filter((c) => c.episode && byClipHas(pins, c.id)).map((c) => c.episode!.title))];
   const byClip = new Map<string, EditorPin[]>();
   for (const p of pins) byClip.set(p.clipId, [...(byClip.get(p.clipId) ?? []), p]);
   const orderedClips = clips.filter((c) => byClip.has(c.id)).sort((a, b) => a.number - b.number);
@@ -99,6 +130,7 @@ export function compilePrompt(input: CompileInput): string {
   const out: string[] = [
     '# VOLTA EDITOR: VIDEO & ANIMATION REVISION BATCH',
     `**Project:** ${projectLine(orderedClips)}`,
+    ...(episodes.length ? [`**Episode${episodes.length === 1 ? '' : 's'}:** ${episodes.join('; ')}`] : []),
     `**Total Revision Pins:** ${pins.length} across ${clipCount} ${clipCount === 1 ? 'file' : 'files'}`,
     '_Timestamps are local to each file (from its first frame). x/y are percentages of the video frame, origin top-left._',
     '',
@@ -110,6 +142,7 @@ export function compilePrompt(input: CompileInput): string {
     out.push(`### ${clipHeading(c)}`);
     const hint = applyHint(c);
     if (hint) out.push(`> ${hint}`);
+    out.push(...episodeLines(c, input.outlines));
     const list = (byClip.get(c.id) ?? []).sort((a, b) => a.timestampSec - b.timestampSec || a.number - b.number);
     list.forEach((p, i) => out.push(pinBlock(p, c, i + 1)));
     out.push('');

@@ -1,5 +1,5 @@
 // VOLTA Editor: local client types (shared server/client shapes live in @/types/editor).
-import type { EditorClipStatus, EditorMediaKind, EditorProjectKind, EditorSkillTag } from '@/types/editor';
+import type { EditorClipStatus, EditorEpisodeRef, EditorMediaKind, EditorProjectKind, EditorSkillTag } from '@/types/editor';
 import type { VideoPinComment } from '@/types/os';
 
 export type SkillTag = EditorSkillTag;
@@ -45,6 +45,8 @@ export interface EditorClip {
   /** Script lines handed over with the file (Scripts hand-offs); relative to the clip start. */
   voiceover: { atSec: number; text: string }[];
   canSaveNotes: boolean;
+  /** Notion episode this file is tagged with; stored with the pins on Windsor. */
+  episode: EditorEpisodeRef | null;
   thumbUrl?: string;
 }
 

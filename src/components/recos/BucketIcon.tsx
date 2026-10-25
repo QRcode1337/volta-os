@@ -14,11 +14,12 @@ export function BucketIcon({ bucket, size = 20 }: { bucket: Bucket; size?: numbe
           <path d="M3 16.5 12 21 21 16.5" stroke={c} strokeWidth={1.8} strokeLinejoin="round" strokeOpacity={0.55} />
         </svg>
       );
-    case 'Skills': // hexagon with diamond core
+    case 'Content': // film frame with a play wedge
       return (
         <svg {...common}>
-          <path d="M12 2.5 20.5 7.25v9.5L12 21.5 3.5 16.75v-9.5Z" stroke={c} strokeWidth={1.8} strokeLinejoin="round" />
-          <path d="M12 8 16 12 12 16 8 12Z" fill={c} />
+          <rect x={3} y={5} width={18} height={14} rx={2} stroke={c} strokeWidth={1.8} />
+          <path d="M10 9.2v5.6l4.8-2.8Z" fill={c} />
+          <path d="M6 5v14M18 5v14" stroke={c} strokeWidth={1.2} strokeOpacity={0.5} />
         </svg>
       );
     case 'Routines': // segmented dial
@@ -29,13 +30,12 @@ export function BucketIcon({ bucket, size = 20 }: { bucket: Bucket; size?: numbe
           <rect x={11} y={11} width={2} height={2} fill={c} />
         </svg>
       );
-    case 'Apps': // 2×2 tiles, one rotated
+    case 'Systems': // monitor with a pulse line
       return (
         <svg {...common}>
-          <rect x={3.5} y={3.5} width={7} height={7} rx={1.2} fill={c} />
-          <rect x={3.5} y={13.5} width={7} height={7} rx={1.2} stroke={c} strokeWidth={1.8} />
-          <rect x={13.5} y={13.5} width={7} height={7} rx={1.2} stroke={c} strokeWidth={1.8} />
-          <rect x={14.2} y={4.2} width={5.6} height={5.6} rx={1} fill={c} fillOpacity={0.6} transform="rotate(45 17 7)" />
+          <rect x={3} y={4.5} width={18} height={12} rx={1.6} stroke={c} strokeWidth={1.8} />
+          <path d="M6 11h3l1.6-3 2.4 6 1.6-3H18" stroke={c} strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round" />
+          <path d="M9 20h6M12 16.5V20" stroke={c} strokeWidth={1.8} strokeLinecap="round" />
         </svg>
       );
   }

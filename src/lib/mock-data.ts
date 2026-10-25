@@ -87,7 +87,7 @@ export const MICRO_APPS: MicroAppItem[] = [
   { id: 'recos', name: 'VOLTA Recos', subtitle: 'Weekly agent improvement cart', route: '/apps/recos', port: OS_PORT, iconType: 'recos', accentColor: '#FF5500', sample: true },
   { id: 'brain', name: 'Second Brain', subtitle: '424,846 interconnected workspace files', route: '/second-brain', port: OS_PORT, iconType: 'brain', accentColor: '#FF5500' },
   { id: 'carousels', name: 'VOLTA Carousels', subtitle: 'Instagram carousel slide approval', route: '/apps/carousels', port: OS_PORT, iconType: 'carousels', accentColor: '#FF5500', sample: true },
-  { id: 'elements', name: 'Elements', subtitle: 'Reusable /robo UI component library', route: '/apps/elements', port: OS_PORT, iconType: 'elements', accentColor: '#FF5500', sample: true },
+  { id: 'elements', name: 'Elements', subtitle: 'Reusable /robo UI component library', route: '/apps/elements', port: OS_PORT, iconType: 'elements', accentColor: '#FF5500' },
 ];
 
 // ───────────────────────── Artifact ring (36) ─────────────────────────

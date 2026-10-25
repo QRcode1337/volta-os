@@ -174,7 +174,7 @@ export async function POST(req: Request) {
   const body = parsed;
 
   // 1. Jev classifies the job (recorded in telemetry) and may reroute the requested tier.
-  const jev = routeAndRecord(body.customPrompt ?? body.command, body.command);
+  const jev = await routeAndRecord(body.customPrompt ?? body.command, body.command);
   const { routed, overridden } = resolveRoutedModel(body.model, jev);
   const seed = hashString(`${body.command}|${routed}|${body.effort}|${body.customPrompt ?? ''}`);
   const { skill, peers } = await resolveSkill(body.command);

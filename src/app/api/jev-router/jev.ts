@@ -1,15 +1,11 @@
 import 'server-only';
 import type { JevRouteResult, ModelTier } from '@/types/os';
+import { JevError, routeTier, telemetrySummary, recordTier } from '@/lib/server/jev';
 
 /**
- * Jev — deterministic prompt → model-tier classifier.
- *
- * Simulates an ultra-fast classification model (~0.006s, ~$0.00004/call). Scoring:
- *   1. Keyword lanes (HAIKU = lightweight edits/extraction, SONNET = drafting/analysis, OPUS = taste/motion/strategy).
- *   2. Length nudges (short → HAIKU, very long → OPUS).
- *   3. Optional tier prior from the caller (real SKILL.md files declare no tier, so none is passed today;
- *      the old prior came from the mock skill catalog and was dropped).
- * Confidence = winning lane's share of the total score, clamped to [0.51, 0.99].
+ * Jev router. Real routing is TypeSafe Jev via src/lib/server/jev (one Choice question over HAIKU/SONNET/OPUS).
+ * The keyword heuristic below is the FALLBACK ONLY: it runs when JEV is unreachable (no key, timeout, 5xx, circuit open)
+ * and every result it produces is labelled `source: 'fallback'` with a "fallback" reason prefix.
  */
 
 export type JevTier = Exclude<ModelTier, 'FABLE'>;
@@ -42,42 +38,11 @@ const LANES: Record<JevTier, [keyword: string, weight: number][]> = {
 
 const TIER_ORDER: JevTier[] = ['HAIKU', 'SONNET', 'OPUS'];
 
-// ───────────────────────── Telemetry (in-memory, survives HMR via globalThis) ─────────────────────────
+// ───────────────────────── Telemetry (real; persisted by src/lib/server/jev/telemetry.ts) ─────────────────────────
 
-interface JevTelemetryState {
-  calls: number;
-  totalUsd: number;
-  byTier: Record<JevTier, number>;
-}
-
-const BASELINE_CALLS = 4_451;
-const BASELINE: JevTelemetryState = {
-  calls: BASELINE_CALLS,
-  totalUsd: 0.18,
-  // 41% / 37% / 22% of 4,451
-  byTier: { HAIKU: 1_825, SONNET: 1_647, OPUS: 979 },
-};
-
-const g = globalThis as typeof globalThis & { __rubricJevTelemetry?: JevTelemetryState };
-
-function state(): JevTelemetryState {
-  if (!g.__rubricJevTelemetry) {
-    g.__rubricJevTelemetry = { ...BASELINE, byTier: { ...BASELINE.byTier } };
-  }
-  return g.__rubricJevTelemetry;
-}
-
-const pct = (n: number, d: number) => (d === 0 ? 0 : Math.round((n / d) * 100));
-
+/** Sync summary in the UI's telemetry shape. Counters are real: tier decisions, measured spend, persisted on /Volumes/Windsor. */
 export function jevTelemetry(): JevRouteResult['telemetry'] {
-  const s = state();
-  return {
-    calls: s.calls,
-    totalUsd: Math.round(s.totalUsd * 100_000) / 100_000,
-    haikuPct: pct(s.byTier.HAIKU, s.calls),
-    sonnetPct: pct(s.byTier.SONNET, s.calls),
-    opusPct: pct(s.byTier.OPUS, s.calls),
-  };
+  return telemetrySummary();
 }
 
 // ───────────────────────── Classification ─────────────────────────
@@ -167,21 +132,58 @@ export function classify(prompt: string, command?: string, prior?: ModelTier): J
   };
 }
 
-/** Classify and record the call in telemetry. */
-export function routeAndRecord(prompt: string, command?: string): JevRouteResult {
-  const c = classify(prompt, command);
-  const s = state();
-  s.calls += 1;
-  s.totalUsd += c.costUsd;
-  s.byTier[c.model] += 1;
-  return {
-    model: c.model,
-    confidence: c.confidence,
-    latencySec: c.latencySec,
-    costUsd: c.costUsd,
-    reason: c.reason,
-    telemetry: jevTelemetry(),
-  };
+export type JevRouteSource = 'jev' | 'cache' | 'fallback';
+
+/** JevRouteResult plus provenance. Extra fields are additive; existing consumers ignore them. */
+export interface JevRouteOutput extends JevRouteResult {
+  source: JevRouteSource;
+  cached: boolean;
+  /** Per-tier probabilities from JEV (empty for fallback). */
+  probabilities: Record<string, number>;
+  /** Set only for source 'fallback': why JEV was not used. */
+  fallbackReason?: string;
+}
+
+/** Route via real JEV; on any JEV failure fall back to the heuristic and say so. Always records telemetry. */
+export async function routeAndRecord(prompt: string, command?: string): Promise<JevRouteOutput> {
+  const t0 = performance.now();
+  try {
+    const d = await routeTier(prompt, command);
+    return {
+      model: d.model,
+      confidence: d.confidence,
+      latencySec: Math.round(d.meta.latencyMs) / 1000,
+      costUsd: d.meta.costUsd,
+      reason: `JEV${d.meta.cached ? ' (cached)' : ''}: ${d.model} ${Math.round(d.confidence * 100)}%` + tierSplit(d.probabilities),
+      telemetry: jevTelemetry(),
+      source: d.meta.cached ? 'cache' : 'jev',
+      cached: d.meta.cached,
+      probabilities: d.probabilities,
+    };
+  } catch (e) {
+    const code = e instanceof JevError ? e.code : 'unknown';
+    const c = classify(prompt, command);
+    recordTier(c.model, true);
+    return {
+      model: c.model,
+      confidence: c.confidence,
+      latencySec: Math.round(performance.now() - t0) / 1000,
+      costUsd: 0,
+      reason: `fallback (heuristic, JEV unavailable: ${code}) — ${c.reason}`,
+      telemetry: jevTelemetry(),
+      source: 'fallback',
+      cached: false,
+      probabilities: {},
+      fallbackReason: code,
+    };
+  }
+}
+
+function tierSplit(p: Record<string, number>): string {
+  const parts = Object.entries(p)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${k} ${Math.round(v * 100)}%`);
+  return parts.length ? ` (${parts.join(' · ')})` : '';
 }
 
 /**

@@ -15,6 +15,13 @@
       "path": "~/Documents/Audio/Music/vanta vector",
       "enabled": true,
       "depth": 1
+    },
+    {
+      "id": "suno",
+      "label": "Suno",
+      "path": "/Volumes/Windsor/VOLTA/music/suno",
+      "enabled": true,
+      "depth": 0
     }
   ],
   "discover": {

@@ -2,7 +2,7 @@
 // VOLTA Music: the VANTA VECTOR library. Album grid / list over the files in config/music.json roots,
 // a persistent player bar with a Web Audio waveform, and a notes editor (lyrics, credits, Suno link, tags, BPM, key).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Cloud, Copy, FolderPlus, HardDrive, LayoutGrid, List, Pause, Play, RefreshCw, Search } from 'lucide-react';
+import { AlertTriangle, Cloud, Copy, FolderPlus, HardDrive, LayoutGrid, List, Pause, Play, RefreshCw, Search, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { pushToEditorInbox } from '@/lib/editor-inbox';
 import { AppTopBar } from '@/components/elements/kit/AppTopBar';
@@ -10,6 +10,7 @@ import { ToastStack, useToasts } from '@/components/elements/kit/toast';
 import { copyText } from '@/components/elements/kit/clipboard';
 import { Cover } from './Cover';
 import { PlayerBar, type PlayerHandle } from './PlayerBar';
+import { SunoPanel } from './SunoPanel';
 import { TrackPanel } from './TrackPanel';
 import { fmtBytes, fmtClock, trackStreamUrl } from './format';
 import { api } from './music-client';
@@ -71,6 +72,7 @@ export function MusicApp() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [rootsOpen, setRootsOpen] = useState(false);
+  const [sunoOpen, setSunoOpen] = useState(false);
   const dirtyRef = useRef(false);
   const playerRef = useRef<PlayerHandle>(null);
 
@@ -244,6 +246,9 @@ export function MusicApp() {
                 {counts.total} tracks · <span className="text-green">{counts.local} local</span> · <span className="text-amber">{counts.icloud} in iCloud</span>
               </span>
             )}
+            <button type="button" onClick={() => setSunoOpen((o) => !o)} className={cn(smallBtn, sunoOpen && 'border-orange/50 text-paper')} aria-expanded={sunoOpen}>
+              <Sparkles className="h-3 w-3" /> Suno
+            </button>
             <button type="button" onClick={() => setRootsOpen((o) => !o)} className={cn(smallBtn, rootsOpen && 'border-orange/50 text-paper')} aria-expanded={rootsOpen}>
               <HardDrive className="h-3 w-3" /> Folders
             </button>
@@ -253,6 +258,8 @@ export function MusicApp() {
           </>
         }
       />
+
+      {sunoOpen && <SunoPanel onSaved={() => void load(true)} onCopy={copy} onToast={(m, tone) => push(m, { tone, ttl: tone === 'error' ? 9000 : undefined })} />}
 
       {rootsOpen && lib && <RootsPanel roots={lib.roots} candidates={lib.candidates} configErrors={lib.configErrors} onToggle={setRoot} onCopy={copy} />}
 

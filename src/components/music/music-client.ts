@@ -2,7 +2,7 @@
 // Browser-side helpers for VOLTA Music: fetch wrappers and Web Audio waveform peaks.
 import { trackStreamUrl } from './format';
 
-export async function api<T>(url: string, opts: { method?: 'GET' | 'PUT'; body?: unknown; signal?: AbortSignal } = {}): Promise<T> {
+export async function api<T>(url: string, opts: { method?: 'GET' | 'PUT' | 'POST'; body?: unknown; signal?: AbortSignal } = {}): Promise<T> {
   const res = await fetch(url, {
     method: opts.method ?? 'GET',
     headers: opts.body === undefined ? undefined : { 'Content-Type': 'application/json' },

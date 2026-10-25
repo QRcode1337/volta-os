@@ -80,6 +80,7 @@ export const MICRO_APPS: MicroAppItem[] = [
   { id: 'feeds', name: 'VOLTA Feeds', subtitle: 'Sentinel, Scout, Curator & cron outputs', route: '/apps/feeds', port: OS_PORT, iconType: 'feeds', accentColor: '#FF5500' },
   { id: 'launchpad', name: 'VOLTA Launchpad', subtitle: 'OmniRoute, OpenClaw, Netlify, repos, Notion pins', route: '/apps/launchpad', port: OS_PORT, iconType: 'launchpad', accentColor: '#FF5500' },
   { id: 'music', name: 'VANTA VECTOR', subtitle: 'Your music: library, player, lyrics & credits', route: '/apps/music', port: OS_PORT, iconType: 'music', accentColor: '#FF5500' },
+  { id: 'podcast', name: 'VOLTA Briefing', subtitle: 'Daily AI, UAP & quantum deep-research podcast', route: '/apps/podcast', port: OS_PORT, iconType: 'podcast', accentColor: '#FF5500' },
   { id: 'search', name: 'VOLTA Search', subtitle: 'One search across every memory source', route: '/apps/search', port: OS_PORT, iconType: 'search', accentColor: '#FF5500' },
   { id: 'sessions', name: 'VOLTA Sessions', subtitle: 'Claude Code projects, sessions & tokens', route: '/apps/sessions', port: OS_PORT, iconType: 'sessions', accentColor: '#FF5500' },
   { id: 'systems', name: 'VOLTA Systems', subtitle: 'Agents, services, models & storage health', route: '/apps/systems', port: OS_PORT, iconType: 'systems', accentColor: '#FF5500' },

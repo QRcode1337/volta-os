@@ -20,7 +20,7 @@ export interface MicroAppItem {
   subtitle: string;
   route: string;
   port: number;
-  iconType: 'ltm' | 'honcho' | 'research' | 'tasks' | 'feeds' | 'launchpad' | 'music' | 'systems' | 'sessions' | 'search' | 'editor' | 'scripts' | 'generations' | 'studio' | 'recos' | 'brain' | 'excalidraw' | 'elements' | 'carousels';
+  iconType: 'ltm' | 'honcho' | 'research' | 'tasks' | 'feeds' | 'launchpad' | 'music' | 'podcast' | 'systems' | 'sessions' | 'search' | 'editor' | 'scripts' | 'generations' | 'studio' | 'recos' | 'brain' | 'excalidraw' | 'elements' | 'carousels';
   accentColor: string;
   /** True for tool apps that still run on sample content rather than the user's real data. */
   sample?: boolean;

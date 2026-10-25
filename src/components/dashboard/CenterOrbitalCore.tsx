@@ -7,6 +7,7 @@ import { LayoutDashboard, RefreshCw, Search, Settings } from 'lucide-react';
 import type { McpServerInfo, RealRoutine, RealSkill, RecentNote } from '@/types/sources';
 import type { LtmStatus, ObsidianVault } from '@/types/ltm';
 import { OS_OWNER } from '@/lib/mock-data';
+import { AwaitingBadge } from './widgets/AwaitingBadge';
 import { OS_EVENTS, emitOsEvent } from '@/lib/events';
 import { formatInt } from '@/lib/format';
 import { cn } from '@/lib/cn';
@@ -412,6 +413,7 @@ export function CenterOrbitalCore() {
           <span className="font-mono text-[12px] tracking-[0.04em] text-muted">
             {OS_OWNER.name} | {OS_OWNER.org}
           </span>
+          <AwaitingBadge />
           <span className="h-3 w-px bg-subtle" aria-hidden />
           <div className="relative flex items-center gap-1.5">
             <IconButton label="Refresh notes & counts" onClick={() => void refresh()} active={refreshing}>

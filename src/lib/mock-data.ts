@@ -75,6 +75,9 @@ export const EFFORT_LEVELS = ['LOW', 'MEDIUM', 'HIGH', 'XHIGH', 'MAX'] as const;
 export const MICRO_APPS: MicroAppItem[] = [
   { id: 'ltm', name: 'VOLTA LTM', subtitle: 'Screen memory: timeline, search, screenshots', route: '/apps/ltm', port: OS_PORT, iconType: 'ltm', accentColor: '#FF5500' },
   { id: 'honcho', name: 'VOLTA Honcho', subtitle: 'Peer memory: cards, sessions, conclusions', route: '/apps/honcho', port: OS_PORT, iconType: 'honcho', accentColor: '#FF5500' },
+  { id: 'research', name: 'VOLTA Research', subtitle: 'Find any file; see what connects your folders', route: '/apps/research', port: OS_PORT, iconType: 'research', accentColor: '#FF5500' },
+  { id: 'tasks', name: 'VOLTA Tasks', subtitle: 'Agent action pipeline · what awaits you', route: '/apps/tasks', port: OS_PORT, iconType: 'tasks', accentColor: '#FF5500' },
+  { id: 'feeds', name: 'VOLTA Feeds', subtitle: 'Sentinel, Scout, Curator & cron outputs', route: '/apps/feeds', port: OS_PORT, iconType: 'feeds', accentColor: '#FF5500' },
   { id: 'launchpad', name: 'VOLTA Launchpad', subtitle: 'OmniRoute, OpenClaw, Netlify, repos, Notion pins', route: '/apps/launchpad', port: OS_PORT, iconType: 'launchpad', accentColor: '#FF5500' },
   { id: 'music', name: 'VANTA VECTOR', subtitle: 'Your music: library, player, lyrics & credits', route: '/apps/music', port: OS_PORT, iconType: 'music', accentColor: '#FF5500' },
   { id: 'search', name: 'VOLTA Search', subtitle: 'One search across every memory source', route: '/apps/search', port: OS_PORT, iconType: 'search', accentColor: '#FF5500' },

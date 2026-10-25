@@ -91,7 +91,7 @@ const GiBf = (b: number | null) => (b == null ? '?' : `${(b / 1024 ** 3).toFixed
 function attentionFor(services: ServiceCheck[], volumes: StorageReport['volumes'], memory: SystemsReport['memory']): AttentionItem[] {
   const out: AttentionItem[] = [];
   for (const s of services) {
-    if (s.status === 'down' || s.status === 'degraded') {
+    if ((s.status === 'down' && s.core) || s.status === 'degraded') {
       const blocker = s.blockedBy ? services.find((x) => x.id === s.blockedBy && x.status !== 'up') : undefined;
       const fix = blocker?.command ? { ...blocker.command, label: `${blocker.name.split(' ')[0]} ${blocker.command.label.toLowerCase()}` } : s.command;
       out.push({
@@ -118,7 +118,7 @@ function attentionFor(services: ServiceCheck[], volumes: StorageReport['volumes'
           target: `svc-${s.id}`,
           ...(a.logPath ? { command: { label: 'Log command', command: `tail -n 40 ${a.logPath.replace(/ /g, '\\ ')}` } } : {}),
         });
-      } else if (a.health === 'not-loaded' && a.role === 'service') {
+      } else if (a.health === 'not-loaded' && a.role === 'service' && s.core) {
         out.push({ id: `agent:${a.label}`, severity: 'warn', title: `${a.label} not loaded`, detail: 'Plist is installed but launchd has not loaded it — it will not restart on its own.', target: `svc-${s.id}` });
       }
     }

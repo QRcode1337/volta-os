@@ -500,7 +500,8 @@ export function hermes(ctx: Ctx, st: HermesState, r: HttpResult | null, port: nu
 }
 
 export function ollama(ctx: Ctx, p: RuntimeProbe, deps: HonchoLlmDeps): ServiceCheck {
-  const s = base('ollama', 'Ollama', 'local models', true);
+  const used = honchoUses(deps, 'ollama');
+  const s = base('ollama', 'Ollama', 'local models', Boolean(used));
   s.launchAgents = agents(ctx, 'ollama');
   http(s, ctx, p.runtime.port, '/api/version', p.http);
   s.status = p.runtime.status;
@@ -513,7 +514,6 @@ export function ollama(ctx: Ctx, p: RuntimeProbe, deps: HonchoLlmDeps): ServiceC
   s.facts.push({ label: 'installed', value: `${p.runtime.available.length + n} local${cloud.length ? ` · ${cloud.length} cloud` : ''}` });
   if (cloudInUse.length) s.facts.push({ label: 'cloud in use', value: cloudInUse.map((m) => m.id).join(', '), tone: 'muted' });
   if (cloud.length) s.notes.push(`${cloud.length} cloud model${cloud.length > 1 ? 's run' : ' runs'} on ${cloud[0].remoteHost ?? 'ollama.com'} — no local disk or memory.`);
-  const used = honchoUses(deps, 'ollama');
   if (used) s.facts.push({ label: 'used by', value: `Honcho (${used})` });
   if (s.status !== 'down' && !n) s.notes.push('No model resident — the first request (e.g. ltm-ingest summaries) pays the load time.');
   s.command = { label: 'Start command', command: 'open -a Ollama' };
@@ -545,7 +545,7 @@ export function lmStudioService(ctx: Ctx, p: RuntimeProbe, sibling: RuntimeProbe
     s.command = {
       label: 'Start command',
       command: KICK('com.epsilon.llmster-autostart', false),
-      note: 'Re-runs ~/bin/llmster-autostart.sh (lms server start --port 1234, loads gpt-oss-20b-abliterated). It skips itself while the LM Studio app is open.',
+      note: 'Re-runs ~/bin/llmster-autostart.sh (lms server start --port 1234, loads qwen/qwen3.5-9b). It skips itself while the LM Studio app is open.',
     };
   } else {
     if (owner === 'llmster') s.notes.push('This port is answered by the headless llmster server, not the LM Studio app.');

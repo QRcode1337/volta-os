@@ -1,19 +1,19 @@
 'use client';
 
-import { Film, Upload } from 'lucide-react';
+import { AlertTriangle, Film, Music, Upload } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { cn } from '@/lib/cn';
 import { PinPopover, POPOVER_W } from './PinPopover';
-import { drawCaption, getScene } from './scenes';
-import { clamp01 } from './scenes/common';
 import { isPinVisibleAt } from './state';
 import { TransportBar, type TransportBarProps } from './TransportBar';
-import type { EditorClip, EditorPin, PinDraft, PinMode, RegionBox, SkillTag } from './types';
+import type { EditorClip, EditorPin, NotesState, PinDraft, PinMode, RegionBox, SkillTag } from './types';
 
 const BOX_MIN = 1.5; // percent
 
 export interface SpatialVideoCanvasProps extends Omit<TransportBarProps, 'onClipStart'> {
   clip: EditorClip | null;
+  notes: NotesState | null;
+  notesDetail: string | null;
   pins: EditorPin[];
   draft: PinDraft | null;
   pulse: { id: string; nonce: number } | null;
@@ -27,21 +27,9 @@ export interface SpatialVideoCanvasProps extends Omit<TransportBarProps, 'onClip
   mode: PinMode;
 }
 
-function useFontsReady(): number {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    let alive = true;
-    document.fonts?.ready.then(() => alive && setTick((n) => n + 1));
-    const onLoad = () => alive && setTick((n) => n + 1);
-    document.fonts?.addEventListener?.('loadingdone', onLoad);
-    return () => {
-      alive = false;
-      document.fonts?.removeEventListener?.('loadingdone', onLoad);
-    };
-  }, []);
-  return tick;
-}
+const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
+/** Script line (from a Scripts hand-off) that is current at `local` seconds into the file. */
 function currentCaption(clip: EditorClip, local: number): { text: string; alpha: number } {
   let line: { atSec: number; text: string } | null = null;
   let next = clip.durationSec;
@@ -54,9 +42,17 @@ function currentCaption(clip: EditorClip, local: number): { text: string; alpha:
   }
   if (!line) return { text: '', alpha: 0 };
   const end = Math.min(next, line.atSec + 7);
-  const alpha = Math.min(clamp01((local - line.atSec) / 0.3), clamp01((end - local) / 0.3));
-  return { text: line.text, alpha };
+  return { text: line.text, alpha: Math.min(clamp01((local - line.atSec) / 0.3), clamp01((end - local) / 0.3)) };
 }
+
+const NOTES_LABEL: Record<NotesState, { text: string; cls: string }> = {
+  loading: { text: 'LOADING NOTES', cls: 'bg-panel-hover text-muted' },
+  saved: { text: 'NOTES SAVED', cls: 'bg-green/15 text-green' },
+  dirty: { text: 'UNSAVED', cls: 'bg-amber/15 text-amber' },
+  saving: { text: 'SAVING', cls: 'bg-amber/15 text-amber' },
+  error: { text: 'NOT SAVED', cls: 'bg-[#EF4444]/15 text-[#EF4444]' },
+  local: { text: 'SESSION ONLY', cls: 'bg-panel-hover text-secondary' },
+};
 
 function PinMarker({ pin, pulsing, onClick }: { pin: EditorPin; pulsing: number | null; onClick: () => void }) {
   const color = pin.resolved ? '#22C55E' : '#FF5500';
@@ -95,20 +91,22 @@ function PinMarker({ pin, pulsing, onClick }: { pin: EditorPin; pulsing: number 
 }
 
 export function SpatialVideoCanvas(props: SpatialVideoCanvasProps) {
-  const { clip, pins, draft, pulse, playhead, playing, speed, mode } = props;
+  const { clip, pins, draft, pulse, playhead, playing, speed, mode, notes } = props;
   const stageRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [stage, setStage] = useState({ w: 0, h: 0 });
   const [popH, setPopH] = useState(250);
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number; id: number } | null>(null);
-  const fontTick = useFontsReady();
+  const [mediaError, setMediaError] = useState<{ url: string; text: string } | null>(null);
 
   const local = clip ? Math.max(0, Math.min(clip.durationSec - 1e-3, playhead - clip.startSec)) : 0;
+  const fps = clip?.fps ?? props.fps;
+  const locked = notes === 'loading';
 
-  // 16:9 letterboxed frame inside the stage
+  // frame letterboxed inside the stage, at the file's real aspect ratio so pin % are percentages of the actual picture
   useLayoutEffect(() => {
     const el = stageRef.current;
     if (!el) return;
@@ -120,45 +118,29 @@ export function SpatialVideoCanvas(props: SpatialVideoCanvasProps) {
   const pad = 12;
   const availW = Math.max(0, stage.w - pad * 2);
   const availH = Math.max(0, stage.h - pad * 2);
-  const fw = Math.floor(Math.min(availW, (availH * 16) / 9));
-  const fh = Math.floor((fw * 9) / 16);
+  const aspect = clip && clip.media !== 'audio' && clip.width && clip.height ? clip.width / clip.height : 16 / 9;
+  let fw = Math.floor(Math.min(availW, availH * aspect));
+  let fh = Math.floor(fw / aspect);
+  if (fh > availH) {
+    fh = Math.floor(availH);
+    fw = Math.floor(fh * aspect);
+  }
   const fx = Math.floor((stage.w - fw) / 2);
   const fy = Math.floor((stage.h - fh) / 2);
 
-  // procedural scene rendering
-  useLayoutEffect(() => {
-    const cv = canvasRef.current;
-    if (!cv || !clip || clip.videoUrl || fw <= 0) return;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const W = Math.round(fw * dpr);
-    const H = Math.round(fh * dpr);
-    if (cv.width !== W || cv.height !== H) {
-      cv.width = W;
-      cv.height = H;
-    }
-    const ctx = cv.getContext('2d');
-    if (!ctx) return;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.save();
-    getScene(clip.sceneKey).draw(ctx, W, H, local, clip.durationSec, clip.origin === 'inbox' ? { heading: clip.title } : undefined);
-    const cap = currentCaption(clip, local);
-    drawCaption(ctx, W, H, cap.text, cap.alpha);
-    ctx.restore();
-  }, [clip, local, fw, fh, fontTick]);
-
-  // <video> sync with the master clock
+  // <video> / <audio> sync with the master clock
   useEffect(() => {
-    const v = videoRef.current;
-    if (!v || !clip?.videoUrl) return;
+    const v = clip?.media === 'video' ? videoRef.current : clip?.media === 'audio' ? audioRef.current : null;
+    if (!v || !clip) return;
     if (v.playbackRate !== speed) v.playbackRate = speed;
     if (playing) {
       if (Math.abs(v.currentTime - local) > 0.3) v.currentTime = local;
       if (v.paused) v.play().catch(() => undefined);
     } else {
       if (!v.paused) v.pause();
-      if (Math.abs(v.currentTime - local) > 0.5 / 30) v.currentTime = local;
+      if (Math.abs(v.currentTime - local) > 0.5 / fps) v.currentTime = local;
     }
-  }, [clip?.videoUrl, local, playing, speed]);
+  }, [clip, local, playing, speed, fps]);
 
   const toPct = (clientX: number, clientY: number) => {
     const r = frameRef.current?.getBoundingClientRect();
@@ -167,7 +149,7 @@ export function SpatialVideoCanvas(props: SpatialVideoCanvasProps) {
   };
 
   const onPointerDown = (e: RPointerEvent<HTMLDivElement>) => {
-    if (!clip || e.button !== 0) return;
+    if (!clip || locked || e.button !== 0) return;
     const p = toPct(e.clientX, e.clientY);
     if (!p) return;
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -182,7 +164,7 @@ export function SpatialVideoCanvas(props: SpatialVideoCanvasProps) {
     if (!drag || drag.id !== e.pointerId || !clip) return;
     const p = toPct(e.clientX, e.clientY) ?? { x: drag.x1, y: drag.y1 };
     setDrag(null);
-    const ts = Math.round(playhead * 30) / 30;
+    const ts = Math.round(playhead * fps) / fps;
     if (mode === 'box') {
       const region: RegionBox = { x: Math.min(drag.x0, p.x), y: Math.min(drag.y0, p.y), w: Math.abs(p.x - drag.x0), h: Math.abs(p.y - drag.y0) };
       if (region.w >= BOX_MIN && region.h >= BOX_MIN) {
@@ -195,6 +177,9 @@ export function SpatialVideoCanvas(props: SpatialVideoCanvasProps) {
 
   const visible = clip ? pins.filter((p) => p.clipId === clip.id && (isPinVisibleAt(p, playhead) || pulse?.id === p.id)) : [];
   const liveBox = drag && mode === 'box' ? { x: Math.min(drag.x0, drag.x1), y: Math.min(drag.y0, drag.y1), w: Math.abs(drag.x1 - drag.x0), h: Math.abs(drag.y1 - drag.y0) } : null;
+  const caption = clip && clip.voiceover.length ? currentCaption(clip, local) : null;
+  const err = clip && mediaError?.url === clip.url ? mediaError.text : null;
+  const noteChip = notes ? NOTES_LABEL[notes] : null;
 
   // popover placement (stage coordinates), flipped near edges
   let popLeft = 0;
@@ -214,10 +199,17 @@ export function SpatialVideoCanvas(props: SpatialVideoCanvasProps) {
     <section className="hud-card flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
       <header className="flex h-9 shrink-0 items-center gap-2 border-b border-subtle px-3">
         <Film size={14} className="shrink-0 text-orange" />
-        <h2 className="hud-label truncate">{clip ? `Clip ${String(clip.number).padStart(2, '0')} · ${clip.title}` : 'No clip'}</h2>
+        <h2 className="hud-label truncate" title={clip?.path}>
+          {clip ? `File ${String(clip.number).padStart(2, '0')} · ${clip.name}` : 'No file open'}
+        </h2>
         {clip && (
-          <span className={cn('shrink-0 rounded px-1.5 py-0.5 font-mono text-[9px] font-bold', clip.kind === 'ANIMATION' ? 'bg-orange/15 text-orange' : 'bg-teal/15 text-teal')}>
-            {clip.videoUrl ? 'VIDEO FILE' : getScene(clip.sceneKey).label.toUpperCase()}
+          <span className={cn('shrink-0 rounded px-1.5 py-0.5 font-mono text-[9px] font-bold', clip.kind === 'ANIMATION' ? 'bg-orange/15 text-orange' : 'bg-teal/15 text-teal')} title={clip.projectId ? `${clip.projectName} (${clip.projectKind})` : clip.projectName}>
+            {clip.media.toUpperCase()} · {clip.projectName.toUpperCase()}
+          </span>
+        )}
+        {noteChip && (
+          <span className={cn('shrink-0 rounded px-1.5 py-0.5 font-mono text-[9px] font-bold', noteChip.cls)} title={props.notesDetail ?? undefined}>
+            {noteChip.text}
           </span>
         )}
         <span className="ml-auto hidden shrink-0 font-mono text-[10px] text-muted xl:inline">{mode === 'point' ? 'Click frame to pin' : 'Drag to box a region'}</span>
@@ -235,6 +227,7 @@ export function SpatialVideoCanvas(props: SpatialVideoCanvasProps) {
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
+          title="Open a video from disk for this session only: it is not uploaded, and its pins are not saved"
           className="ml-2 inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-subtle bg-panel-elevated px-2.5 font-mono text-[10px] font-semibold text-secondary hover:border-orange/60 hover:text-paper"
         >
           <Upload size={11} /> + Import Local MP4 / WebM
@@ -245,17 +238,47 @@ export function SpatialVideoCanvas(props: SpatialVideoCanvasProps) {
         {fw > 0 && clip && (
           <div
             ref={frameRef}
-            className={cn('absolute overflow-hidden rounded-[4px] ring-1 ring-subtle', mode === 'box' ? 'cursor-crosshair' : 'cursor-cell')}
+            className={cn('absolute overflow-hidden rounded-[4px] bg-black ring-1 ring-subtle', locked ? 'cursor-wait' : mode === 'box' ? 'cursor-crosshair' : 'cursor-cell')}
             style={{ left: fx, top: fy, width: fw, height: fh }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={() => setDrag(null)}
           >
-            {clip.videoUrl ? (
-              <video ref={videoRef} key={clip.videoUrl} src={clip.videoUrl} className="pointer-events-none h-full w-full bg-black object-contain" playsInline preload="auto" />
-            ) : (
-              <canvas ref={canvasRef} className="pointer-events-none block h-full w-full" />
+            {clip.media === 'video' && (
+              <video
+                ref={videoRef}
+                key={clip.url}
+                src={clip.url}
+                className="pointer-events-none h-full w-full bg-black object-contain"
+                playsInline
+                preload="auto"
+                onError={() => setMediaError({ url: clip.url, text: 'The browser could not play this file (missing, still downloading from iCloud, or an unsupported codec).' })}
+              />
+            )}
+            {clip.media === 'image' && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={clip.url}
+                src={clip.url}
+                alt={clip.name}
+                draggable={false}
+                className="pointer-events-none h-full w-full bg-black object-contain"
+                onError={() => setMediaError({ url: clip.url, text: 'The image could not be loaded.' })}
+              />
+            )}
+            {clip.media === 'audio' && (
+              <div className="pointer-events-none flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-b from-panel-elevated to-black px-6 text-center">
+                <Music size={36} className="text-teal" />
+                <div className="font-mono text-[12px] text-paper">{clip.name}</div>
+                <div className="font-mono text-[10px] text-muted">Audio file. Pins mark a moment; x/y say where on this card you meant, if it matters.</div>
+                <audio ref={audioRef} key={clip.url} src={clip.url} preload="auto" onError={() => setMediaError({ url: clip.url, text: 'The audio could not be played (missing or still downloading from iCloud).' })} />
+              </div>
+            )}
+            {caption && caption.alpha > 0 && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-[7%] flex justify-center px-6" style={{ opacity: caption.alpha }}>
+                <span className="max-w-[88%] rounded bg-black/70 px-3 py-1 text-center font-serif text-[15px] italic leading-snug text-paper">{caption.text}</span>
+              </div>
             )}
             {visible.map((p) => (
               <PinMarker key={p.id} pin={p} pulsing={pulse?.id === p.id ? pulse.nonce : null} onClick={() => props.onPinClick(p.id)} />
@@ -275,7 +298,20 @@ export function SpatialVideoCanvas(props: SpatialVideoCanvasProps) {
             )}
           </div>
         )}
-        {!clip && <div className="absolute inset-0 flex items-center justify-center font-mono text-xs text-muted">No clips in this project — import one.</div>}
+        {err && (
+          <div className="absolute inset-x-4 top-3 z-20 flex items-start gap-2 rounded-md border border-[#EF4444]/50 bg-[#1F0F0F]/95 px-3 py-2 font-mono text-[11px] text-paper">
+            <AlertTriangle size={13} className="mt-0.5 shrink-0 text-[#EF4444]" /> {err}
+          </div>
+        )}
+        {!clip && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-8 text-center font-mono text-xs text-muted">
+            <Film size={28} className="text-subtle" />
+            <div className="text-secondary">Open a file from the media bin to review it.</div>
+            <div className="max-w-md leading-relaxed">
+              Click a render or generation on the left, or use &quot;Send to VOLTA Editor&quot; in Studio or Generations. Then click the frame to drop a pin; notes save per file on the Windsor drive.
+            </div>
+          </div>
+        )}
         {draft && clip && (
           <PinPopover
             key="draft"
@@ -294,6 +330,7 @@ export function SpatialVideoCanvas(props: SpatialVideoCanvasProps) {
       <TransportBar
         playhead={playhead}
         total={props.total}
+        fps={fps}
         playing={playing}
         speed={speed}
         loop={props.loop}

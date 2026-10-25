@@ -1,26 +1,18 @@
-// VOLTA Editor — reducer, seed state and persistence helpers (pure; no DOM at module scope).
-import { EDITOR_FPS, EDITOR_PROJECTS, EDITOR_SCENE_KEYS, SEED_PINS, VIDEO_CLIPS, formatHMS } from '@/lib/mock-data';
+// VOLTA Editor: reducer, selectors and persistence helpers (pure; no DOM at module scope).
+import type { EditorMediaItem, EditorPinRecord } from '@/types/editor';
 import type { EditorInboxItem } from '@/types/os';
+import { formatClock } from './spatial';
 import type { ClipFilter, ClipStatus, EditorClip, EditorPin, EditorState, GroupMode, InspectorTab, PinDraft, PinMode, PlaybackSpeed, SkillTag } from './types';
-import { STATUS_ORDER } from './types';
+import { DEFAULT_FPS, STATUS_ORDER, STILL_SECONDS } from './types';
 
 export const STORAGE_KEY = 'rubric:editor-state';
 const PIN_WINDOW = 1.5;
 
-export function seedClips(): EditorClip[] {
-  return VIDEO_CLIPS.map((c) => ({ ...c, voiceover: c.voiceover.map((v) => ({ ...v })), origin: 'seed' as const }));
-}
-
-export function seedPins(): EditorPin[] {
-  return SEED_PINS.map((p, i) => ({ ...p, number: i + 1 }));
-}
-
 export function initialState(): EditorState {
   return {
     hydrated: false,
-    project: EDITOR_PROJECTS[0],
-    clips: seedClips(),
-    pins: seedPins(),
+    clips: [],
+    pins: [],
     playhead: 0,
     playing: false,
     speed: 1,
@@ -37,7 +29,97 @@ export function initialState(): EditorState {
     isolate: null,
     editingPinId: null,
     nonce: 1,
+    restoreIds: [],
   };
+}
+
+// ───────────────────────── clips from real files ─────────────────────────
+
+export type NewClip = Omit<EditorClip, 'startSec' | 'number'>;
+
+/** A bin / inbox item -> a timeline clip. `durationOverride` is used when ffprobe had no duration (browser-probed). */
+export function clipFromMedia(item: EditorMediaItem, extra: { durationOverride?: number; voiceover?: EditorClip['voiceover'] } = {}): NewClip {
+  const dur = item.media === 'image' ? STILL_SECONDS : item.durationSec ?? extra.durationOverride ?? 0;
+  const animated = item.projectKind === 'remotion' || item.projectKind === 'hyperframes' || (item.source === 'generations' && item.media === 'video');
+  return {
+    id: item.id,
+    title: item.name.replace(/\.[^.]+$/, '') || item.name,
+    name: item.name,
+    path: item.path,
+    origin: 'server',
+    media: item.media,
+    projectId: item.projectId,
+    projectName: item.groupName,
+    projectKind: item.projectKind,
+    projectPath: item.projectPath,
+    kind: animated ? 'ANIMATION' : 'A-ROLL CUT',
+    status: 'NEEDS REVIEW',
+    durationSec: Math.max(0.5, Math.round(dur * 1000) / 1000),
+    fps: item.fps && item.fps > 0 ? item.fps : DEFAULT_FPS,
+    fpsKnown: !!(item.fps && item.fps > 0),
+    width: item.width,
+    height: item.height,
+    hasAudio: item.hasAudio,
+    url: item.url,
+    animationLabel: item.groupName,
+    voiceover: extra.voiceover ?? [],
+    canSaveNotes: item.canSaveNotes,
+  };
+}
+
+/** Inbox hand-off -> the fileKey it points at, or null when it carries no real file (Scripts / Carousels items). */
+export function inboxFileKey(item: EditorInboxItem): string | null {
+  const m = /^\/api\/(studio|media)\/file\?id=([A-Za-z0-9_-]+)$/.exec(item.mediaUrl ?? '');
+  if (!m) return null;
+  return m[1] === 'studio' ? m[2] : `g_${m[2]}`;
+}
+
+export function inboxVoiceover(item: EditorInboxItem): EditorClip['voiceover'] {
+  return (Array.isArray(item.cues) ? item.cues : [])
+    .filter((c) => c && typeof c.voiceover === 'string')
+    .map((c) => ({ atSec: Math.max(0, Number(c.atSec) || 0), text: c.voiceover }))
+    .sort((a, b) => a.atSec - b.atSec);
+}
+
+// ───────────────────────── pins <-> records ─────────────────────────
+
+export function pinsFromRecords(records: EditorPinRecord[], clip: EditorClip, firstNumber: number): EditorPin[] {
+  return [...records]
+    .sort((a, b) => a.timestampSec - b.timestampSec || a.number - b.number)
+    .map((r, i) => {
+      const local = Math.min(clip.durationSec, Math.max(0, r.timestampSec));
+      return {
+        id: r.id,
+        number: firstNumber + i,
+        clipId: clip.id,
+        timestampSec: clip.startSec + local,
+        formattedTime: formatClock(local),
+        xPercent: r.xPercent,
+        yPercent: r.yPercent,
+        region: r.region,
+        commentText: r.commentText,
+        skill: r.skill,
+        resolved: r.resolved,
+        scriptLine: r.scriptLine,
+      };
+    });
+}
+
+export function recordsFromPins(pins: EditorPin[], clip: EditorClip): EditorPinRecord[] {
+  return pins
+    .filter((p) => p.clipId === clip.id)
+    .map((p) => ({
+      id: p.id,
+      number: p.number,
+      timestampSec: Math.max(0, Math.round((p.timestampSec - clip.startSec) * 1000) / 1000),
+      xPercent: p.xPercent,
+      yPercent: p.yPercent,
+      region: p.region,
+      commentText: p.commentText,
+      skill: p.skill,
+      resolved: p.resolved,
+      scriptLine: p.scriptLine,
+    }));
 }
 
 // ───────────────────────── selectors ─────────────────────────
@@ -75,9 +157,9 @@ export function clipMatchesFilter(c: EditorClip, pins: EditorPin[], f: ClipFilte
   }
 }
 
-const snap = (t: number) => Math.round(t * EDITOR_FPS) / EDITOR_FPS;
+const snapTo = (t: number, fps: number) => Math.round(t * fps) / fps;
 
-/** Re-pack clips contiguously by number; shift each clip's pins by the clip's start delta. */
+/** Re-pack clips contiguously by number; shift each clip's pins by the clip's start delta (local times are unchanged). */
 export function relayout(clips: EditorClip[], pins: EditorPin[]): { clips: EditorClip[]; pins: EditorPin[] } {
   const sorted = [...clips].sort((a, b) => a.number - b.number);
   let start = 0;
@@ -93,67 +175,31 @@ export function relayout(clips: EditorClip[], pins: EditorPin[]): { clips: Edito
     .filter((p) => ids.has(p.clipId))
     .map((p) => {
       const d = delta.get(p.clipId) ?? 0;
-      if (!d) return p;
-      const ts = p.timestampSec + d;
-      return { ...p, timestampSec: ts, formattedTime: formatHMS(ts) };
+      return d ? { ...p, timestampSec: p.timestampSec + d } : p;
     });
   return { clips: out, pins: outPins };
 }
 
-function slug(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'clip';
-}
-
-export function inboxItemToClip(item: EditorInboxItem, number: number): Omit<EditorClip, 'startSec'> {
-  const dur = Math.max(2, Math.min(600, Number(item.durationSec) || 10));
-  const key = (EDITOR_SCENE_KEYS as readonly string[]).includes(item.sceneKey ?? '') ? (item.sceneKey as string) : 'title-reveal';
-  const cues = Array.isArray(item.cues) ? item.cues : [];
-  return {
-    id: `inbox-${item.id}`,
-    number,
-    title: String(item.title || 'Untitled hand-off').slice(0, 80),
-    kind: item.kind === 'A-ROLL CUT' ? 'A-ROLL CUT' : 'ANIMATION',
-    status: 'NEEDS REVIEW',
-    durationSec: dur,
-    sourcePath: `workspace/videos/clips/${String(number).padStart(2, '0')}-${slug(item.title || 'handoff')}.tsx`,
-    sceneKey: key,
-    animationLabel: cues[0]?.visualCue?.slice(0, 28) || `${item.source} hand-off`,
-    voiceover: cues
-      .filter((c) => c && typeof c.voiceover === 'string')
-      .map((c) => ({ atSec: Math.max(0, Math.min(dur - 0.5, Number(c.atSec) || 0)), text: c.voiceover }))
-      .sort((a, b) => a.atSec - b.atSec),
-    origin: 'inbox',
-  };
-}
-
-// ───────────────────────── persistence ─────────────────────────
+// ───────────────────────── persistence (toggles + which files were open) ─────────────────────────
 
 export interface PersistedState {
-  v: 1;
-  project: string;
+  v: 2;
   teachCut: boolean;
   teachAnimate: boolean;
   group: GroupMode;
-  clips: EditorClip[];
-  pins: EditorPin[];
+  /** fileKeys of the open server files, in timeline order. Pins live on disk per file, not here. */
+  open: string[];
 }
 
 export function toPersisted(s: EditorState): PersistedState {
-  const clips = s.clips.filter((c) => c.origin !== 'file').map(({ videoUrl: _v, thumbUrl: _t, ...rest }) => rest);
-  const ids = new Set(clips.map((c) => c.id));
-  return { v: 1, project: s.project, teachCut: s.teachCut, teachAnimate: s.teachAnimate, group: s.group, clips, pins: s.pins.filter((p) => ids.has(p.clipId)) };
-}
-
-function isPersisted(x: unknown): x is PersistedState {
-  const o = x as PersistedState | null;
-  return !!o && o.v === 1 && Array.isArray(o.clips) && Array.isArray(o.pins);
+  return { v: 2, teachCut: s.teachCut, teachAnimate: s.teachAnimate, group: s.group, open: s.clips.filter((c) => c.origin === 'server').map((c) => c.id) };
 }
 
 export function parsePersisted(raw: string | null): PersistedState | null {
   if (!raw) return null;
   try {
-    const o = JSON.parse(raw) as unknown;
-    return isPersisted(o) ? o : null;
+    const o = JSON.parse(raw) as PersistedState | null;
+    return o && o.v === 2 && Array.isArray(o.open) ? o : null;
   } catch {
     return null;
   }
@@ -175,7 +221,6 @@ export type EditorAction =
   | { type: 'SET_FILTER'; filter: ClipFilter }
   | { type: 'SET_TAB'; tab: InspectorTab }
   | { type: 'SET_GROUP'; group: GroupMode }
-  | { type: 'SET_PROJECT'; project: string }
   | { type: 'SELECT_CLIP'; clipId: string }
   | { type: 'CLEAR_FOCUS' }
   | { type: 'START_DRAFT'; draft: PinDraft }
@@ -189,36 +234,18 @@ export type EditorAction =
   | { type: 'NEXT_PIN' }
   | { type: 'SET_CLIP_STATUS'; clipId: string; status: ClipStatus }
   | { type: 'CYCLE_CLIP_STATUS'; clipId: string }
-  | { type: 'ADD_CLIPS'; clips: Omit<EditorClip, 'startSec' | 'number'>[]; select?: boolean }
+  | { type: 'ADD_CLIPS'; clips: NewClip[]; select?: boolean }
+  | { type: 'LOAD_PINS'; clipId: string; records: EditorPinRecord[]; status?: ClipStatus }
   | { type: 'REMOVE_CLIP'; clipId: string }
   | { type: 'SET_EDITING'; id: string | null }
-  | { type: 'RESET' };
+  | { type: 'CLEAR_TIMELINE' };
 
 export function editorReducer(s: EditorState, a: EditorAction): EditorState {
   const total = totalDuration(s.clips);
   switch (a.type) {
     case 'HYDRATE': {
       if (!a.saved) return { ...s, hydrated: true };
-      const sv = a.saved;
-      const seedIds = new Set(VIDEO_CLIPS.map((c) => c.id));
-      // keep seed clips authoritative for content, but honour persisted status
-      const savedById = new Map(sv.clips.map((c) => [c.id, c]));
-      const base = seedClips().map((c) => ({ ...c, status: savedById.get(c.id)?.status ?? c.status }));
-      const extra = sv.clips.filter((c) => !seedIds.has(c.id) && typeof c.durationSec === 'number').map((c) => ({ ...c, origin: 'inbox' as const }));
-      const pins = sv.pins
-        .filter((p) => p && typeof p.timestampSec === 'number' && typeof p.id === 'string')
-        .map((p, i) => ({ ...p, number: typeof p.number === 'number' ? p.number : i + 1, skill: p.skill ?? '/animate', resolved: !!p.resolved }));
-      const lay = relayout([...base, ...extra], pins);
-      return {
-        ...s,
-        hydrated: true,
-        project: (EDITOR_PROJECTS as readonly string[]).includes(sv.project) ? sv.project : s.project,
-        teachCut: !!sv.teachCut,
-        teachAnimate: !!sv.teachAnimate,
-        group: sv.group === 'chrono' ? 'chrono' : 'clip',
-        clips: lay.clips,
-        pins: lay.pins,
-      };
+      return { ...s, hydrated: true, teachCut: !!a.saved.teachCut, teachAnimate: !!a.saved.teachAnimate, group: a.saved.group === 'chrono' ? 'chrono' : 'clip', restoreIds: a.saved.open.filter((x) => typeof x === 'string').slice(0, 24) };
     }
     case 'TICK': {
       if (!s.playing || total <= 0) return s;
@@ -233,8 +260,10 @@ export function editorReducer(s: EditorState, a: EditorAction): EditorState {
     }
     case 'SEEK':
       return { ...s, playhead: Math.max(0, Math.min(total, a.t)) };
-    case 'STEP':
-      return { ...s, playing: false, playhead: Math.max(0, Math.min(total, snap(s.playhead) + a.frames / EDITOR_FPS)) };
+    case 'STEP': {
+      const fps = clipAt(s.clips, s.playhead)?.fps ?? DEFAULT_FPS;
+      return { ...s, playing: false, playhead: Math.max(0, Math.min(total, snapTo(s.playhead, fps) + a.frames / fps)) };
+    }
     case 'SET_PLAYING':
       return { ...s, playing: a.playing && total > 0, playhead: a.playing && s.playhead >= total ? 0 : s.playhead, draft: a.playing ? null : s.draft };
     case 'TOGGLE_PLAY':
@@ -253,12 +282,10 @@ export function editorReducer(s: EditorState, a: EditorAction): EditorState {
       return { ...s, tab: a.tab };
     case 'SET_GROUP':
       return { ...s, group: a.group };
-    case 'SET_PROJECT':
-      return { ...s, project: a.project };
     case 'SELECT_CLIP': {
       const c = s.clips.find((x) => x.id === a.clipId);
       if (!c) return s;
-      return { ...s, playhead: c.startSec, focusClipId: c.id, isolate: { clipId: c.id, nonce: s.nonce }, nonce: s.nonce + 1, draft: null };
+      return { ...s, playhead: c.startSec, playing: false, focusClipId: c.id, isolate: { clipId: c.id, nonce: s.nonce }, nonce: s.nonce + 1, draft: null };
     }
     case 'CLEAR_FOCUS':
       return { ...s, focusClipId: null, isolate: { clipId: null, nonce: s.nonce }, nonce: s.nonce + 1 };
@@ -269,12 +296,14 @@ export function editorReducer(s: EditorState, a: EditorAction): EditorState {
     case 'SAVE_DRAFT': {
       if (!s.draft || !a.text.trim()) return s;
       const d = s.draft;
+      const clip = s.clips.find((c) => c.id === d.clipId);
+      if (!clip) return { ...s, draft: null };
       const pin: EditorPin = {
-        id: `pin-${s.nonce}-${Math.round(d.timestampSec * 1000)}`,
+        id: `pin-${Date.now().toString(36)}-${s.nonce}`,
         number: nextPinNumber(s.pins),
         clipId: d.clipId,
         timestampSec: d.timestampSec,
-        formattedTime: formatHMS(d.timestampSec),
+        formattedTime: formatClock(d.timestampSec - clip.startSec),
         xPercent: d.xPercent,
         yPercent: d.yPercent,
         region: d.region,
@@ -285,12 +314,14 @@ export function editorReducer(s: EditorState, a: EditorAction): EditorState {
       return { ...s, pins: [...s.pins, pin], draft: null, nonce: s.nonce + 1, pulse: { id: pin.id, nonce: s.nonce } };
     }
     case 'ADD_SCRIPT_PIN': {
+      const clip = s.clips.find((c) => c.id === a.clipId);
+      if (!clip) return s;
       const pin: EditorPin = {
-        id: `pin-${s.nonce}-script`,
+        id: `pin-${Date.now().toString(36)}-${s.nonce}`,
         number: nextPinNumber(s.pins),
         clipId: a.clipId,
         timestampSec: a.timestampSec,
-        formattedTime: formatHMS(a.timestampSec),
+        formattedTime: formatClock(a.timestampSec - clip.startSec),
         xPercent: 50,
         yPercent: 88,
         commentText: a.text,
@@ -314,7 +345,8 @@ export function editorReducer(s: EditorState, a: EditorAction): EditorState {
     case 'NEXT_PIN': {
       const sorted = [...s.pins].sort((x, y) => x.timestampSec - y.timestampSec || x.number - y.number);
       if (!sorted.length) return s;
-      const next = sorted.find((p) => p.timestampSec > s.playhead + 0.5 / EDITOR_FPS) ?? sorted[0];
+      const fps = clipAt(s.clips, s.playhead)?.fps ?? DEFAULT_FPS;
+      const next = sorted.find((p) => p.timestampSec > s.playhead + 0.5 / fps) ?? sorted[0];
       return { ...s, playhead: next.timestampSec, playing: false, draft: null, pulse: { id: next.id, nonce: s.nonce }, nonce: s.nonce + 1 };
     }
     case 'SET_CLIP_STATUS':
@@ -335,30 +367,51 @@ export function editorReducer(s: EditorState, a: EditorAction): EditorState {
         added.push({ ...c, number: num, startSec: start });
         start += c.durationSec;
       }
-      if (!added.length) return s;
+      if (!added.length) {
+        // Already on the timeline: just select it.
+        const dup = a.select ? a.clips.map((c) => s.clips.find((x) => x.id === c.id)).find(Boolean) : undefined;
+        return dup ? editorReducer(s, { type: 'SELECT_CLIP', clipId: dup.id }) : s;
+      }
       const first = added[0];
       return {
         ...s,
         clips: [...s.clips, ...added],
-        ...(a.select ? { playhead: first.startSec, focusClipId: first.id, isolate: { clipId: first.id, nonce: s.nonce }, nonce: s.nonce + 1 } : {}),
+        ...(a.select ? { playhead: first.startSec, playing: false, focusClipId: first.id, isolate: { clipId: first.id, nonce: s.nonce }, nonce: s.nonce + 1 } : {}),
+      };
+    }
+    case 'LOAD_PINS': {
+      const clip = s.clips.find((c) => c.id === a.clipId);
+      if (!clip) return s;
+      const others = s.pins.filter((p) => p.clipId !== clip.id);
+      const loaded = pinsFromRecords(a.records, clip, nextPinNumber(others));
+      return {
+        ...s,
+        pins: [...others, ...loaded],
+        clips: a.status ? s.clips.map((c) => (c.id === clip.id ? { ...c, status: a.status as ClipStatus } : c)) : s.clips,
       };
     }
     case 'REMOVE_CLIP': {
       const c = s.clips.find((x) => x.id === a.clipId);
-      if (!c || c.origin === 'seed') return s;
+      if (!c) return s;
       const lay = relayout(
         s.clips.filter((x) => x.id !== a.clipId),
         s.pins.filter((p) => p.clipId !== a.clipId),
       );
       const nt = totalDuration(lay.clips);
-      return { ...s, ...lay, playhead: Math.min(s.playhead, nt), focusClipId: s.focusClipId === a.clipId ? null : s.focusClipId, draft: s.draft?.clipId === a.clipId ? null : s.draft };
+      return {
+        ...s,
+        ...lay,
+        playing: s.playing && nt > 0,
+        playhead: Math.min(s.playhead, nt),
+        focusClipId: s.focusClipId === a.clipId ? null : s.focusClipId,
+        draft: s.draft?.clipId === a.clipId ? null : s.draft,
+        editingPinId: s.pins.some((p) => p.id === s.editingPinId && p.clipId === a.clipId) ? null : s.editingPinId,
+      };
     }
     case 'SET_EDITING':
       return { ...s, editingPinId: a.id };
-    case 'RESET': {
-      const init = initialState();
-      return { ...init, hydrated: true, isolate: { clipId: null, nonce: s.nonce }, nonce: s.nonce + 1 };
-    }
+    case 'CLEAR_TIMELINE':
+      return { ...s, clips: [], pins: [], playhead: 0, playing: false, draft: null, focusClipId: null, editingPinId: null, pulse: null, isolate: { clipId: null, nonce: s.nonce }, nonce: s.nonce + 1 };
     default:
       return s;
   }

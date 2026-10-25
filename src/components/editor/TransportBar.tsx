@@ -4,7 +4,6 @@ import { ChevronLeft, ChevronRight, Crosshair, Pause, Play, Repeat, SkipBack, Sk
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { formatTimecode } from '@/lib/format';
-import { EDITOR_FPS } from '@/lib/mock-data';
 import type { PinMode, PlaybackSpeed } from './types';
 
 const SPEEDS: PlaybackSpeed[] = [0.5, 1, 1.5, 2];
@@ -31,6 +30,8 @@ function TBtn({ title, onClick, children, active, primary }: { title: string; on
 export interface TransportBarProps {
   playhead: number;
   total: number;
+  /** Frame rate of the file under the playhead (ffprobe). */
+  fps: number;
   playing: boolean;
   speed: PlaybackSpeed;
   loop: boolean;
@@ -47,7 +48,7 @@ export interface TransportBarProps {
 export function TransportBar(p: TransportBarProps) {
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-t border-subtle px-3 py-2">
-      <TBtn title="Jump to clip start" onClick={p.onClipStart}>
+      <TBtn title="Jump to file start" onClick={p.onClipStart}>
         <SkipBack size={13} />
       </TBtn>
       <TBtn title="Step back 1 frame (←)" onClick={() => p.onStep(-1)}>
@@ -66,8 +67,8 @@ export function TransportBar(p: TransportBarProps) {
         <SkipForward size={13} /> PIN
       </TBtn>
       <div className="mx-1 flex items-baseline gap-1 rounded-md border border-subtle bg-obsidian px-2 py-1">
-        <span className="font-doto text-[15px] font-bold tabular-nums text-orange">{formatTimecode(p.playhead + 1e-6, EDITOR_FPS)}</span>
-        <span className="font-doto text-[11px] text-muted">/ {formatTimecode(p.total, EDITOR_FPS)}</span>
+        <span className="font-doto text-[15px] font-bold tabular-nums text-orange">{formatTimecode(p.playhead + 1e-6, Math.round(p.fps))}</span>
+        <span className="font-doto text-[11px] text-muted">/ {formatTimecode(p.total, Math.round(p.fps))}</span>
       </div>
       <div className="ml-auto flex items-center gap-1.5">
         <TBtn title="Point pin mode — click the frame to drop a pin" onClick={() => p.onMode('point')} active={p.mode === 'point'}>
@@ -91,7 +92,7 @@ export function TransportBar(p: TransportBarProps) {
             ))}
           </select>
         </label>
-        <TBtn title="Loop current clip" onClick={p.onLoop} active={p.loop}>
+        <TBtn title="Loop current file" onClick={p.onLoop} active={p.loop}>
           <Repeat size={13} /> Loop
         </TBtn>
       </div>

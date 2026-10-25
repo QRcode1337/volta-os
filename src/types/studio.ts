@@ -68,6 +68,8 @@ export interface StudioOutput {
   durationSec: number | null;
   width: number | null;
   height: number | null;
+  /** Video frame rate from ffprobe (null for audio / unprobed). */
+  fps?: number | null;
   /** iCloud placeholder (size > 0 but no blocks on disk): reading it would trigger a download. */
   offline: boolean;
 }

@@ -76,7 +76,7 @@ export const InspectorPanel = memo(function InspectorPanel(p: InspectorPanelProp
       </header>
       {focusClip && (
         <div className="flex shrink-0 items-center gap-1.5 border-b border-subtle bg-orange/5 px-3 py-1.5 font-mono text-[10px] text-secondary">
-          Showing Clip {String(focusClip.number).padStart(2, '0')} · <span className="truncate text-paper">{focusClip.title}</span>
+          Showing File {String(focusClip.number).padStart(2, '0')} · <span className="truncate text-paper">{focusClip.title}</span>
           <button type="button" onClick={p.onClearFocus} className="ml-auto flex shrink-0 items-center gap-0.5 rounded px-1 text-orange hover:bg-orange/10">
             <X size={11} /> Show all
           </button>
@@ -88,7 +88,7 @@ export const InspectorPanel = memo(function InspectorPanel(p: InspectorPanelProp
             <div className="flex shrink-0 items-center gap-1 px-2 pt-2">
               {(
                 [
-                  ['clip', 'By clip'],
+                  ['clip', 'By file'],
                   ['chrono', 'Chronological'],
                 ] as const
               ).map(([k, label]) => (
@@ -106,9 +106,9 @@ export const InspectorPanel = memo(function InspectorPanel(p: InspectorPanelProp
             <div className="hud-scroll min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
               {scoped.length === 0 && (
                 <div className="rounded-md border border-dashed border-subtle px-3 py-8 text-center font-mono text-[11px] leading-relaxed text-muted">
-                  No pins yet.
+                  {p.clips.length === 0 ? 'Open a file from the media bin first.' : 'No pins yet.'}
                   <br />
-                  Click anywhere on the video frame to drop one.
+                  {p.clips.length === 0 ? 'Pins are saved per file.' : 'Click anywhere on the video frame to drop one.'}
                 </div>
               )}
               {p.group === 'chrono'

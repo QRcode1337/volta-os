@@ -25,13 +25,14 @@ export function studioGet(load: (req: Request) => Promise<unknown> | unknown) {
 }
 
 /** POST handler wrapper: localhost + same-origin + application/json, small bounded JSON body. */
-export function studioPost(run: (body: Record<string, unknown>, req: Request) => Promise<unknown> | unknown) {
+export function studioPost(run: (body: Record<string, unknown>, req: Request) => Promise<unknown> | unknown, opts: { maxBytes?: number } = {}) {
+  const maxBytes = opts.maxBytes ?? 64 * 1024;
   return async function POST(req: Request) {
     const denied = rejectNonLocalMutation(req);
     if (denied) return denied;
     try {
       const text = await req.text();
-      if (text.length > 64 * 1024) throw new StudioError('Request body too large.', 413);
+      if (text.length > maxBytes) throw new StudioError('Request body too large.', 413);
       let body: unknown = {};
       if (text.trim()) {
         try {

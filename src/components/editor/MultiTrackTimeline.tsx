@@ -1,40 +1,20 @@
 'use client';
 
 import { Layers, Maximize2, X } from 'lucide-react';
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { cn } from '@/lib/cn';
-import { seededRandom } from '@/lib/mock-data';
 import type { EditorClip, EditorPin } from './types';
 
 const LABEL_W = 136;
 const RULER_H = 20;
 const MAX_PPS = 80;
-const TRACKS = ['01 A-ROLL / CUTS', '02 ANIMATIONS (/animate)', '03 VOICEOVER WAVEFORM', '04 SPATIAL PINS'] as const;
+const TRACKS = ['01 A-ROLL / CUTS', '02 ANIMATIONS (/animate)', '03 AUDIO', '04 SPATIAL PINS'] as const;
 
 const mmss = (s: number) => {
   const m = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
   return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 };
-
-function hashId(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
-  return h >>> 0;
-}
-
-/** Waveform amplitudes (4 per second) — louder inside spoken voiceover segments. */
-function waveform(clip: EditorClip): number[] {
-  const rnd = seededRandom(hashId(clip.id));
-  const n = Math.max(1, Math.round(clip.durationSec * 4));
-  const spans = clip.voiceover.map((v) => ({ a: v.atSec, b: v.atSec + Math.max(1.5, v.text.split(/\s+/).length * 0.38) }));
-  return Array.from({ length: n }, (_, i) => {
-    const t = i / 4;
-    const speaking = spans.some((s) => t >= s.a && t <= s.b);
-    const base = speaking ? 0.45 + rnd() * 0.55 : 0.06 + rnd() * 0.16;
-    return Math.min(1, base * (0.85 + 0.15 * Math.sin(i * 0.7)));
-  });
-}
 
 interface TracksProps {
   clips: EditorClip[];
@@ -47,7 +27,6 @@ interface TracksProps {
 }
 
 const Tracks = memo(function Tracks({ clips, pins, pps, isolatedId, trackH, onPinClick, onClipDoubleClick }: TracksProps) {
-  const waves = useMemo(() => new Map(clips.map((c) => [c.id, waveform(c)])), [clips]);
   const dim = (c: EditorClip) => (isolatedId && isolatedId !== c.id ? 'opacity-35' : '');
   return (
     <>
@@ -57,7 +36,7 @@ const Tracks = memo(function Tracks({ clips, pins, pps, isolatedId, trackH, onPi
           <div
             key={c.id}
             onDoubleClick={() => onClipDoubleClick(c.id)}
-            title={`Clip ${String(c.number).padStart(2, '0')} · ${c.title} (${mmss(c.durationSec)}) — double-click to isolate`}
+            title={`File ${String(c.number).padStart(2, '0')} · ${c.name} (${mmss(c.durationSec)}) — double-click to isolate`}
             className={cn(
               'absolute inset-y-1 overflow-hidden rounded-[3px] border px-1.5 transition-opacity',
               c.kind === 'A-ROLL CUT' ? 'border-teal/60 bg-teal/15' : 'border-highlight bg-panel-elevated',
@@ -67,55 +46,44 @@ const Tracks = memo(function Tracks({ clips, pins, pps, isolatedId, trackH, onPi
             style={{ left: c.startSec * pps, width: Math.max(2, c.durationSec * pps - 1) }}
           >
             <div className="truncate pt-0.5 font-mono text-[9.5px] font-semibold text-paper">
-              Clip {String(c.number).padStart(2, '0')}: {c.title}
+              File {String(c.number).padStart(2, '0')}: {c.title}
             </div>
             <div className="truncate font-mono text-[8.5px] text-muted">{mmss(c.durationSec)}</div>
             <span className="absolute inset-y-0 right-0 w-[2px] bg-paper/40" />
           </div>
         ))}
       </div>
-      {/* 02 ANIMATIONS */}
+      {/* 02 ANIMATIONS: rendered Remotion / HyperFrames / generated video (the source project that /animate edits) */}
+      <div className="relative border-b border-subtle" style={{ height: trackH }}>
+        {clips
+          .filter((c) => c.kind === 'ANIMATION')
+          .map((c) => (
+            <div
+              key={c.id}
+              className={cn('absolute inset-y-1.5 overflow-hidden rounded-[3px] border border-orange/70 bg-orange/20 px-1.5 transition-opacity', dim(c))}
+              style={{ left: c.startSec * pps, width: Math.max(2, c.durationSec * pps - 1) }}
+              title={`Source: ${c.animationLabel}`}
+            >
+              <div className="truncate pt-0.5 font-mono text-[9.5px] font-semibold text-orange">[Anim: {c.animationLabel}]</div>
+            </div>
+          ))}
+      </div>
+      {/* 03 AUDIO: one bar per file (ffprobe says whether it has an audio stream); no synthetic waveform */}
       <div className="relative border-b border-subtle" style={{ height: trackH }}>
         {clips.map((c) => {
-          const inset = Math.min(c.durationSec * 0.08, 4);
+          const audible = c.media === 'audio' || (c.media === 'video' && c.hasAudio);
           return (
             <div
               key={c.id}
               className={cn(
-                'absolute inset-y-1.5 overflow-hidden rounded-[3px] border px-1.5 transition-opacity',
-                c.kind === 'ANIMATION' ? 'border-orange/70 bg-orange/20' : 'border-amber/50 bg-amber/10',
+                'absolute inset-y-2 flex items-center overflow-hidden rounded-[3px] border px-1.5 transition-opacity',
+                audible ? 'border-teal/50 bg-teal/15' : 'border-dashed border-subtle bg-transparent',
                 dim(c),
               )}
-              style={{ left: (c.startSec + inset) * pps, width: Math.max(2, (c.durationSec - inset * 2) * pps) }}
-              title={`Anim: ${c.animationLabel}`}
+              style={{ left: c.startSec * pps, width: Math.max(2, c.durationSec * pps - 1) }}
+              title={audible ? `${c.name}: audio stream present` : c.media === 'image' ? 'Still image (no audio)' : `${c.name}: no audio stream`}
             >
-              <div className={cn('truncate pt-0.5 font-mono text-[9.5px] font-semibold', c.kind === 'ANIMATION' ? 'text-orange' : 'text-amber')}>[Anim: {c.animationLabel}]</div>
-            </div>
-          );
-        })}
-      </div>
-      {/* 03 VOICEOVER WAVEFORM */}
-      <div className="relative border-b border-subtle" style={{ height: trackH }}>
-        {clips.map((c) => {
-          const amps = waves.get(c.id) ?? [];
-          const w = Math.max(2, c.durationSec * pps);
-          const step = 0.25 * pps;
-          const bw = Math.max(1, step * 0.55);
-          const mid = trackH / 2;
-          let d = '';
-          amps.forEach((a, i) => {
-            const x = i * step + bw / 2;
-            const hh = Math.max(1, a * (trackH / 2 - 4));
-            d += `M${x.toFixed(1)} ${(mid - hh).toFixed(1)}V${(mid + hh).toFixed(1)}`;
-          });
-          return (
-            <div key={c.id} className={cn('absolute inset-y-0 transition-opacity', dim(c))} style={{ left: c.startSec * pps, width: w }}>
-              <svg width={w} height={trackH} className="block">
-                <path d={d} stroke={c.kind === 'ANIMATION' ? '#A39E93' : '#14B8A6'} strokeOpacity={0.75} strokeWidth={bw} strokeLinecap="round" />
-              </svg>
-              {c.voiceover[0] && pps * c.durationSec > 90 && (
-                <span className="pointer-events-none absolute left-1 top-0.5 max-w-[95%] truncate font-serif text-[10px] italic text-paper/80">“{c.voiceover[0].text}”</span>
-              )}
+              <span className={cn('truncate font-mono text-[9px]', audible ? 'text-teal' : 'text-muted')}>{audible ? (c.media === 'audio' ? 'audio file' : 'audio') : c.media === 'image' ? 'still' : 'no audio'}</span>
             </div>
           );
         })}
@@ -290,11 +258,11 @@ export function MultiTrackTimeline({ clips, pins, playhead, playing, total, isol
         <Layers size={14} className="text-orange" />
         <h2 className="hud-label">Multi-Track Timeline</h2>
         <span className="font-mono text-[10px] text-muted">
-          {clips.length} clips · {pins.length} pins · {mmss(total)}
+          {clips.length} {clips.length === 1 ? 'file' : 'files'} · {pins.length} pins · {mmss(total)}
         </span>
         {isolatedClip && (
           <span className="flex items-center gap-1 rounded-full border border-orange/50 bg-orange/10 px-2 py-0.5 font-mono text-[10px] text-orange">
-            Isolated: Clip {String(isolatedClip.number).padStart(2, '0')}
+            Isolated: File {String(isolatedClip.number).padStart(2, '0')}
             <button type="button" onClick={onClearFocus} aria-label="Clear isolation" className="hover:text-paper">
               <X size={11} />
             </button>

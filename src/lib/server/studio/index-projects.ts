@@ -30,17 +30,28 @@ export const MIME: Record<string, string> = {
 };
 const SKIP_DIRS = new Set(['node_modules', '.git', '.next', '.turbo', 'dist', 'build', '__pycache__', '.venv', '.cache', '.hyperframes', '.remotion']);
 const OUTPUT_TTL_MS = 20_000;
+/** Newest outputs indexed per project (the Editor media bin lists all of them). */
+export const OUTPUT_SCAN_LIMIT = 100;
 const WALK_BUDGET = 25_000;
 const PROBE_CONCURRENCY = 4;
 const FFPROBE = '/opt/homebrew/bin/ffprobe';
 
-interface Probe {
+export interface Probe {
   durationSec: number | null;
   width: number | null;
   height: number | null;
+  fps: number | null;
   hasAudio: boolean;
 }
-const NO_PROBE: Probe = { durationSec: null, width: null, height: null, hasAudio: false };
+const NO_PROBE: Probe = { durationSec: null, width: null, height: null, fps: null, hasAudio: false };
+
+/** "30000/1001" -> 29.97; 0/0 and garbage -> null. */
+function parseRate(r: string | undefined): number | null {
+  const m = /^(\d+)\/(\d+)$/.exec(r ?? '');
+  if (!m || Number(m[2]) === 0) return null;
+  const v = Number(m[1]) / Number(m[2]);
+  return v > 0 && v <= 1000 ? Math.round(v * 1000) / 1000 : null;
+}
 interface Registry {
   files: Map<string, { path: string; projectId: string }>;
   probes: Map<string, Probe>;
@@ -64,28 +75,29 @@ export const fileId = (p: string) => `o_${createHash('sha1').update(p).digest('h
 // ───────────────────────── ffprobe ─────────────────────────
 
 export function probeFile(file: string, size: number, mtimeMs: number): Promise<Probe> {
-  const key = `${file}|${size}|${mtimeMs}`;
+  const key = `v2|${file}|${size}|${mtimeMs}`;
   const hit = R.probes.get(key);
   if (hit) return Promise.resolve(hit);
   return new Promise((resolve) => {
     execFile(
       FFPROBE,
-      ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width,height', '-of', 'json', '-i', file],
+      ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width,height,avg_frame_rate,r_frame_rate', '-of', 'json', '-i', file],
       { timeout: 15_000, maxBuffer: 1024 * 1024 },
       (err, stdout, stderr) => {
-        const empty: Probe = { durationSec: null, width: null, height: null, hasAudio: false };
+        const empty: Probe = NO_PROBE;
         if (err) {
           console.warn('[studio] ffprobe failed:', path.basename(file), String(stderr || err.message).split('\n')[0].slice(0, 200));
           return resolve(empty);
         }
         try {
-          const j = JSON.parse(stdout) as { format?: { duration?: string }; streams?: { codec_type?: string; width?: number; height?: number }[] };
+          const j = JSON.parse(stdout) as { format?: { duration?: string }; streams?: { codec_type?: string; width?: number; height?: number; avg_frame_rate?: string; r_frame_rate?: string }[] };
           const v = j.streams?.find((s) => s.codec_type === 'video' && s.width);
           const dur = Number(j.format?.duration);
           const p: Probe = {
             durationSec: Number.isFinite(dur) ? Math.round(dur * 100) / 100 : null,
             width: v?.width ?? null,
             height: v?.height ?? null,
+            fps: parseRate(v?.avg_frame_rate) ?? parseRate(v?.r_frame_rate),
             hasAudio: !!j.streams?.some((s) => s.codec_type === 'audio'),
           };
           if (R.probes.size > 3000) R.probes.clear();
@@ -200,6 +212,7 @@ export async function projectOutputs(project: Project, opts: { limit?: number; r
       durationSec: pr.durationSec,
       width: pr.width,
       height: pr.height,
+      fps: pr.fps,
       offline: c.offline,
     };
   });
@@ -236,6 +249,7 @@ export async function registerOutput(project: Project, file: string): Promise<St
       durationSec: pr.durationSec,
       width: pr.width,
       height: pr.height,
+      fps: pr.fps,
       offline: false,
     };
   } catch {
@@ -246,7 +260,7 @@ export async function registerOutput(project: Project, file: string): Promise<St
 async function scanAllThrottled(): Promise<void> {
   if (Date.now() - R.lastFullScan < 3000) return;
   R.lastFullScan = Date.now();
-  for (const p of loadConfig().projects) await projectOutputs(p, { limit: 40, refresh: true });
+  for (const p of loadConfig().projects) await projectOutputs(p, { limit: OUTPUT_SCAN_LIMIT, refresh: true });
 }
 
 function allowedRoots(project: Project): string[] {

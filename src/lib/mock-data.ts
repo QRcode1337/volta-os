@@ -13,8 +13,6 @@ import type {
   RoutineItem,
   SkillCardItem,
   UsageSnapshot,
-  VideoClip,
-  VideoPinComment,
   YouTubeVideoStat,
 } from '@/types/os';
 
@@ -81,7 +79,7 @@ export const MICRO_APPS: MicroAppItem[] = [
   { id: 'search', name: 'VOLTA Search', subtitle: 'One search across every memory source', route: '/apps/search', port: OS_PORT, iconType: 'search', accentColor: '#FF5500' },
   { id: 'sessions', name: 'VOLTA Sessions', subtitle: 'Claude Code projects, sessions & tokens', route: '/apps/sessions', port: OS_PORT, iconType: 'sessions', accentColor: '#FF5500' },
   { id: 'systems', name: 'VOLTA Systems', subtitle: 'Agents, services, models & storage health', route: '/apps/systems', port: OS_PORT, iconType: 'systems', accentColor: '#FF5500' },
-  { id: 'editor', name: 'VOLTA Editor', subtitle: 'Review cuts & pin timestamp feedback', route: '/apps/editor', port: OS_PORT, iconType: 'editor', accentColor: '#FF5500', sample: true },
+  { id: 'editor', name: 'VOLTA Editor', subtitle: 'Review Studio renders & Generations; pin notes per file', route: '/apps/editor', port: OS_PORT, iconType: 'editor', accentColor: '#FF5500' },
   { id: 'scripts', name: 'VOLTA Scripts', subtitle: 'Draft & teleprompter view for YouTube', route: '/apps/scripts', port: OS_PORT, iconType: 'scripts', accentColor: '#FF5500', sample: true },
   { id: 'generations', name: 'Generations', subtitle: 'Image, video & voice generation (xAI, ElevenLabs)', route: '/apps/generations', port: OS_PORT, iconType: 'generations', accentColor: '#FF5500' },
   { id: 'studio', name: 'VOLTA Studio', subtitle: 'Render queue: HyperFrames · Remotion · ffmpeg', route: '/apps/studio', port: OS_PORT, iconType: 'studio', accentColor: '#FF5500' },
@@ -417,47 +415,6 @@ export const RECOMMENDATIONS: RecommendationCardExt[] = [
   { id: 'rc-11', category: 'Apps', bucket: 'Apps', priority: false, title: 'Replace Heavy Slack MCP with Lightweight CLI', benefit: 'Slack MCP preloads 18.6k tokens every session but is used 3×/wk.', actionDescription: 'Disable the Slack MCP and add a slack CLI connector note.', filesTouched: ['applications/mcp-slack.md', 'CLAUDE.md'], effortLabel: '3 mins · Medium risk', savingsLabel: 'Saves ~18.6k tok/chat', weeklyTokensSaved: 2_600_000, weeklyUsdSaved: 13.1, promptPayload: 'Mark workspace/applications/mcp-slack.md as disabled and document a slack CLI fallback; update the connector list in CLAUDE.md.', status: 'pending' },
   { id: 'rc-12', category: 'Apps', bucket: 'Apps', priority: false, title: 'Add Direct FAL Image Endpoint to Generations', benefit: 'Direct endpoints skip the aggregator markup and return 30% faster.', actionDescription: 'Register a direct FAL endpoint in the media API connector.', filesTouched: ['applications/api-media.md'], effortLabel: '5 mins · Low risk', savingsLabel: 'Saves ~$3.80/wk', weeklyTokensSaved: 0, weeklyUsdSaved: 3.8, promptPayload: 'Add a FAL direct endpoint section to workspace/applications/api-media.md (env var name only, no secrets).', status: 'pending' },
 ];
-
-// ───────────────────────── VOLTA Editor ─────────────────────────
-
-export const EDITOR_PROJECTS = ['Claude 5.5 Agentic OS — Master Cut v3', 'Claude Mods Deep Dive', 'Direct Media Gen Setup'] as const;
-export const EDITOR_FPS = 30;
-
-/** sceneKey values the editor must be able to render procedurally. */
-export const EDITOR_SCENE_KEYS = ['title-reveal', 'ring-zoom', 'arms-stack', 'wildcard-split', 'cache-meter', 'brain-orb', 'jev-router', 'outro-cta'] as const;
-
-export const VIDEO_CLIPS: VideoClip[] = [
-  { id: 'clip-01', number: 1, title: 'Hook', kind: 'ANIMATION', status: 'CHANGES REQUESTED', startSec: 0, durationSec: 71, sourcePath: 'workspace/videos/clips/01-hook.tsx', sceneKey: 'title-reveal', animationLabel: 'Title HUD', voiceover: [{ atSec: 0, text: 'Something big just shipped with Claude 5.5.' }, { atSec: 18, text: 'I rebuilt my entire business around one local OS.' }, { atSec: 44, text: 'By the end of this you will have the whole blueprint.' }] },
-  { id: 'clip-02', number: 2, title: 'Home Dashboard Overview', kind: 'ANIMATION', status: 'NEEDS REVIEW', startSec: 71, durationSec: 74, sourcePath: 'workspace/videos/clips/02-home-os.tsx', sceneKey: 'ring-zoom', animationLabel: '3D Ring Zoom', voiceover: [{ atSec: 0, text: "So what you're seeing is the home dashboard." }, { atSec: 21, text: 'Every artifact Claude makes lands on this ring.' }, { atSec: 52, text: 'And the skills deck routes each job to the right model.' }] },
-  { id: 'clip-03', number: 3, title: 'ARMS Framework Intro', kind: 'A-ROLL CUT', status: 'APPROVED', startSec: 145, durationSec: 67, sourcePath: 'workspace/videos/clips/03-arms.mp4', sceneKey: 'arms-stack', animationLabel: 'ARMS Stack', voiceover: [{ atSec: 0, text: 'I call it ARMS.' }, { atSec: 14, text: 'Apps, Routines, Memory, Skills.' }, { atSec: 40, text: 'Each layer is just plain text files Claude can route.' }] },
-  { id: 'clip-04', number: 4, title: 'Database Skills & Wildcards', kind: 'ANIMATION', status: 'NEEDS REVIEW', startSec: 212, durationSec: 78, sourcePath: 'workspace/videos/clips/04-database-skills.tsx', sceneKey: 'wildcard-split', animationLabel: 'Wildcard Split', voiceover: [{ atSec: 0, text: 'Database skills are memory with taste.' }, { atSec: 30, text: 'But if you only feed it winners, it overfits.' }, { atSec: 55, text: 'So twenty percent of every batch is a wildcard.' }] },
-  { id: 'clip-05', number: 5, title: 'Second Brain 3D Orb', kind: 'A-ROLL CUT', status: 'NEEDS REVIEW', startSec: 290, durationSec: 62, sourcePath: 'workspace/videos/clips/05-second-brain.mp4', sceneKey: 'brain-orb', animationLabel: 'Orb Fly-through', voiceover: [{ atSec: 0, text: 'This is four hundred twenty-four thousand files.' }, { atSec: 25, text: 'Every dot is something Claude can read.' }] },
-  { id: 'clip-06', number: 6, title: 'Prompt Cache Math', kind: 'ANIMATION', status: 'NEEDS REVIEW', startSec: 352, durationSec: 58, sourcePath: 'workspace/videos/clips/06-cache-math.tsx', sceneKey: 'cache-meter', animationLabel: 'Cache Meter', voiceover: [{ atSec: 0, text: 'Here is the bit nobody talks about: the cache.' }, { atSec: 28, text: 'Cold reloads cost you almost five dollars on Opus.' }] },
-  { id: 'clip-07', number: 7, title: 'Jev Router Stats', kind: 'ANIMATION', status: 'NEEDS REVIEW', startSec: 410, durationSec: 58, sourcePath: 'workspace/videos/clips/07-jev.tsx', sceneKey: 'jev-router', animationLabel: 'Jev Router Stats', voiceover: [{ atSec: 0, text: 'Jev decides which model gets every job.' }, { atSec: 30, text: 'Four thousand calls for eighteen cents.' }] },
-  { id: 'clip-08', number: 8, title: 'Outro & CTA', kind: 'A-ROLL CUT', status: 'NEEDS REVIEW', startSec: 468, durationSec: 52, sourcePath: 'workspace/videos/clips/08-outro.mp4', sceneKey: 'outro-cta', animationLabel: 'Subscribe CTA', voiceover: [{ atSec: 0, text: 'Grab the full template in the community.' }, { atSec: 26, text: 'See you in the next one.' }] },
-];
-
-export type EditorSkillTag = '/animate' | '/cut' | 'audio' | '/robo';
-export type SeedPin = VideoPinComment & { skill: EditorSkillTag; resolved: boolean };
-
-function hms(sec: number): string {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = Math.floor(sec % 60);
-  return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':');
-}
-export const formatHMS = hms;
-
-/** 7 seed pins. timestampSec is absolute on the master timeline. */
-export const SEED_PINS: SeedPin[] = [
-  { id: 'pin-1', clipId: 'clip-02', timestampSec: 88, xPercent: 64.2, yPercent: 38.5, skill: '/animate', resolved: false, commentText: 'Speed up the zoom transition into the Artifact Ring by 1.5x and increase the orange glow (#FF5500) on the matched BETASHARES node.' },
-  { id: 'pin-2', clipId: 'clip-02', timestampSec: 128, xPercent: 82.0, yPercent: 74.1, skill: '/cut', resolved: false, commentText: 'Cut the 1.8s dead air pause right before the Haiku/Sonnet/Opus matrix popover opens.' },
-  { id: 'pin-3', clipId: 'clip-01', timestampSec: 12, xPercent: 50.0, yPercent: 46.0, skill: '/robo', resolved: false, commentText: 'Title lockup kerning is too loose — tighten "Agentic" Doto tracking to 0.02em.' },
-  { id: 'pin-4', clipId: 'clip-01', timestampSec: 41, xPercent: 28.4, yPercent: 70.2, skill: '/cut', resolved: false, commentText: 'Jump cut here feels abrupt — add 6 frames of B-roll to cover it.' },
-  { id: 'pin-5', clipId: 'clip-04', timestampSec: 247, xPercent: 71.5, yPercent: 33.0, skill: '/animate', resolved: false, commentText: 'Wildcard 20% slice should animate in after the 80% block, not at the same time.' },
-  { id: 'pin-6', clipId: 'clip-06', timestampSec: 371, xPercent: 45.0, yPercent: 60.0, skill: 'audio', resolved: false, commentText: 'Add a low whoosh SFX when the meter flips from WARM to COLD.' },
-  { id: 'pin-7', clipId: 'clip-05', timestampSec: 301, xPercent: 52.3, yPercent: 49.8, skill: '/animate', resolved: true, commentText: 'Slow the orb rotation by ~30% during the "every dot" line.' },
-].map((p) => ({ ...p, formattedTime: hms(p.timestampSec) })) as SeedPin[];
 
 // ───────────────────────── Usage mod ─────────────────────────
 

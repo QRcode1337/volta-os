@@ -1,5 +1,6 @@
 'use client';
-// Cross-app hand-off into VOLTA Editor. Producers: Generations, Scripts, Carousels. Consumer: Editor.
+// Cross-app hand-off into VOLTA Editor. Producers: Generations and Studio (real files: `mediaUrl` = /api/media/file or /api/studio/file),
+// plus Scripts and Carousels (no file: the Editor lists them as hand-offs without media). Consumer: Editor.
 import type { EditorInboxItem } from '@/types/os';
 
 export const EDITOR_INBOX_KEY = 'rubric:editor-inbox';
@@ -23,6 +24,16 @@ export function pushToEditorInbox(items: EditorInboxItem | EditorInboxItem[]): n
     // storage unavailable (private mode) — caller still gets the count
   }
   return next.length;
+}
+
+/** Editor keeps only the hand-offs it could not open as real files (no file id / url); everything else is consumed. */
+export function replaceEditorInbox(items: EditorInboxItem[]): void {
+  try {
+    if (items.length) window.localStorage.setItem(EDITOR_INBOX_KEY, JSON.stringify(items));
+    else window.localStorage.removeItem(EDITOR_INBOX_KEY);
+  } catch {
+    // ignore
+  }
 }
 
 /** Editor calls this after importing the items into its clip bin. */

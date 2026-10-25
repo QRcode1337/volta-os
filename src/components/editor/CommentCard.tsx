@@ -3,7 +3,7 @@
 import { Copy, FileText, Trash2 } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/cn';
-import { coordsLabel, regionDescriptor } from './prompt';
+import { coordsLabel, regionDescriptor } from './spatial';
 import { SKILL_COLORS, SKILL_OPTIONS, type EditorClip, type EditorPin, type SkillTag } from './types';
 
 export interface CommentCardProps {
@@ -81,7 +81,7 @@ export const CommentCard = memo(function CommentCard({ pin, clip, pulsing, editi
       </div>
       {clip && (
         <div className="mt-1 truncate font-mono text-[9.5px] text-muted">
-          Clip {String(clip.number).padStart(2, '0')} · {clip.title}
+          File {String(clip.number).padStart(2, '0')} · {clip.name}
         </div>
       )}
       {pin.scriptLine && (

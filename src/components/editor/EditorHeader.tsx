@@ -1,16 +1,15 @@
 'use client';
 
-import { ArrowLeft, ClipboardCopy, Eye, RotateCcw, Wand2 } from 'lucide-react';
+import { ArrowLeft, ClipboardCopy, Eye, FileText, Eraser, Wand2 } from 'lucide-react';
 import Link from 'next/link';
 import { memo, type ReactNode } from 'react';
 import { PixelMascotLogo } from '@/components/robo-ui';
 import { cn } from '@/lib/cn';
-import { EDITOR_PROJECTS } from '@/lib/mock-data';
 import type { ClipFilter } from './types';
 
 export const TEACH_TOOLTIPS = {
-  cut: 'Appends reinforcement learning rules to update workspace/skills/cut/SKILL.md based on your pacing/cutting feedback',
-  animate: 'Appends reinforcement learning rules to update workspace/skills/animate/SKILL.md based on your motion/layout feedback',
+  cut: 'Adds a /cut directive to the copied prompt that points at your live video skills in ~/.claude/skills (see Preview Prompt). "Apply & Teach" also appends the rule to VOLTA\'s workspace copy, workspace/skills/cut/SKILL.md, which is not a live skill.',
+  animate: 'Adds an /animate directive to the copied prompt that points at your live HyperFrames / Remotion skills in ~/.claude/skills (see Preview Prompt). "Apply & Teach" also appends the rule to VOLTA\'s workspace copy, workspace/skills/animate/SKILL.md, which is not a live skill.',
 } as const;
 
 const FILTERS: { value: ClipFilter; label: string }[] = [
@@ -40,7 +39,10 @@ function TeachToggle({ on, label, tip, onToggle }: { on: boolean; label: string;
             className={cn('absolute top-0.5 h-4 w-4 rounded-full transition-all', on ? 'left-[18px] bg-green shadow-[0_0_8px_#22C55E]' : 'left-0.5 bg-muted')}
           />
         </span>
-        <span className="whitespace-nowrap">{on ? '●' : '○'} {label}</span>
+        <span className="whitespace-nowrap">
+          {on ? '●' : '○'} <span className="hidden xl:inline">Teach my </span>
+          {label}
+        </span>
       </button>
       <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-72 -translate-x-1/2 rounded-md border border-highlight bg-panel-elevated px-3 py-2 text-[11.5px] leading-snug text-paper shadow-xl shadow-black/60 group-hover:block">
         {tip}
@@ -67,26 +69,28 @@ function HBtn({ onClick, children, primary, disabled, title }: { onClick: () => 
 }
 
 export interface EditorHeaderProps {
-  project: string;
+  canSaveNote: boolean;
+  saveNoteHint: string;
+  savingNote: boolean;
+  onSaveNote: () => void;
   teachCut: boolean;
   teachAnimate: boolean;
   filter: ClipFilter;
   unresolvedCount: number;
   applying: boolean;
-  onProject: (p: string) => void;
   onToggleTeach: (s: 'cut' | 'animate') => void;
   onFilter: (f: ClipFilter) => void;
   onPreview: () => void;
   onCopyAll: () => void;
   onApply: () => void;
-  onReset: () => void;
+  onClear: () => void;
 }
 
 export const EditorHeader = memo(function EditorHeader(p: EditorHeaderProps) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b border-subtle bg-panel/80 px-3">
       <Link href="/" className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-subtle px-2 font-mono text-[10.5px] text-secondary hover:border-highlight hover:text-paper">
-        <ArrowLeft size={13} /> Back to VOLTA OS
+        <ArrowLeft size={13} /> <span className="hidden xl:inline">Back to VOLTA OS</span>
       </Link>
       <div className="flex shrink-0 items-center gap-2 pl-1">
         <PixelMascotLogo size={22} />
@@ -94,27 +98,11 @@ export const EditorHeader = memo(function EditorHeader(p: EditorHeaderProps) {
           VOLTA <span className="font-doto font-extrabold text-orange">EDITOR</span>
         </span>
       </div>
-      <label className="ml-2 flex min-w-0 items-center gap-1.5 font-mono text-[10.5px] text-muted">
-        <span className="hidden xl:inline">Project:</span>
-        <select
-          value={p.project}
-          onChange={(e) => p.onProject(e.target.value)}
-          className="h-7 min-w-0 max-w-[260px] truncate rounded-md border border-subtle bg-panel-elevated px-2 text-[11px] text-paper outline-none focus:border-orange/60"
-          aria-label="Project"
-        >
-          {EDITOR_PROJECTS.map((x) => (
-            <option key={x} value={x}>
-              {x}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <div className="ml-auto flex shrink-0 items-center gap-2">
-        <TeachToggle on={p.teachCut} label="Teach my /cut" tip={TEACH_TOOLTIPS.cut} onToggle={() => p.onToggleTeach('cut')} />
-        <TeachToggle on={p.teachAnimate} label="Teach my /animate" tip={TEACH_TOOLTIPS.animate} onToggle={() => p.onToggleTeach('animate')} />
-        <label className="flex h-7 items-center gap-1 rounded-md border border-subtle bg-panel-elevated px-2 font-mono text-[10.5px] text-secondary">
-          Filter:
+      <div className="ml-auto flex min-w-0 shrink items-center gap-2">
+        <TeachToggle on={p.teachCut} label="/cut" tip={TEACH_TOOLTIPS.cut} onToggle={() => p.onToggleTeach('cut')} />
+        <TeachToggle on={p.teachAnimate} label="/animate" tip={TEACH_TOOLTIPS.animate} onToggle={() => p.onToggleTeach('animate')} />
+        <label className="flex h-7 items-center gap-1 rounded-md border border-subtle bg-panel-elevated px-2 font-mono text-[10.5px] text-secondary" title="Filter the files on the timeline by review status">
+          <span className="hidden 2xl:inline">Filter:</span>
           <select value={p.filter} onChange={(e) => p.onFilter(e.target.value as ClipFilter)} className="bg-transparent text-paper outline-none" aria-label="Clip filter">
             {FILTERS.map((f) => (
               <option key={f.value} value={f.value} className="bg-panel">
@@ -123,18 +111,20 @@ export const EditorHeader = memo(function EditorHeader(p: EditorHeaderProps) {
             ))}
           </select>
         </label>
-        <HBtn onClick={p.onReset} title="Discard local pins/toggles and restore the seed project">
-          <RotateCcw size={12} />
-          <span className="hidden 2xl:inline">Reset to seed</span>
+        <HBtn onClick={p.onClear} title="Take every file off the timeline (saved notes stay on disk and reload when you reopen a file)">
+          <Eraser size={12} />
+        </HBtn>
+        <HBtn onClick={p.onSaveNote} disabled={!p.canSaveNote || p.savingNote} title={p.saveNoteHint}>
+          <FileText size={12} /> <span className="hidden min-[1620px]:inline">{p.savingNote ? 'Saving...' : 'Save notes to project'}</span>
         </HBtn>
         <HBtn onClick={p.onPreview} title="Preview the exact compiled prompt">
-          <Eye size={12} /> <span className="hidden xl:inline">Preview Prompt</span>
+          <Eye size={12} /> <span className="hidden min-[1620px]:inline">Preview</span>
         </HBtn>
-        <HBtn onClick={p.onApply} disabled={p.applying} title="Write learned rules into workspace/skills/*/SKILL.md and show the diff">
-          <Wand2 size={12} className={p.applying ? 'robo-spin' : ''} /> <span className="hidden lg:inline">{p.applying ? 'Applying…' : 'Apply & Teach Locally'}</span>
+        <HBtn onClick={p.onApply} disabled={p.applying} title="Append the learned rules to VOLTA's WORKSPACE COPY (./workspace/skills/cut|animate/SKILL.md, not your live ~/.claude skills) and show the diff">
+          <Wand2 size={12} className={p.applying ? 'robo-spin' : ''} /> <span className="hidden min-[1620px]:inline">{p.applying ? 'Applying...' : 'Apply & Teach (workspace copy)'}</span>
         </HBtn>
         <HBtn onClick={p.onCopyAll} primary title="Copy every unresolved pin + RL directives as a structured prompt">
-          <ClipboardCopy size={12} /> 📋 Copy All Comments ({p.unresolvedCount})
+          <ClipboardCopy size={12} /> Copy All Comments ({p.unresolvedCount})
         </HBtn>
       </div>
     </header>

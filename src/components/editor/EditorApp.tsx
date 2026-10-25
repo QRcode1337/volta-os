@@ -1,17 +1,19 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { EDITOR_INBOX_EVENT, clearEditorInbox, readEditorInbox } from '@/lib/editor-inbox';
+import { EDITOR_INBOX_EVENT, readEditorInbox, replaceEditorInbox } from '@/lib/editor-inbox';
 import { isTypingTarget } from '@/lib/events';
-import { ClipSceneBin } from './ClipSceneBin';
+import type { EditorFeedbackResponse, EditorMediaItem, EditorReviewNoteResponse, EditorSkillsResponse } from '@/types/editor';
+import type { EditorInboxItem } from '@/types/os';
 import { DiffModal, EditorToast, PromptPreviewModal, type AppliedFile, type ToastState } from './EditorModals';
 import { EditorHeader } from './EditorHeader';
 import { InspectorPanel } from './InspectorPanel';
+import { MediaBin, type BinState } from './MediaBin';
 import { MultiTrackTimeline } from './MultiTrackTimeline';
 import { compilePrompt, copyToastText, singlePinMarkdown, toRlInputs, writeClipboard } from './prompt';
 import { SpatialVideoCanvas } from './SpatialVideoCanvas';
-import { STORAGE_KEY, clipAt, editorReducer, inboxItemToClip, initialState, nextPinNumber, parsePersisted, toPersisted, totalDuration } from './state';
-import type { ClipFilter, ClipStatus, EditorClip, EditorPin, GroupMode, InspectorTab, PinDraft, PinMode, PlaybackSpeed, SkillTag } from './types';
+import { STORAGE_KEY, clipAt, clipFromMedia, editorReducer, inboxFileKey, inboxVoiceover, initialState, nextPinNumber, parsePersisted, recordsFromPins, toPersisted, totalDuration, type NewClip } from './state';
+import { DEFAULT_FPS, type ClipFilter, type ClipStatus, type EditorClip, type EditorPin, type GroupMode, type InspectorTab, type NotesState, type PinDraft, type PinMode, type PlaybackSpeed, type SkillTag } from './types';
 
 const EDITOR_CSS = `
 @keyframes editor-pin-ping { 0% { transform: scale(1); opacity: .9 } 80%,100% { transform: scale(2.3); opacity: 0 } }
@@ -75,15 +77,69 @@ function probeVideo(url: string): Promise<{ duration: number; thumb?: string } |
   });
 }
 
+interface NoteInfo {
+  state: NotesState;
+  detail: string | null;
+}
+
+const BACKUP_PREFIX = 'volta:editor:fb:';
+interface Backup {
+  dirty: boolean;
+  status: ClipStatus;
+  pins: ReturnType<typeof recordsFromPins>;
+}
+function readBackup(id: string): Backup | null {
+  try {
+    const raw = window.localStorage.getItem(BACKUP_PREFIX + id);
+    const o = raw ? (JSON.parse(raw) as Backup) : null;
+    return o && Array.isArray(o.pins) ? o : null;
+  } catch {
+    return null;
+  }
+}
+function writeBackup(id: string, b: Backup): void {
+  try {
+    window.localStorage.setItem(BACKUP_PREFIX + id, JSON.stringify(b));
+  } catch {
+    // storage unavailable: the server copy is still the source of truth
+  }
+}
+
+/** What the server stores for a file (numbers are session-local, so they are not part of the change signature). */
+function signature(clip: EditorClip, pins: EditorPin[]): string {
+  return JSON.stringify({ s: clip.status, p: recordsFromPins(pins, clip).map(({ number: _n, ...r }) => r).sort((a, b) => (a.id < b.id ? -1 : 1)) });
+}
+
+async function jsonFetch<T>(url: string, body?: unknown, keepalive = false): Promise<T> {
+  const res = await fetch(url, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), keepalive });
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
 export function EditorApp() {
   const [state, dispatch] = useReducer(editorReducer, undefined, initialState);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [preview, setPreview] = useState(false);
   const [applied, setApplied] = useState<AppliedFile[] | null>(null);
   const [applying, setApplying] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
+  const [bin, setBin] = useState<BinState>({ status: 'loading', data: null, error: null });
+  const [skills, setSkills] = useState<EditorSkillsResponse | null>(null);
+  const [notes, setNotes] = useState<Record<string, NoteInfo>>({});
+  const [handoffs, setHandoffs] = useState<EditorInboxItem[]>([]);
   const toastSeq = useRef(0);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const binRef = useRef(bin);
+  binRef.current = bin;
+
+  // per-file persistence bookkeeping (refs: they must not re-render)
+  const loadedRef = useRef<Set<string>>(new Set()); // notes fetched OK: autosave allowed
+  const sigRef = useRef<Map<string, string>>(new Map()); // last signature known to be on the server
+  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const savingRef = useRef<Set<string>>(new Set());
+  const restoredRef = useRef(false);
 
   const notify = useCallback((text: string, tone: ToastState['tone'] = 'ok') => {
     toastSeq.current += 1;
@@ -91,26 +147,171 @@ export function EditorApp() {
   }, []);
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3600);
+    const t = setTimeout(() => setToast(null), 4200);
     return () => clearTimeout(t);
   }, [toast]);
 
-  // ── hydrate from localStorage, then pull the cross-app inbox ──
-  const importInbox = useCallback(() => {
-    const items = readEditorInbox();
-    if (!items.length) return;
-    const s = stateRef.current;
-    let num = s.clips.reduce((m, c) => Math.max(m, c.number), 0);
-    const existing = new Set(s.clips.map((c) => c.id));
-    const fresh = items.filter((it) => it && typeof it.id === 'string' && !existing.has(`inbox-${it.id}`));
-    const clips = fresh.map((it) => inboxItemToClip(it, ++num));
-    clearEditorInbox();
-    if (!clips.length) return;
-    dispatch({ type: 'ADD_CLIPS', clips });
-    const sources = [...new Set(fresh.map((f) => f.source))].join(' & ');
-    notify(`Imported ${clips.length} clip${clips.length === 1 ? '' : 's'} from ${sources} into the bin`, 'info');
-  }, [notify]);
+  const setNote = useCallback((id: string, noteState: NotesState, detail: string | null = null) => {
+    setNotes((m) => (m[id]?.state === noteState && m[id]?.detail === detail ? m : { ...m, [id]: { state: noteState, detail } }));
+  }, []);
 
+  // ── media bin + live skill targets ──
+  const loadBin = useCallback(async (refresh = false) => {
+    setBin((b) => ({ ...b, status: 'loading', error: null }));
+    try {
+      const data = await jsonFetch<BinState['data'] & object>(`/api/editor/media${refresh ? '?refresh=1' : ''}`);
+      setBin({ status: 'ready', data: data as BinState['data'], error: null });
+    } catch (err) {
+      setBin((b) => ({ ...b, status: 'error', error: (err as Error).message }));
+    }
+  }, []);
+  useEffect(() => {
+    void loadBin();
+    jsonFetch<EditorSkillsResponse>('/api/editor/skills')
+      .then(setSkills)
+      .catch(() => setSkills(null));
+  }, [loadBin]);
+
+  // ── per-file notes: load ──
+  const loadNotes = useCallback(
+    async (clip: EditorClip) => {
+      setNote(clip.id, 'loading');
+      try {
+        const r = await jsonFetch<EditorFeedbackResponse>(`/api/editor/feedback?fileKey=${encodeURIComponent(clip.id)}`);
+        const backup = readBackup(clip.id);
+        const useBackup = !!backup?.dirty && (backup.pins.length > 0 || backup.status !== 'NEEDS REVIEW');
+        const records = useBackup ? backup!.pins : (r.doc?.pins ?? backup?.pins.filter(() => !r.available) ?? []);
+        const status = useBackup ? backup!.status : (r.doc?.status ?? 'NEEDS REVIEW');
+        dispatch({ type: 'LOAD_PINS', clipId: clip.id, records, status });
+        loadedRef.current.add(clip.id);
+        // baseline = what the server holds; a recovered local backup differs from it, so it gets saved by the autosave pass
+        if (useBackup || !r.available) sigRef.current.delete(clip.id);
+        else sigRef.current.set(clip.id, JSON.stringify({ s: status, p: records.map(({ number: _n, ...x }) => x).sort((a, b) => (a.id < b.id ? -1 : 1)) }));
+        if (!r.available) setNote(clip.id, 'error', r.reason);
+        else {
+          setNote(clip.id, useBackup ? 'dirty' : 'saved');
+          if (useBackup) notify(`Recovered unsaved notes for ${clip.name} and re-saving them.`, 'info');
+        }
+      } catch (err) {
+        setNote(clip.id, 'error', `Could not load saved notes (${(err as Error).message}). Take the file off the timeline and reopen it to retry; nothing is overwritten.`);
+        notify(`Saved notes for ${clip.name} could not be loaded: ${(err as Error).message}`, 'error');
+      }
+    },
+    [notify, setNote],
+  );
+
+  // ── per-file notes: save ──
+  const saveClip = useCallback(
+    async (id: string, keepalive = false): Promise<boolean> => {
+      const t = timersRef.current.get(id);
+      if (t) clearTimeout(t);
+      timersRef.current.delete(id);
+      const s = stateRef.current;
+      const clip = s.clips.find((c) => c.id === id);
+      if (!clip || clip.origin !== 'server' || !loadedRef.current.has(id)) return true;
+      if (savingRef.current.has(id)) {
+        // a save is in flight: try again right after it
+        timersRef.current.set(id, setTimeout(() => void saveClip(id), 300));
+        return true;
+      }
+      const sig = signature(clip, s.pins);
+      if (sigRef.current.get(id) === sig) {
+        setNote(id, 'saved');
+        return true;
+      }
+      const records = recordsFromPins(s.pins, clip);
+      writeBackup(id, { dirty: true, status: clip.status, pins: records });
+      savingRef.current.add(id);
+      setNote(id, 'saving');
+      try {
+        await jsonFetch('/api/editor/feedback', { fileKey: id, pins: records, status: clip.status }, keepalive);
+        sigRef.current.set(id, sig);
+        writeBackup(id, { dirty: false, status: clip.status, pins: records });
+        const cur = stateRef.current.clips.find((c) => c.id === id);
+        setNote(id, cur && signature(cur, stateRef.current.pins) !== sig ? 'dirty' : 'saved');
+        return true;
+      } catch (err) {
+        setNote(id, 'error', (err as Error).message);
+        notify(`Notes for ${clip.name} were not saved: ${(err as Error).message}`, 'error');
+        return false;
+      } finally {
+        savingRef.current.delete(id);
+      }
+    },
+    [notify, setNote],
+  );
+
+  // autosave: debounce per file whenever its pins / status differ from what the server holds
+  useEffect(() => {
+    for (const c of state.clips) {
+      if (c.origin !== 'server' || !loadedRef.current.has(c.id)) continue;
+      const sig = signature(c, state.pins);
+      if (sigRef.current.get(c.id) === sig) continue;
+      setNote(c.id, savingRef.current.has(c.id) ? 'saving' : 'dirty');
+      const old = timersRef.current.get(c.id);
+      if (old) clearTimeout(old);
+      timersRef.current.set(
+        c.id,
+        setTimeout(() => void saveClip(c.id), 450),
+      );
+    }
+  }, [state.clips, state.pins, saveClip, setNote]);
+
+  // flush pending saves when the tab is hidden or closed
+  useEffect(() => {
+    const flush = () => {
+      for (const id of [...timersRef.current.keys()]) void saveClip(id, true);
+    };
+    const onVis = () => document.visibilityState === 'hidden' && flush();
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [saveClip]);
+
+  // ── open a real file on the timeline ──
+  const openItem = useCallback(
+    async (item: EditorMediaItem, opts: { select?: boolean; voiceover?: EditorClip['voiceover'] } = {}) => {
+      const select = opts.select ?? true;
+      if (stateRef.current.clips.some((c) => c.id === item.id)) {
+        if (select) dispatch({ type: 'SELECT_CLIP', clipId: item.id });
+        return;
+      }
+      if (item.offline) {
+        notify(`${item.name} is an iCloud placeholder and is not downloaded to this Mac.`, 'error');
+        return;
+      }
+      let durationOverride: number | undefined;
+      if (item.media !== 'image' && item.durationSec === null) {
+        const probe = await probeVideo(item.url);
+        if (!probe) {
+          notify(`Could not read the duration of ${item.name} (ffprobe and the browser both failed).`, 'error');
+          return;
+        }
+        durationOverride = probe.duration;
+      }
+      if (stateRef.current.clips.some((c) => c.id === item.id)) return; // opened meanwhile
+      const clip = clipFromMedia(item, { durationOverride, voiceover: opts.voiceover });
+      dispatch({ type: 'ADD_CLIPS', clips: [clip], select });
+      // the reducer assigns number / startSec; loadNotes only needs identity + name until LOAD_PINS runs against the stored clip
+      void loadNotes({ ...clip, number: 0, startSec: 0 });
+    },
+    [loadNotes, notify],
+  );
+
+  const fetchItem = useCallback(async (key: string): Promise<EditorMediaItem | null> => {
+    const fromBin = binRef.current.data?.groups.flatMap((g) => g.items).find((i) => i.id === key);
+    if (fromBin) return fromBin;
+    try {
+      return (await jsonFetch<{ item: EditorMediaItem }>(`/api/editor/media?id=${encodeURIComponent(key)}`)).item;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // ── hydrate toggles, then reopen the files that were open ──
   useEffect(() => {
     let saved = null;
     try {
@@ -121,32 +322,86 @@ export function EditorApp() {
     dispatch({ type: 'HYDRATE', saved });
   }, []);
   useEffect(() => {
-    if (!state.hydrated) return;
-    importInbox();
-    const onInbox = () => importInbox();
+    if (!state.hydrated || restoredRef.current || bin.status === 'loading') return;
+    restoredRef.current = true;
+    const ids = stateRef.current.restoreIds;
+    void (async () => {
+      for (const id of ids) {
+        const item = await fetchItem(id);
+        if (item) await openItem(item, { select: false });
+      }
+    })();
+  }, [state.hydrated, bin.status, fetchItem, openItem]);
+
+  // ── inbox: items from Generations / Studio carry a file id or url and open as real clips ──
+  const importInbox = useCallback(async () => {
+    const items = readEditorInbox();
+    if (!items.length) return;
+    const keyed = items.map((it) => ({ it, key: it && typeof it.id === 'string' ? inboxFileKey(it) : null }));
+    // consume the file-backed items now; anything unresolved is put back below so nothing vanishes silently
+    replaceEditorInbox(keyed.filter((k) => !k.key).map((k) => k.it));
+    const leftovers: EditorInboxItem[] = keyed.filter((k) => !k.key).map((k) => k.it);
+    let opened = 0;
+    let last: EditorMediaItem | null = null;
+    for (const { it, key } of keyed) {
+      if (!key) continue;
+      let item = await fetchItem(key);
+      if (!item && it.file) item = binRef.current.data?.groups.flatMap((g) => g.items).find((i) => i.path === it.file) ?? null;
+      if (!item) {
+        leftovers.push(it);
+        continue;
+      }
+      const already = stateRef.current.clips.some((c) => c.id === item!.id);
+      await openItem(item, { select: false, voiceover: inboxVoiceover(it) });
+      if (!already) opened += 1;
+      last = item;
+    }
+    if (leftovers.length) {
+      const known = new Set(leftovers.map((l) => l.id));
+      replaceEditorInbox(leftovers);
+      setHandoffs([...known].map((id) => leftovers.find((l) => l.id === id) as EditorInboxItem));
+    } else setHandoffs([]);
+    if (last) dispatch({ type: 'SELECT_CLIP', clipId: last.id });
+    if (opened) notify(`Opened ${opened} file${opened === 1 ? '' : 's'} from the inbox.`, 'info');
+    const unresolved = leftovers.filter((l) => inboxFileKey(l));
+    if (unresolved.length) notify(`${unresolved.length} inbox item${unresolved.length === 1 ? '' : 's'} pointed at a file that no longer resolves (moved or drive unplugged).`, 'error');
+  }, [fetchItem, notify, openItem]);
+
+  useEffect(() => {
+    if (!state.hydrated || bin.status === 'loading') return;
+    void importInbox();
+    const onInbox = () => void importInbox();
     window.addEventListener(EDITOR_INBOX_EVENT, onInbox);
-    const onStorage = (e: StorageEvent) => e.key === 'rubric:editor-inbox' && importInbox();
+    const onStorage = (e: StorageEvent) => e.key === 'rubric:editor-inbox' && void importInbox();
     window.addEventListener('storage', onStorage);
     return () => {
       window.removeEventListener(EDITOR_INBOX_EVENT, onInbox);
       window.removeEventListener('storage', onStorage);
     };
-  }, [state.hydrated, importInbox]);
+  }, [state.hydrated, bin.status, importInbox]);
 
-  // ── persist pins / toggles / clip statuses ──
+  const dismissHandoff = useCallback((id: string) => {
+    setHandoffs((h) => {
+      const next = h.filter((x) => x.id !== id);
+      replaceEditorInbox(next);
+      return next;
+    });
+  }, []);
+
+  // ── persist toggles + which files are open (pins live on disk per file) ──
   useEffect(() => {
     if (!state.hydrated) return;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toPersisted(stateRef.current)));
     } catch {
-      // storage full / private mode — app keeps working in memory
+      // storage full / private mode: app keeps working in memory
     }
-  }, [state.hydrated, state.pins, state.clips, state.teachCut, state.teachAnimate, state.project, state.group]);
+  }, [state.hydrated, state.clips, state.teachCut, state.teachAnimate, state.group]);
 
-  // ── object URL lifecycle for imported files ──
+  // ── object URL lifecycle for session-only imports ──
   const urlsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    const now = new Set(state.clips.map((c) => c.videoUrl).filter((u): u is string => !!u));
+    const now = new Set(state.clips.filter((c) => c.origin === 'local').map((c) => c.url));
     for (const u of urlsRef.current) if (!now.has(u)) URL.revokeObjectURL(u);
     urlsRef.current = now;
   }, [state.clips]);
@@ -184,6 +439,11 @@ export function EditorApp() {
   const active = clipAt(state.clips, state.playhead);
   const activeId = active?.id ?? null;
   const unresolved = useMemo(() => state.pins.filter((p) => !p.resolved), [state.pins]);
+  const noteStates = useMemo(() => {
+    const out: Record<string, NotesState> = {};
+    for (const c of state.clips) out[c.id] = c.origin === 'local' ? 'local' : (notes[c.id]?.state ?? 'loading');
+    return out;
+  }, [state.clips, notes]);
   const activeLineKey = useMemo(() => {
     if (!active) return null;
     const local = state.playhead - active.startSec;
@@ -197,20 +457,28 @@ export function EditorApp() {
   // ── actions ──
   const compile = useCallback(() => {
     const s = stateRef.current;
-    return compilePrompt({ project: s.project, clips: s.clips, pins: s.pins.filter((p) => !p.resolved), teachCut: s.teachCut, teachAnimate: s.teachAnimate });
-  }, []);
+    return compilePrompt({ clips: s.clips, pins: s.pins.filter((p) => !p.resolved), teachCut: s.teachCut, teachAnimate: s.teachAnimate, skills });
+  }, [skills]);
 
   const copyAll = useCallback(async () => {
     const s = stateRef.current;
     const n = s.pins.filter((p) => !p.resolved).length;
     if (!n) {
-      notify('No unresolved pins to copy — drop a pin on the frame first.', 'info');
+      notify('No unresolved pins to copy. Drop a pin on the frame first.', 'info');
       return;
     }
     const ok = await writeClipboard(compile());
     if (ok) notify(copyToastText(n, s.teachCut, s.teachAnimate));
-    else notify('Clipboard blocked by the browser — open Preview Prompt and copy manually.', 'error');
+    else notify('Clipboard blocked by the browser. Open Preview Prompt and copy manually.', 'error');
   }, [compile, notify]);
+
+  const copyText = useCallback(
+    async (text: string, label: string) => {
+      const ok = await writeClipboard(text);
+      notify(ok ? `Copied the ${label}.` : 'Clipboard blocked by the browser.', ok ? 'ok' : 'error');
+    },
+    [notify],
+  );
 
   const apply = useCallback(async () => {
     const s = stateRef.current;
@@ -219,17 +487,13 @@ export function EditorApp() {
       return;
     }
     const pins = s.pins.filter((p) => !p.resolved);
+    const projects = [...new Set(s.clips.filter((c) => pins.some((p) => p.clipId === c.id)).map((c) => c.projectName))].join(', ') || 'VOLTA Editor';
     setApplying(true);
     try {
-      const res = await fetch('/api/editor/apply-feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project: s.project, teach: { cut: s.teachCut, animate: s.teachAnimate }, pins: toRlInputs(pins, s.clips) }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { files?: AppliedFile[]; error?: string };
-      if (!res.ok || !Array.isArray(data.files)) throw new Error(data.error || `HTTP ${res.status}`);
+      const data = await jsonFetch<{ files?: AppliedFile[] }>('/api/editor/apply-feedback', { project: projects, teach: { cut: s.teachCut, animate: s.teachAnimate }, pins: toRlInputs(pins, s.clips) });
+      if (!Array.isArray(data.files)) throw new Error('unexpected response');
       setApplied(data.files);
-      notify(`Taught ${data.files.map((f) => f.path.replace('workspace/skills/', '/').replace('/SKILL.md', '')).join(' & ')} — rules appended locally.`);
+      notify(`Appended rules to VOLTA's workspace copy of ${data.files.map((f) => f.path.replace('workspace/skills/', '/').replace('/SKILL.md', '')).join(' & ')} (not your live ~/.claude skills).`);
     } catch (err) {
       notify(`Apply & Teach failed: ${(err as Error).message}`, 'error');
     } finally {
@@ -237,16 +501,47 @@ export function EditorApp() {
     }
   }, [notify]);
 
-  const reset = useCallback(() => {
-    if (!window.confirm('Reset VOLTA Editor to the seed project? Local pins, statuses and imported clips will be discarded.')) return;
-    dispatch({ type: 'RESET' });
-    notify('Editor reset to seed data.', 'info');
-  }, [notify]);
+  const clearTimeline = useCallback(() => {
+    const open = stateRef.current.clips.length;
+    if (!open) return;
+    if (!window.confirm(`Take ${open} file${open === 1 ? '' : 's'} off the timeline? Saved notes stay on disk and reload when you reopen a file. Session-only imports and their pins are discarded.`)) return;
+    for (const id of [...timersRef.current.keys()]) void saveClip(id);
+    loadedRef.current.clear();
+    sigRef.current.clear();
+    dispatch({ type: 'CLEAR_TIMELINE' });
+  }, [saveClip]);
+
+  const removeClip = useCallback(
+    async (clipId: string) => {
+      if (timersRef.current.has(clipId)) await saveClip(clipId);
+      loadedRef.current.delete(clipId);
+      sigRef.current.delete(clipId);
+      dispatch({ type: 'REMOVE_CLIP', clipId });
+    },
+    [saveClip],
+  );
+
+  const saveNoteToProject = useCallback(async () => {
+    const s = stateRef.current;
+    const clip = clipAt(s.clips, s.playhead);
+    if (!clip || clip.origin !== 'server') return;
+    setSavingNote(true);
+    try {
+      await saveClip(clip.id); // make sure the pins on disk match what is on screen
+      const records = recordsFromPins(stateRef.current.pins, clip);
+      const res = await jsonFetch<EditorReviewNoteResponse>('/api/editor/review-note', { fileKey: clip.id, pins: records, status: stateRef.current.clips.find((c) => c.id === clip.id)?.status ?? clip.status });
+      notify(`Saved ${res.pinCount} pin${res.pinCount === 1 ? '' : 's'} to ${res.projectName}: ${res.relPath}`);
+    } catch (err) {
+      notify(`Save notes to project failed: ${(err as Error).message}`, 'error');
+    } finally {
+      setSavingNote(false);
+    }
+  }, [notify, saveClip]);
 
   const importFile = useCallback(
     async (file: File) => {
       if (!/^video\/(mp4|webm|quicktime)$/.test(file.type) && !/\.(mp4|webm|mov)$/i.test(file.name)) {
-        notify('Only MP4 / WebM video files can be imported.', 'error');
+        notify('Only MP4 / WebM / MOV video files can be imported.', 'error');
         return;
       }
       const url = URL.createObjectURL(file);
@@ -256,24 +551,34 @@ export function EditorApp() {
         notify(`Couldn't decode ${file.name} in this browser.`, 'error');
         return;
       }
-      const id = `file-${Date.now().toString(36)}`;
-      const clip: Omit<EditorClip, 'startSec' | 'number'> = {
+      const id = `local-${Date.now().toString(36)}`;
+      const clip: NewClip = {
         id,
         title: file.name.replace(/\.[^.]+$/, '').slice(0, 60) || 'Imported clip',
+        name: file.name,
+        path: `local://${file.name}`,
+        origin: 'local',
+        media: 'video',
+        projectId: null,
+        projectName: 'Local import',
+        projectKind: null,
+        projectPath: null,
         kind: 'A-ROLL CUT',
         status: 'NEEDS REVIEW',
-        durationSec: Math.round(probe.duration * 30) / 30,
-        sourcePath: `local://${file.name}`,
-        sceneKey: 'title-reveal',
-        animationLabel: 'Imported footage',
+        durationSec: Math.max(0.5, Math.round(probe.duration * DEFAULT_FPS) / DEFAULT_FPS),
+        fps: DEFAULT_FPS,
+        fpsKnown: false,
+        width: null,
+        height: null,
+        hasAudio: true,
+        url,
+        animationLabel: 'Local import',
         voiceover: [],
-        origin: 'file',
-        videoUrl: url,
-        fileName: file.name,
+        canSaveNotes: false,
         thumbUrl: probe.thumb,
       };
       dispatch({ type: 'ADD_CLIPS', clips: [clip], select: true });
-      notify(`Imported ${file.name} (${probe.duration.toFixed(1)}s) — local only, never uploaded.`, 'info');
+      notify(`Opened ${file.name} (${probe.duration.toFixed(1)}s) for this session only: not uploaded, pins are not saved.`, 'info');
     },
     [notify],
   );
@@ -303,12 +608,10 @@ export function EditorApp() {
       filter: (filter: ClipFilter) => dispatch({ type: 'SET_FILTER', filter }),
       tab: (tab: InspectorTab) => dispatch({ type: 'SET_TAB', tab }),
       group: (group: GroupMode) => dispatch({ type: 'SET_GROUP', group }),
-      project: (project: string) => dispatch({ type: 'SET_PROJECT', project }),
       selectClip: (clipId: string) => dispatch({ type: 'SELECT_CLIP', clipId }),
       clearFocus: () => dispatch({ type: 'CLEAR_FOCUS' }),
       cycleStatus: (clipId: string) => dispatch({ type: 'CYCLE_CLIP_STATUS', clipId }),
       setStatus: (clipId: string, status: ClipStatus) => dispatch({ type: 'SET_CLIP_STATUS', clipId, status }),
-      removeClip: (clipId: string) => dispatch({ type: 'REMOVE_CLIP', clipId }),
       startDraft: (draft: PinDraft) => dispatch({ type: 'START_DRAFT', draft }),
       cancelDraft: () => dispatch({ type: 'CANCEL_DRAFT' }),
       saveDraft: (text: string, skill: SkillTag) => dispatch({ type: 'SAVE_DRAFT', text, skill }),
@@ -324,13 +627,20 @@ export function EditorApp() {
           timestampSec: atSec,
           line,
           skill: kind === 'animate' ? '/animate' : '/cut',
-          text: kind === 'animate' ? `Attach a visual / animation cue for “${line}” — illustrate this line on screen.` : `Mark cut / trim here: tighten the delivery around “${line}”.`,
+          text: kind === 'animate' ? `Attach a visual / animation cue for “${line}”: illustrate this line on screen.` : `Mark cut / trim here: tighten the delivery around “${line}”.`,
         }),
     }),
     [],
   );
 
   const openPreview = useCallback(() => setPreview(true), []);
+  const onOffline = useCallback(
+    (item: EditorMediaItem) => {
+      if (item.brctl) void writeClipboard(item.brctl);
+      notify(`${item.name} is not downloaded from iCloud. ${item.brctl ? 'The command is copied: run it in Terminal, then refresh the bin.' : 'Download it in Finder, then refresh the bin.'}`, 'info');
+    },
+    [notify],
+  );
 
   const clipStart = useCallback(() => {
     const c = clipAt(stateRef.current.clips, stateRef.current.playhead);
@@ -372,47 +682,68 @@ export function EditorApp() {
     return () => window.removeEventListener('keydown', onKey);
   }, [preview, applied]);
 
+  const saveHint = !active
+    ? 'Open a file first.'
+    : active.origin !== 'server'
+      ? 'Session-only imports have no project to save to.'
+      : !active.canSaveNotes
+        ? 'Generations files do not belong to a Studio project, so there is no project folder to write to. Their pins are still saved on the Windsor drive.'
+        : `Write a dated markdown review note (pins, timestamps, coordinates, text) to ${active.projectPath}/review-notes/ (a new file each time)`;
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-obsidian text-paper">
       <style>{EDITOR_CSS}</style>
       <EditorHeader
-        project={state.project}
+        canSaveNote={!!active && active.origin === 'server' && active.canSaveNotes}
+        saveNoteHint={saveHint}
+        savingNote={savingNote}
+        onSaveNote={saveNoteToProject}
         teachCut={state.teachCut}
         teachAnimate={state.teachAnimate}
         filter={state.filter}
         unresolvedCount={unresolved.length}
         applying={applying}
-        onProject={h.project}
         onToggleTeach={h.teach}
         onFilter={h.filter}
         onPreview={openPreview}
         onCopyAll={copyAll}
         onApply={apply}
-        onReset={reset}
+        onClear={clearTimeline}
       />
       <div className="flex min-h-0 flex-1 gap-2 px-2 pt-2">
-        <div className="h-full min-h-0 w-[20%] min-w-[200px]">
-          <ClipSceneBin
+        <div className="h-full min-h-0 w-[24%] min-w-[250px]">
+          <MediaBin
             clips={state.clips}
             pins={state.pins}
             filter={state.filter}
             activeClipId={activeId}
             focusClipId={state.focusClipId}
+            notes={noteStates}
+            bin={bin}
+            handoffs={handoffs}
             onSelect={h.selectClip}
             onCycleStatus={h.cycleStatus}
             onSetStatus={h.setStatus}
-            onRemove={h.removeClip}
+            onRemove={removeClip}
+            onOpen={(item) => void openItem(item)}
+            onOffline={onOffline}
+            onRefresh={() => void loadBin(true)}
+            onCopy={copyText}
+            onDismissHandoff={dismissHandoff}
           />
         </div>
-        <div className="h-full min-h-0 w-[54%] min-w-0 flex-1">
+        <div className="h-full min-h-0 w-[50%] min-w-0 flex-1">
           <SpatialVideoCanvas
             clip={active}
+            notes={active ? noteStates[active.id] : null}
+            notesDetail={active ? (notes[active.id]?.detail ?? null) : null}
             pins={state.pins}
             draft={state.draft}
             pulse={state.pulse}
             nextPinNumber={nextPinNumber(state.pins)}
             playhead={state.playhead}
             total={total}
+            fps={active?.fps ?? DEFAULT_FPS}
             playing={state.playing}
             speed={state.speed}
             loop={state.loop}
@@ -431,7 +762,7 @@ export function EditorApp() {
             onImport={importFile}
           />
         </div>
-        <div className="h-full min-h-0 w-[26%] min-w-[260px]">
+        <div className="h-full min-h-0 w-[24%] min-w-[260px]">
           <InspectorPanel
             tab={state.tab}
             group={state.group}

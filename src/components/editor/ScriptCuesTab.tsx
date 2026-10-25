@@ -3,7 +3,7 @@
 import { Scissors, Sparkles } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/cn';
-import { formatHMS } from '@/lib/mock-data';
+import { formatClock } from './spatial';
 import type { EditorClip, EditorPin } from './types';
 
 interface Sel {
@@ -78,11 +78,10 @@ export const ScriptCuesTab = memo(function ScriptCuesTab({ clips, pins, activeLi
               <span className="font-doto text-[12px] font-bold text-orange">{String(c.number).padStart(2, '0')}</span>
               <span className="truncate text-[12px] font-semibold text-paper">{c.title}</span>
               <span className="ml-auto shrink-0 font-mono text-[9.5px] text-muted">
-                {formatHMS(c.startSec)}
                 {cueCount ? ` · ${cueCount} cue${cueCount === 1 ? '' : 's'}` : ''}
               </span>
             </div>
-            {c.voiceover.length === 0 && <div className="px-2 py-1 font-mono text-[10.5px] text-muted">No voiceover lines.</div>}
+            {c.voiceover.length === 0 && <div className="px-2 py-1 font-mono text-[10.5px] leading-snug text-muted">No script lines are attached to this file.</div>}
             {c.voiceover.map((v, i) => {
               const key = `${c.id}:${i}`;
               const abs = c.startSec + v.atSec;
@@ -94,7 +93,7 @@ export const ScriptCuesTab = memo(function ScriptCuesTab({ clips, pins, activeLi
                     onClick={() => onSeek(abs)}
                     className={cn('h-5 shrink-0 rounded border px-1.5 font-doto text-[10.5px] font-bold', active ? 'border-orange bg-orange text-obsidian' : 'border-subtle text-secondary hover:text-paper')}
                   >
-                    {formatHMS(abs)}
+                    {formatClock(v.atSec)}
                   </button>
                   <p data-line data-clip={c.id} data-at={abs} className="selectable min-w-0 cursor-text font-serif text-[14px] leading-snug text-paper">
                     {v.text}

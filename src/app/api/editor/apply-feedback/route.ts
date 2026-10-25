@@ -1,6 +1,8 @@
 // POST /api/editor/apply-feedback — VOLTA Editor "Apply & Teach Locally".
 // Derives RL rules from the submitted pins (server-side, never trusting client-written rules) and inserts
 // a dated entry under `## Learned Preferences (RL Log)` in skills/cut|animate/SKILL.md inside ./workspace.
+// NOTE: those are VOLTA's own WORKSPACE COPY, not the user's live skills in ~/.claude/skills. The compiled prompt
+// (Copy All Comments) carries the directive that targets the live skills; the response says so (`scope`).
 import { NextResponse } from 'next/server';
 import { readWorkspaceFile, writeWorkspaceFile } from '@/lib/server/workspace';
 import { rejectNonLocalMutation } from '@/lib/server/local-only';
@@ -89,5 +91,10 @@ export async function POST(req: Request) {
     return bad(`Failed to write skill files: ${(err as Error).message}`, 500);
   }
   if (!files.length) return bad(`No unresolved pins tagged ${skipped.join(' or ')} — nothing to teach.`, 422);
-  return NextResponse.json({ files, skipped });
+  return NextResponse.json({
+    files,
+    skipped,
+    scope: 'workspace-copy',
+    note: "Written to VOLTA's ./workspace/skills (a local copy), not to your live ~/.claude/skills.",
+  });
 }

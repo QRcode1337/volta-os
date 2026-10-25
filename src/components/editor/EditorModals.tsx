@@ -114,7 +114,7 @@ export function DiffModal({ files, onClose }: { files: AppliedFile[]; onClose: (
       wide
       title={
         <>
-          <Check size={14} className="text-green" /> Applied &amp; taught locally · {files.length} skill file{files.length === 1 ? '' : 's'} updated
+          <Check size={14} className="text-green" /> Appended to VOLTA workspace copy · {files.length} file{files.length === 1 ? '' : 's'} updated
         </>
       }
       onClose={onClose}
@@ -124,6 +124,9 @@ export function DiffModal({ files, onClose }: { files: AppliedFile[]; onClose: (
         </button>
       }
     >
+      <div className="border-b border-subtle bg-amber/5 px-4 py-2 font-mono text-[11px] leading-snug text-amber">
+        These are VOLTA&apos;s own files under ./workspace/skills, not your live skills in ~/.claude/skills. The copied prompt (Copy All Comments) carries the directive that targets the live skills.
+      </div>
       {files.map((f) => (
         <FileDiff key={f.path} file={f} />
       ))}

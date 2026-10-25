@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "_doc": [
+    "VOLTA Research config. Phase 1 is read-only and never downloads: the inventory is a stat-only walk (readdir + lstat).",
+    "A file with blocks === 0 and size > 0 is a dataless iCloud placeholder. Its contents are never read; the UI shows a copyable `brctl download` command instead.",
+    "roots[]: { id, label, path (~ ok), enabled, excludeDirs? }. excludeDirs are folder names (case-insensitive) skipped inside that root, on top of the global excludeDirNames / excludeDirPatterns.",
+    "excludeDirPatterns are case-insensitive regular expressions matched against a folder name. The default pattern skips image folders (images, figures, screenshots, thumbnails...).",
+    "stageA.mirrorPrefixes maps the paths Voltamachine recorded (/Volumes/Voltamachina/...) to a root id, so a Stage A record joins the same file under ~/Documents by relative path.",
+    "indexPath: the persisted inventory. Lives on Windsor, never on the boot disk (the disk is tight)."
+  ],
+  "indexPath": "/Volumes/Windsor/VOLTA/research/inventory.json",
+  "maxFilesPerRoot": 60000,
+  "inventoryTtlMinutes": 30,
+  "excludeDirNames": [".git", "node_modules", ".Trash", "__MACOSX", "__pycache__", ".venv", ".obsidian"],
+  "excludeDirPatterns": ["^(images?|img|imgs|figures?|screenshots?|photos?|pictures?|thumbnails?|thumbs)$", "[-_ ](images?|figures?|screenshots?)$"],
+  "packageSuffixes": [".photoslibrary", ".app", ".bundle", ".band", ".logicx", ".xcodeproj", ".framework"],
+  "roots": [
+    { "id": "science", "label": "Science", "path": "~/Documents/Science", "enabled": true, "excludeDirs": [] },
+    { "id": "ai", "label": "Artificial Intelligence", "path": "~/Documents/Artificial-Intelligence", "enabled": true, "excludeDirs": ["grokking", "AGI figures"] },
+    { "id": "q", "label": "Q", "path": "~/Documents/Q", "enabled": true, "excludeDirs": [] },
+    { "id": "grimoire", "label": "VOLTA GRIMIORE", "path": "~/Documents/VOLTA GRIMIORE", "enabled": true, "excludeDirs": [] }
+  ],
+  "stageA": {
+    "dir": "~/ErisMorn/voltamachine/stagea",
+    "stateFile": "~/ErisMorn/voltamachine/state.json",
+    "indexStatusFile": "~/ErisMorn/voltamachine/index-status.json",
+    "batchInsightsFile": "~/ErisMorn/voltamachine/batch-insights.md",
+    "synthesisDir": "~/ErisMorn/voltamachine/synthesis",
+    "logsDir": "~/ErisMorn/voltamachine/logs",
+    "mirrorPrefixes": [
+      { "prefix": "/Volumes/Voltamachina/Science", "root": "science" },
+      { "prefix": "/Volumes/Voltamachina/Artificial-Intelligence", "root": "ai" },
+      { "prefix": "/Volumes/Voltamachina/Q", "root": "q" },
+      { "prefix": "/Volumes/Voltamachina/VOLTA GRIMIORE", "root": "grimoire" }
+    ]
+  },
+  "vault": {
+    "name": "Voltamachine",
+    "path": "~/Library/Mobile Documents/iCloud~md~obsidian/Documents/Voltamachine",
+    "synthesisDir": "Synthesis",
+    "noteDirs": ["00-Meta", "01-Quantum", "03-Esoterica", "04-UAP"]
+  },
+  "graphs": [
+    {
+      "id": "voltamachine",
+      "label": "Voltamachine papers",
+      "dir": "~/Documents/PROJECTS/ErisMornCloud/voltamachine-graph/graphify-out",
+      "docNodes": "stagea"
+    },
+    {
+      "id": "uap",
+      "label": "UAP / UFO corpus",
+      "dir": "~/Documents/PROJECTS/ErisMornCloud/UAP-UFO-graph/graphify-out",
+      "docNodes": "source"
+    }
+  ],
+  "launchAgents": ["com.erismorn.voltamachine-batch-index", "com.erismorn.voltamachine-stageb-watch"],
+  "batchIndexHold": {
+    "envVar": "VM_BATCH_INDEX_ENABLED",
+    "plist": "~/Library/LaunchAgents/com.erismorn.voltamachine-batch-index.plist",
+    "latestLog": "~/ErisMorn/voltamachine/logs/batch-index-launchd-latest.log"
+  }
+}

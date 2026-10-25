@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronUp, RotateCw, X } from 'lucide-react';
 import type { UsageSummary } from '@/types/sources';
+import type { LimitsProvider, OmniProvider, QuotaPayload, QuotaWindow } from '@/lib/server/quota/types';
 import { useSharedJson } from '@/components/dashboard/widgets/shared-json';
 import { MODEL_COLORS } from '@/lib/mock-data';
 import { OS_EVENTS } from '@/lib/events';
@@ -11,8 +12,9 @@ import { cn } from '@/lib/cn';
 import { dayLabel } from '@/components/ltm/ltm-client';
 import { PixelMascotLogo } from '@/components/robo-ui';
 
-// Claude Code usage from local transcripts (/api/usage). Plan limits are not exposed locally, so the bar
-// shows raw token windows and a "today vs busiest day" meter instead of "% left".
+// Claude Code usage from local transcripts (/api/usage): raw token windows and a "today vs busiest day" meter.
+// Real plan limits come from /api/quota: CodexBar's session / weekly percentages (Claude, Codex, Cursor, Copilot, …)
+// and OmniRoute's per-provider tokens, connection state and circuit breakers.
 
 const STORAGE_KEY = 'rubric:usage-robo-bar';
 const USAGE_URL = '/api/usage';
@@ -21,7 +23,8 @@ const CLOCK_MS = 30_000;
 /** A persisted snapshot older than this is discarded instead of shown. */
 const MAX_SNAPSHOT_AGE_MS = 12 * 3_600_000;
 const WINDOW_5H_MS = 5 * 3_600_000;
-const NOTE = "Token counts from local Claude Code transcripts; plan limits aren't exposed locally.";
+const QUOTA_URL = '/api/quota';
+const NOTE = 'Token counts from local Claude Code transcripts · plan limits from CodexBar · provider usage from OmniRoute.';
 
 type Origin = 'none' | 'cached' | 'live';
 
@@ -127,6 +130,33 @@ function meterTone(frac: number): { fill: string; text: string } {
   return { fill: 'bg-green', text: 'text-green' };
 }
 
+function isQuotaPayload(d: unknown): d is QuotaPayload {
+  if (!d || typeof d !== 'object') return false;
+  const q = d as Partial<QuotaPayload>;
+  return typeof q.generatedAt === 'string' && Array.isArray(q.codexbar?.providers) && Array.isArray(q.omniroute?.providers);
+}
+
+/** "resets in 2h 31m" within two days, else "resets Oct 31". Client-only. */
+function resetIn(iso: string | null, now: number | null): string {
+  if (!iso || now === null) return '';
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return '';
+  const mins = Math.round((t - now) / 60_000);
+  if (mins <= 0) return 'resetting';
+  if (mins < 48 * 60) return `resets in ${formatIdle(mins)}`;
+  return `resets ${new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+}
+
+const pctText = (v: number | null): string => (v === null ? '—' : `${Math.round(v)}%`);
+const windowOf = (p: LimitsProvider | undefined, id: string): QuotaWindow | undefined => p?.windows.find((w) => w.id === id);
+
+/** Short "Max 5x · 45% session · 58% week" description of a CodexBar provider for tooltips. */
+function limitTitle(p: LimitsProvider, now: number | null): string {
+  const parts = p.windows.map((w) => `${w.label} ${pctText(w.usedPercent)} used${w.resetsAt ? ` (${resetIn(w.resetsAt, now)})` : ''}`);
+  const note = p.status === 'ok' ? '' : ` · ${p.status}${p.error ? `: ${p.error}` : ''}`;
+  return `${p.label}${p.plan ? ` ${p.plan}` : ''} · ${parts.join(' · ') || 'no windows'}${note}`;
+}
+
 // ───────────────────────── collapsed bar pieces ─────────────────────────
 
 function Readout({ label, value, sub, title, loading, stale }: { label: string; value: string; sub: string; title: string; loading: boolean; stale?: boolean }) {
@@ -135,6 +165,22 @@ function Readout({ label, value, sub, title, loading, stale }: { label: string; 
       <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary">{label}</span>
       <span className={cn('font-mono text-[11px] font-semibold text-paper', loading && 'animate-pulse text-muted')}>{value}</span>
       <span className="font-mono text-[10px] text-muted">{sub}</span>
+    </div>
+  );
+}
+
+/** Subscription limit pill-readout: session % used, then weekly % used (CodexBar). */
+function LimitReadout({ label, p, now }: { label: string; p: LimitsProvider; now: number | null }) {
+  const session = windowOf(p, 'primary');
+  const week = windowOf(p, 'secondary');
+  const lead = session ?? week;
+  const frac = Math.max(session?.usedPercent ?? 0, week?.usedPercent ?? 0) / 100;
+  const stale = p.status !== 'ok';
+  return (
+    <div className={cn('flex shrink-0 items-baseline gap-1.5 whitespace-nowrap transition-opacity', stale && 'opacity-55')} title={limitTitle(p, now)}>
+      <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary">{label}</span>
+      <span className={cn('font-mono text-[11px] font-semibold', lead ? meterTone(frac).text : 'text-muted')}>{lead ? pctText(lead.usedPercent) : '…'}</span>
+      {session && week && <span className="font-mono text-[10px] text-muted">· {pctText(week.usedPercent)} wk</span>}
     </div>
   );
 }
@@ -187,6 +233,189 @@ function CachePill({ cache, lastAt, loading, staleNote }: { cache: CacheView | n
     >
       {text}
     </span>
+  );
+}
+
+// ───────────────────────── plan limits + OmniRoute (drawer) ─────────────────────────
+
+function LimitMeter({ w, now }: { w: QuotaWindow; now: number | null }) {
+  const used = w.usedPercent;
+  const frac = used === null ? 0 : used / 100;
+  const tone = meterTone(frac);
+  const reset = w.resetLabel && now === null ? w.resetLabel : resetIn(w.resetsAt, now);
+  return (
+    <li className="grid grid-cols-[96px_minmax(0,1fr)_40px_104px] items-center gap-2" title={w.pace ?? undefined}>
+      <span className="truncate font-mono text-[10px] text-paper">{w.label}</span>
+      <span className="h-[7px] overflow-hidden rounded-full bg-panel-hover">
+        {used !== null && <span className={cn('block h-full rounded-full', tone.fill)} style={{ width: `${Math.max(used > 0 ? 1.5 : 0, Math.min(100, used))}%` }} />}
+      </span>
+      <span className={cn('text-right font-mono text-[10px] font-semibold', used === null ? 'text-muted' : tone.text)}>{pctText(used)}</span>
+      <span className="truncate text-right font-mono text-[9.5px] text-muted">{reset}</span>
+    </li>
+  );
+}
+
+function ProviderLimits({ p, now }: { p: LimitsProvider; now: number | null }) {
+  const bad = p.status === 'error' || p.status === 'pending';
+  const asOf = p.fetchedAt && now !== null ? stamp(p.fetchedAt, now) : null;
+  return (
+    <div className={cn('rounded-[10px] border border-subtle bg-panel-elevated p-2.5', p.status === 'stale' && 'opacity-80')}>
+      <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        <span className="font-mono text-[11px] font-semibold text-paper">{p.label}</span>
+        {p.plan && <span className="rounded-full border border-subtle px-1.5 py-px font-mono text-[9px] text-secondary">{p.plan}</span>}
+        <span
+          className={cn(
+            'rounded-full border px-1.5 py-px font-mono text-[9px] uppercase tracking-[0.06em]',
+            p.status === 'ok' ? 'border-green/40 text-green' : bad ? 'border-[#EF4444]/40 text-[#F87171]' : 'border-amber/40 text-amber',
+          )}
+          title={p.error ?? undefined}
+        >
+          {p.status === 'ok' ? p.source : `${p.status} · ${p.source}`}
+        </span>
+        {asOf && p.status !== 'ok' && <span className="font-mono text-[9px] text-muted">as of {asOf}</span>}
+      </div>
+      {p.windows.length > 0 ? (
+        <ul className="flex flex-col gap-1">
+          {p.windows.slice(0, 5).map((w) => (
+            <LimitMeter key={w.id} w={w} now={now} />
+          ))}
+        </ul>
+      ) : (
+        <p className="font-mono text-[10px] text-muted">{p.error ?? 'No limit windows reported.'}</p>
+      )}
+      {p.windows.length > 0 && p.error && p.status !== 'ok' && <p className="mt-1 truncate font-mono text-[9.5px] text-amber" title={p.error}>{p.error}</p>}
+      {p.extras.length > 0 && (
+        <p className="mt-1.5 truncate font-mono text-[9.5px] text-muted" title={p.extras.map((e) => `${e.label}: ${e.value}`).join(' · ')}>
+          {p.extras.slice(0, 2).map((e) => `${e.label}: ${e.value}`).join(' · ')}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function LimitsSection({ quota, loading, error, now }: { quota: QuotaPayload | null; loading: boolean; error: string | null; now: number | null }) {
+  const cb = quota?.codexbar;
+  return (
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary">Plan limits · CodexBar</span>
+        {quota && now !== null && <span className="font-mono text-[9.5px] text-muted">read {stamp(quota.generatedAt, now)} · % used</span>}
+      </div>
+      {!cb ? (
+        <p className={cn('font-mono text-[10px]', error ? 'text-[#F87171]' : 'animate-pulse text-muted')}>{error ? `Quota API offline · ${error}` : loading ? 'Reading CodexBar limits…' : 'No quota data.'}</p>
+      ) : !cb.available ? (
+        <p className="font-mono text-[10px] text-amber">{cb.note ?? 'CodexBar is not available.'}</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {cb.providers.map((p) => (
+            <ProviderLimits key={p.id} p={p} now={now} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const STATE_TONE: Record<OmniProvider['state'], string> = {
+  ok: 'text-muted',
+  limited: 'text-amber',
+  exhausted: 'text-[#F87171]',
+  cooldown: 'text-amber',
+  expired: 'text-[#F87171]',
+  inactive: 'text-muted',
+  unknown: 'text-muted',
+};
+
+/** Lowest remaining-% window OmniRoute last saw for a provider: "weekly 40% left". */
+function tightest(p: OmniProvider): string | null {
+  const ws = p.windows.filter((w) => w.remainingPercent !== null);
+  if (ws.length === 0) return null;
+  const w = ws.reduce((a, b) => ((b.remainingPercent ?? 100) < (a.remainingPercent ?? 100) ? b : a));
+  return `${w.label} ${pctText(w.remainingPercent)} left`;
+}
+
+function OmniRow({ p }: { p: OmniProvider }) {
+  const hint = p.stateDetail ?? tightest(p);
+  return (
+    <li
+      className="grid grid-cols-[minmax(0,1fr)_64px_64px_44px] items-center gap-2"
+      title={`${p.label} · ${p.kind === 'subscription' ? 'OAuth subscription' : p.kind === 'api' ? 'API key (can bill)' : 'local'} · ${p.connections.active}/${p.connections.total} connections active · week ${formatInt(p.week.requests)} requests, ${formatInt(p.week.failures)} failed · VOLTA key this week ${formatInt(p.voltaWeek.requests)} requests${p.voltaAllowed === false ? ' (blocked for the volta-os key)' : ''}`}
+    >
+      <span className="min-w-0">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate font-mono text-[10px] text-paper">{p.label}</span>
+          {p.kind === 'api' && <span className="shrink-0 rounded-full border border-amber/40 px-1 font-mono text-[8.5px] uppercase text-amber">api</span>}
+          {p.state !== 'ok' && p.state !== 'unknown' && <span className={cn('shrink-0 font-mono text-[9px] uppercase tracking-[0.06em]', STATE_TONE[p.state])}>{p.state}</span>}
+        </span>
+        {hint && (
+          <span className={cn('block truncate font-mono text-[9px]', p.state === 'ok' ? 'text-muted' : STATE_TONE[p.state])} title={hint}>
+            {hint}
+          </span>
+        )}
+      </span>
+      <span className="text-right font-mono text-[10px] text-secondary" title={`Today: ${formatInt(p.today.requests)} requests · ${formatInt(p.today.tokensIn)} in / ${formatInt(p.today.tokensOut)} out`}>
+        {p.today.requests > 0 ? formatTokens(p.today.tokensIn + p.today.tokensOut) : '–'}
+      </span>
+      <span className="text-right font-mono text-[10px] text-secondary" title={`7 days: ${formatInt(p.week.requests)} requests · ${formatInt(p.week.tokensIn)} in / ${formatInt(p.week.tokensOut)} out`}>
+        {p.week.requests > 0 ? formatTokens(p.week.tokensIn + p.week.tokensOut) : '–'}
+      </span>
+      <span className={cn('text-right font-mono text-[10px]', p.voltaAllowed === false ? 'text-[#F87171]' : p.voltaAllowed ? 'text-green' : 'text-muted')} title={p.voltaAllowed === false ? 'volta-os key cannot use this provider' : p.voltaAllowed ? 'volta-os key may use this provider' : 'unknown'}>
+        {p.voltaAllowed === null ? '·' : p.voltaAllowed ? 'yes' : 'no'}
+      </span>
+    </li>
+  );
+}
+
+function OmniSection({ quota }: { quota: QuotaPayload | null }) {
+  const o = quota?.omniroute;
+  if (!o) return null;
+  const shown = o.providers.filter((p) => p.week.requests > 0 || ['limited', 'exhausted', 'cooldown', 'expired'].includes(p.state) || (p.kind === 'subscription' && p.voltaAllowed === true));
+  const hidden = o.providers.length - shown.length;
+  const gw = o.gateway === 'up' ? 'text-green border-green/40' : o.gateway === 'down' ? 'text-[#F87171] border-[#EF4444]/40' : 'text-muted border-subtle';
+  return (
+    <div>
+      <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-2">
+        <span className="flex items-center gap-2">
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary">OmniRoute · providers</span>
+          <span className={cn('rounded-full border px-1.5 py-px font-mono text-[9px] uppercase tracking-[0.06em]', gw)} title={o.gatewayUrl}>
+            gateway {o.gateway}
+          </span>
+        </span>
+        {o.volta && (
+          <span className="font-mono text-[9.5px] text-muted" title="Requests made with the volta-os API key">
+            VOLTA today <span className="text-secondary">{formatInt(o.volta.today.requests)} req · {formatTokens(o.volta.today.tokensIn + o.volta.today.tokensOut)}</span>
+          </span>
+        )}
+      </div>
+      {!o.available ? (
+        <p className="font-mono text-[10px] text-amber">{o.error ?? 'OmniRoute data unavailable.'}</p>
+      ) : (
+        <>
+          <div className="mb-1 grid grid-cols-[minmax(0,1fr)_64px_64px_44px] gap-2 font-mono text-[8.5px] uppercase tracking-[0.08em] text-muted">
+            <span>provider</span>
+            <span className="text-right">today</span>
+            <span className="text-right">7 days</span>
+            <span className="text-right">volta</span>
+          </div>
+          <ul className="flex flex-col gap-1.5">
+            {shown.slice(0, 14).map((p) => (
+              <OmniRow key={p.id} p={p} />
+            ))}
+          </ul>
+          {(o.breakers.length > 0 || o.cooldowns.length > 0) && (
+            <p className="mt-1.5 font-mono text-[9.5px] text-amber">
+              {o.breakers.length > 0 && `Breakers: ${o.breakers.map((b) => `${b.name} ${b.state}`).join(', ')}. `}
+              {o.cooldowns.length > 0 && `Cooling down: ${o.cooldowns.map((c) => c.name).join(', ')}.`}
+            </p>
+          )}
+          <p className="mt-1.5 font-mono text-[9.5px] text-muted">
+            Tokens = input + output from OmniRoute's request log (today since local midnight). {hidden > 0 ? `${hidden} idle providers hidden. ` : ''}
+            {o.breakers.length === 0 && o.cooldowns.length === 0 ? 'No circuit breakers open.' : ''}
+            {o.note ? ` ${o.note}` : ''}
+          </p>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -330,6 +559,14 @@ export function UsageRoboBar() {
   const load = q.reload;
   const fetching = q.refreshing;
 
+  // /api/quota (CodexBar limits + OmniRoute usage), same 60 s cadence; its failures never affect the transcript numbers.
+  const qq = useSharedJson<unknown>(QUOTA_URL, POLL_MS);
+  const quota = useMemo(() => (qq.data !== null && isQuotaPayload(qq.data) ? qq.data : null), [qq.data]);
+  const quotaError = qq.error ? qq.error.message || 'request failed' : qq.data !== null && !quota ? 'unexpected /api/quota payload' : null;
+  const reloadAll = () => void Promise.all([load(), qq.reload()]);
+  const claudeLim = quota?.codexbar.providers.find((p) => p.id === 'claude');
+  const codexLim = quota?.codexbar.providers.find((p) => p.id === 'codex');
+
   // Restore the last good snapshot (≤12 h old) after mount (no storage access during render → no hydration mismatch).
   useEffect(() => {
     const p = readPersisted(Date.now());
@@ -441,12 +678,12 @@ export function UsageRoboBar() {
         <div className="min-h-0 overflow-hidden">
           <div className="pb-2">
             <section
-              aria-label="Claude Code usage"
+              aria-label="Usage, plan limits and providers"
               className="hud-scroll max-h-[calc(100vh-72px)] overflow-y-auto rounded-[14px] border border-subtle bg-panel/95 p-3 shadow-[0_-12px_40px_rgba(0,0,0,0.55)] backdrop-blur-md"
             >
               <header className="mb-3 flex items-center gap-2">
                 <PixelMascotLogo size={14} />
-                <h2 className="hud-label">Claude Code Usage</h2>
+                <h2 className="hud-label">Usage · Limits</h2>
                 <span
                   className={cn(
                     'rounded-full border px-1.5 py-px font-mono text-[9px] uppercase tracking-[0.08em]',
@@ -459,12 +696,12 @@ export function UsageRoboBar() {
                 {usage && now !== null && <span className="hidden font-mono text-[9px] text-muted sm:inline">updated {stamp(usage.generatedAt, now)}</span>}
                 <button
                   type="button"
-                  onClick={() => void load()}
+                  onClick={reloadAll}
                   aria-label="Refresh usage"
                   title="Refresh usage"
                   className="ml-auto flex h-6 w-6 items-center justify-center rounded-full text-muted transition-colors hover:bg-panel-hover hover:text-paper"
                 >
-                  <RotateCw size={12} className={cn(fetching && 'robo-spin')} />
+                  <RotateCw size={12} className={cn((fetching || qq.refreshing) && 'robo-spin')} />
                 </button>
                 <button
                   type="button"
@@ -476,6 +713,14 @@ export function UsageRoboBar() {
                   <X size={13} />
                 </button>
               </header>
+
+              <div className="mb-3.5 flex flex-col gap-3.5">
+                <LimitsSection quota={quota} loading={qq.loading} error={quotaError} now={now} />
+                <OmniSection quota={quota} />
+              </div>
+              <div className="mb-3 flex items-center gap-2 border-t border-subtle pt-3">
+                <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary">Claude Code · local transcripts</span>
+              </div>
 
               {!usage ? (
                 <div className="flex flex-col items-center gap-2 py-6 text-center">
@@ -590,6 +835,22 @@ export function UsageRoboBar() {
               loading={loading}
               stale={stale}
             />
+            {claudeLim && claudeLim.windows.length > 0 && (
+              <>
+                <span className="hidden h-4 w-px shrink-0 bg-subtle md:block" aria-hidden />
+                <div className="hidden md:block">
+                  <LimitReadout label="Max" p={claudeLim} now={now} />
+                </div>
+              </>
+            )}
+            {codexLim && codexLim.windows.length > 0 && (
+              <>
+                <span className="hidden h-4 w-px shrink-0 bg-subtle xl:block" aria-hidden />
+                <div className="hidden xl:block">
+                  <LimitReadout label="Codex" p={codexLim} now={now} />
+                </div>
+              </>
+            )}
             <span className="hidden h-4 w-px shrink-0 bg-subtle lg:block" aria-hidden />
             <div className="hidden lg:block">
               <DotMeter

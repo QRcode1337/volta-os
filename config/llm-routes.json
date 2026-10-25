@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "_about": "VOLTA task -> OmniRoute combo routing. The key in OMNIROUTE_API_KEY ('volta-os') is scoped inside OmniRoute to OAuth subscription connections plus the free/local ones, so an API-billed provider (xai, gemini, nous-research, ...) can never be selected by these calls even when a combo lists it. A task tries its chain in order (first failure moves to the next); 'local' (LM Studio) is always the last resort and is appended when a chain does not list it.",
+  "gateway": {
+    "baseUrl": "http://127.0.0.1:20128/v1",
+    "keyEnv": "OMNIROUTE_API_KEY",
+    "baseUrlEnv": "OMNIROUTE_BASE_URL"
+  },
+  "local": {
+    "baseUrl": "http://127.0.0.1:1234/v1",
+    "model": "qwen/qwen3.5-9b",
+    "timeoutMs": 150000,
+    "minMaxTokens": 1024
+  },
+  "limits": {
+    "maxMessages": 60,
+    "maxChars": 600000,
+    "maxOutputTokens": 32000,
+    "maxTimeoutMs": 600000
+  },
+  "apiBilledProviders": ["xai", "gemini", "anthropic", "openai", "nous-research", "openrouter", "cerebras", "digitalocean", "minimax", "nvidia", "cheaperinference", "ollama-cloud", "v0-vercel", "runwayml"],
+  "tasks": {
+    "research-web": {
+      "chain": ["agem", "SmartSpread", "local"],
+      "timeoutMs": 120000,
+      "maxTokens": 4096,
+      "liveWeb": false,
+      "note": "No live web search through OmniRoute for an OAuth-only key (/v1/search needs API-key search providers, which this key may not use). Answers are knowledge-only (liveWeb:false in the result); keep claude -p with WebSearch/WebFetch where real browsing is required."
+    },
+    "long-write": {
+      "chain": ["SmartSpread", "codex-first", "local"],
+      "timeoutMs": 240000,
+      "maxTokens": 8192,
+      "note": "Podcast scripts, outlines, long-form drafts. SmartSpread spreads across the OAuth subscriptions."
+    },
+    "quick": {
+      "chain": ["local", "free-stack", "balanced"],
+      "timeoutMs": 60000,
+      "maxTokens": 1024,
+      "note": "Labels, summaries, triage. Local qwen first so no subscription is touched. free-stack is currently dead while OmniRoute's Claude OAuth is expired (its first member 401s and the priority combo stops), so 'balanced' (cheaper least-used members) backs it up."
+    },
+    "code": {
+      "chain": ["codex-first", "SmartSpread", "local"],
+      "timeoutMs": 180000,
+      "maxTokens": 8192
+    },
+    "video-prompts": {
+      "chain": ["video", "SmartSpread", "local"],
+      "timeoutMs": 90000,
+      "maxTokens": 2048,
+      "note": "The video combo lists gemini/* (Google AI Studio API key) as members 3 and 4; the volta-os key cannot use that connection, so only Antigravity answers."
+    },
+    "deep-reasoning": {
+      "chain": ["top-tier", "SmartSpread", "local"],
+      "timeoutMs": 240000,
+      "maxTokens": 8192
+    }
+  },
+  "verified": {
+    "at": "2026-10-25",
+    "how": "POST /api/llm/complete per task, prompt 'Reply with exactly: pong'",
+    "tasks": {
+      "research-web": { "ok": true, "target": "agem", "model": "gpt-5.6-sol", "provider": "codex", "ms": 9977, "note": "least-used picked Codex, not grok-4.6; agem's gemini-pro-agent member is not in the live Antigravity catalog" },
+      "long-write": { "ok": true, "target": "SmartSpread", "model": "gpt-5.6-terra / grok-4.7", "provider": "codex / xai-oauth", "ms": 1737 },
+      "quick": { "ok": true, "target": "local", "model": "qwen/qwen3.5-9b", "provider": "lm-studio", "ms": 11935, "note": "thinks first; ~10 s even for one word" },
+      "code": { "ok": true, "target": "codex-first", "model": "gpt-5.6-sol", "provider": "codex", "ms": 1106 },
+      "video-prompts": { "ok": true, "target": "video", "model": "gemini-3.8-flash-tiered", "provider": "antigravity", "ms": 2960, "note": "1 internal fallback: gemini-pro-agent unavailable" },
+      "deep-reasoning": { "ok": true, "target": "top-tier", "model": "gpt-5.6-sol", "provider": "codex", "ms": 2613 }
+    },
+    "combosNotInATask": {
+      "balanced": { "ok": true, "model": "gpt-5.6-terra", "provider": "codex", "ms": 7367 },
+      "free-stack": { "ok": false, "status": 503, "note": "claude/claude-haiku-4-5 401 (OmniRoute's Claude OAuth connection is expired), then protected_priority_stop. Fallback to local verified." }
+    }
+  }
+}

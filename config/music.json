@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "_doc": [
+    "VOLTA Music library config. Tracks are indexed from every enabled root (read-only; nothing here is ever written to the music folders).",
+    "roots[]: { id, label, path (~ ok), enabled, depth? }. depth = how many folder levels below the root are scanned (default 1 = the folder itself plus one level of subfolders).",
+    "discover: ~/Documents/Audio is scanned to this depth for other folders that hold audio files; they are listed in the app as optional roots (disabled until you enable one, which adds it to roots[] here).",
+    "metaPath: per-track lyrics / credits / Suno link / tags / BPM / key. Lives on Windsor, never on the boot disk.",
+    "iCloud: a file with blocks === 0 and size > 0 is a dataless placeholder. The app never reads it (that would trigger a download); it shows 'In iCloud' and a copyable `brctl download` command instead."
+  ],
+  "band": "VANTA VECTOR",
+  "roots": [
+    {
+      "id": "vanta-vector",
+      "label": "VANTA VECTOR",
+      "path": "~/Documents/Audio/Music/vanta vector",
+      "enabled": true,
+      "depth": 1
+    }
+  ],
+  "discover": {
+    "base": "~/Documents/Audio",
+    "maxDepth": 3
+  },
+  "extensions": [".mp3", ".wav", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".aiff", ".aif"],
+  "metaPath": "/Volumes/Windsor/VOLTA/music/meta.json"
+}

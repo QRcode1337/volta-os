@@ -48,7 +48,7 @@ You're picking up **VOLTA OS**: Patrick's local dashboard over his whole digital
 3. **Research drive diff:** a separate Haiku session is re-scanning `/Volumes/Voltamachina` to compare against iCloud. Output goes to `/Volumes/Windsor/VOLTA/research/drive-diff/`. The first pass said 19,272 files / 22.5 GB missing, but the user says his copies are on Voltamachina under other names.
 
 ## Next up (priority order)
-1. **Launcher:** add the Podcast entry to `MICRO_APPS` (`src/lib/mock-data.ts`), the iconType in `src/types/os.ts`, and a 7×7 glyph in `src/components/dashboard/widgets/MicroAppIcon.tsx`. Commit and push.
+1. ~~Launcher Podcast entry~~ done (`d3bc7d6`). Podcast shipped in `f9bda50`: episode ~$0.20 (Gemini TTS), confirm >$0.50, cap $1.00; 06:00 LaunchAgent still not loaded.
 2. **Launchpad:** use `GITHUB_TOKEN` to list real GitHub repos. 84 of 91 local repos are iCloud placeholders, so local scans miss them.
 3. **Feeds:** tighten JEV triage. 108 of 238 items are marked needs-action, which is too many. Adjust the labels or thresholds.
 4. **Research phase 2:** cross-folder threads via embeddings (LM Studio nomic on :1234), clustering, and qwen labels. Index lives on Windsor. This needs batched iCloud hydration with a disk cap; ask the user first. Phase 3 is a research assistant with cited sources.

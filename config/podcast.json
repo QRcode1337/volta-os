@@ -1,0 +1,277 @@
+{
+  "version": 1,
+  "title": "VOLTA Daily Briefing",
+  "description": "A daily two-host briefing on AI, UAP, quantum and breakthrough computing, and cutting-edge physics, weighted toward neuromorphic computing, brain-computer interfaces, quantum memristors and photonics. Every claim is cited in the show notes.",
+  "author": "VOLTA OS",
+  "language": "en-us",
+  "publicBaseUrl": "https://patricks-macbook-pro-1.tail6e6059.ts.net:8447",
+  "hosts": [
+    {
+      "name": "Mira",
+      "voice": "Kore",
+      "persona": "Lead host. Sharp, warm, quick to connect dots and ask the pointed question."
+    },
+    {
+      "name": "Dex",
+      "voice": "Charon",
+      "persona": "Co-host. Dry humour, technically deep, likes to stress-test claims and explain the mechanism."
+    }
+  ],
+  "topics": [
+    {
+      "id": "neuromorphic",
+      "label": "Neuromorphic computing",
+      "weight": 5,
+      "focus": true,
+      "brief": "Spiking neural networks, event-based sensors, in-memory/analog compute, memristive hardware, chips such as Loihi, Hala Point, SpiNNaker, NorthPole, and brain-inspired architectures.",
+      "keywords": [
+        "neuromorphic",
+        "spiking neural",
+        "memristive",
+        "event-based",
+        "in-memory computing",
+        "loihi",
+        "spinnaker",
+        "brain-inspired"
+      ]
+    },
+    {
+      "id": "bci",
+      "label": "Brain-computer interfaces",
+      "weight": 5,
+      "focus": true,
+      "brief": "Implanted and non-invasive BCIs, neural decoding, speech/motor neuroprostheses, trials and regulatory milestones (Neuralink, Synchron, Precision, Blackrock, academic labs).",
+      "keywords": [
+        "brain-computer interface",
+        "brain computer interface",
+        "bci",
+        "neural interface",
+        "neuroprosthe",
+        "neural decoding",
+        "neuralink",
+        "synchron",
+        "electrocorticograph",
+        "intracortical"
+      ]
+    },
+    {
+      "id": "qmemristor",
+      "label": "Quantum memristors",
+      "weight": 5,
+      "focus": true,
+      "brief": "Quantum memristors, memristive quantum devices and photonic quantum memory-with-history elements, quantum reservoir computing and quantum neuromorphic ideas.",
+      "keywords": [
+        "quantum memristor",
+        "memristor",
+        "quantum reservoir",
+        "quantum neuromorphic",
+        "quantum neural"
+      ]
+    },
+    {
+      "id": "photonics",
+      "label": "Photonics and optical computing",
+      "weight": 5,
+      "focus": true,
+      "brief": "Photonic and optical computing, silicon photonics, photonic neural networks and accelerators, integrated photonic chips, co-packaged optics, photonic quantum hardware.",
+      "keywords": [
+        "photonic",
+        "silicon photonics",
+        "optical computing",
+        "optical neural",
+        "integrated optics",
+        "co-packaged optics",
+        "photonic chip"
+      ]
+    },
+    {
+      "id": "ai",
+      "label": "AI",
+      "weight": 4,
+      "focus": false,
+      "brief": "The most significant AI developments: frontier model releases, agents, major research results, safety and policy decisions, big compute or funding moves.",
+      "keywords": [
+        "artificial intelligence",
+        "language model",
+        "llm",
+        "openai",
+        "anthropic",
+        "deepmind",
+        "gemini",
+        "claude",
+        "gpt",
+        "ai agent",
+        "ai safety",
+        "machine learning",
+        "generative ai"
+      ]
+    },
+    {
+      "id": "quantum",
+      "label": "Quantum and breakthrough computing",
+      "weight": 4,
+      "focus": false,
+      "brief": "Quantum computing hardware and error-correction milestones, quantum advantage claims, new qubit modalities, plus other breakthrough computing (new compute paradigms, major chips).",
+      "keywords": [
+        "quantum computing",
+        "qubit",
+        "quantum error correction",
+        "quantum advantage",
+        "quantum processor",
+        "quantum supremacy",
+        "logical qubit",
+        "quantum"
+      ]
+    },
+    {
+      "id": "physics",
+      "label": "Cutting-edge physics",
+      "weight": 3,
+      "focus": false,
+      "brief": "Frontier physics results: particle and astro physics, condensed matter and materials breakthroughs, fusion, gravitational waves, dark matter, new states of matter, major collaborations.",
+      "keywords": [
+        "physics",
+        "dark matter",
+        "gravitational wave",
+        "superconduct",
+        "topological",
+        "fusion",
+        "particle",
+        "cosmolog",
+        "condensed matter"
+      ]
+    },
+    {
+      "id": "uap",
+      "label": "UAP",
+      "weight": 3,
+      "focus": false,
+      "brief": "UAP/UFO news: government disclosures, AARO and congressional activity, FOIA releases, credible sensor data and scientific analysis. Treat claims as claims and say who made them.",
+      "keywords": [
+        "uap",
+        "ufo",
+        "unidentified anomalous",
+        "aaro",
+        "non-human",
+        "unidentified aerial"
+      ]
+    }
+  ],
+  "storyCount": 8,
+  "windowHours": 48,
+  "arxiv": {
+    "categories": [
+      "quant-ph",
+      "cs.ET",
+      "cs.NE",
+      "physics.optics",
+      "cond-mat.mes-hall",
+      "q-bio.NC"
+    ],
+    "maxResults": 80,
+    "widenToHours": 96,
+    "keywords": [
+      "neuromorphic",
+      "spiking",
+      "memristor",
+      "memristive",
+      "brain-computer interface",
+      "brain computer interface",
+      "neural interface",
+      "neural decoding",
+      "photonic",
+      "optical computing",
+      "optical neural",
+      "quantum memristor",
+      "quantum reservoir",
+      "quantum error correction",
+      "logical qubit",
+      "quantum advantage",
+      "in-memory computing",
+      "analog computing"
+    ]
+  },
+  "rss": [
+    {
+      "id": "verge-ai",
+      "label": "The Verge AI",
+      "url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+      "topic": "ai"
+    },
+    {
+      "id": "mit-tr-ai",
+      "label": "MIT Technology Review AI",
+      "url": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
+      "topic": "ai"
+    },
+    {
+      "id": "ars-ai",
+      "label": "Ars Technica",
+      "url": "https://feeds.arstechnica.com/arstechnica/technology-lab",
+      "topic": "ai"
+    },
+    {
+      "id": "debrief",
+      "label": "The Debrief",
+      "url": "https://thedebrief.org/feed/",
+      "topic": "uap"
+    },
+    {
+      "id": "quantum-insider",
+      "label": "The Quantum Insider",
+      "url": "https://thequantuminsider.com/feed/",
+      "topic": "quantum"
+    },
+    {
+      "id": "physorg",
+      "label": "Phys.org physics",
+      "url": "https://phys.org/rss-feed/physics-news/",
+      "topic": "physics"
+    }
+  ],
+  "notion": {
+    "databaseId": "fadf5ac5b4814515b4577c1c6a2a65eb",
+    "maxItems": 5
+  },
+  "feeds": {
+    "enabled": true,
+    "sources": [
+      "sentinel",
+      "scout",
+      "sentinel-log",
+      "scout-log"
+    ],
+    "maxItems": 6
+  },
+  "research": {
+    "model": "sonnet",
+    "timeoutSec": 270,
+    "parallel": 2,
+    "storiesPerTopic": 3
+  },
+  "script": {
+    "model": "sonnet",
+    "timeoutSec": 420,
+    "targetWords": 1900,
+    "minWords": 1600,
+    "maxWords": 2200
+  },
+  "quick": {
+    "model": "haiku",
+    "timeoutSec": 90
+  },
+  "tts": {
+    "model": "gemini-3.8-flash-tts",
+    "chunkChars": 2400,
+    "gapMs": 450,
+    "timeoutSec": 240
+  },
+  "audio": {
+    "lufs": -16,
+    "bitrateKbps": 96
+  },
+  "cost": {
+    "confirmAboveUsd": 0.5,
+    "hardCapUsd": 1.0
+  }
+}

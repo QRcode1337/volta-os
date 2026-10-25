@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.epsilon.volta-podcast</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/patrickgallowaypro/.local/bin/node</string>
+		<string>/Users/patrickgallowaypro/Volta-OS/scripts/podcast-run.mjs</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/Users/patrickgallowaypro/Volta-OS</string>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>6</integer>
+		<key>Minute</key>
+		<integer>0</integer>
+	</dict>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/Users/patrickgallowaypro/.local/bin:/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+	</dict>
+	<key>StandardOutPath</key>
+	<string>/Users/patrickgallowaypro/Library/Logs/volta-podcast.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/patrickgallowaypro/Library/Logs/volta-podcast.log</string>
+</dict>
+</plist>

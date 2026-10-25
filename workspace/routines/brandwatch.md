@@ -26,3 +26,11 @@ Currently the **#1 token consumer** (18.2M tok/wk, $9.44/wk) while surfacing ~2 
 
 ## Last run
 - 2026-10-22 14:00 · 212 items scanned · 2 actionable (competitor pricing change, 1 mention) · $1.31
+
+## Applied Recos
+
+### 2026-10-25 · rc-8 · Convert Brand Watch to Passive Routine
+- Applied: 2026-10-25T03:23:17.064Z
+- Source: VOLTA Recos (/apps/recos) · Routines · priority
+- Expected impact: Saves ~11.6M tok/wk
+- Change: In workspace/routines/brandwatch.md set mode: passive and cap_usd: 4, and change output to a single weekly digest.

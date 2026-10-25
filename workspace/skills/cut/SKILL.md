@@ -54,3 +54,11 @@ _Project: Claude 5.5 Agentic OS — Master Cut v3_
 - **Rule (cut smoothing):** Cover abrupt jump cuts with ≥ 6 frames (0.2s @ 30fps) of B-roll or a 4-frame J-cut; never leave a bare jump cut on a talking head.
 - _Evidence:_ Pin #2 (Clip 02 Home Dashboard Overview @ 00:02:08): "Cut the 1.8s dead air pause right before the Haiku/Sonnet/Opus matrix popover opens."
 - _Evidence:_ Pin #4 (Clip 01 Hook @ 00:00:41): "Jump cut here feels abrupt — add 6 frames of B-roll to cover it."
+
+### 2026-10-25 · VOLTA Editor feedback (Pin #2 & Pin #4)
+_Project: Claude 5.5 Agentic OS — Master Cut v3_
+
+- **Rule (pacing):** Auto-trim any dead-air pause longer than `0.4s`, especially right before UI popovers or scene transitions.
+- **Rule (cut smoothing):** Cover abrupt jump cuts with ≥ 6 frames (0.2s @ 30fps) of B-roll or a 4-frame J-cut; never leave a bare jump cut on a talking head.
+- _Evidence:_ Pin #2 (Clip 02 Home Dashboard Overview @ 00:02:08): "Cut the 1.8s dead air pause right before the Haiku/Sonnet/Opus matrix popover opens."
+- _Evidence:_ Pin #4 (Clip 01 Hook @ 00:00:41): "Jump cut here feels abrupt — add 6 frames of B-roll to cover it."

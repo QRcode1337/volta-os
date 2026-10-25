@@ -15,3 +15,11 @@
 - The OS bridge only writes inside `./workspace`.
 - Live `claude -p` execution is opt-in (`RUBRIC_CLAUDE_LIVE=1`); default is simulated.
 - No hydration mismatches: deterministic seeds in render paths.
+
+## Applied Recos
+
+### 2026-10-25 · rc-1 · Shrink CLAUDE.md into Department Routers
+- Applied: 2026-10-25T03:23:17.064Z
+- Source: VOLTA Recos (/apps/recos) · Memory · priority
+- Expected impact: Saves ~18.4k tok/chat
+- Change: Refactor workspace/CLAUDE.md into a slim router: move each department section into workspace/departments/<dept>.md and replace it with a one-line pointer. Preserve /compact directives verbatim.

@@ -18,3 +18,11 @@ All client-facing artifacts use `/robo`. All client-facing prose uses `/tone` (b
 - One client per artifact. Never reference one client's numbers in another client's deliverable.
 - Proposals: 3 tiers max, anchor high, show ROI in hours saved per week.
 - Follow-up emails are drafted, never sent, unless Jay says "send".
+
+## Applied Recos
+
+### 2026-10-25 · rc-1 · Shrink CLAUDE.md into Department Routers
+- Applied: 2026-10-25T03:23:17.064Z
+- Source: VOLTA Recos (/apps/recos) · Memory · priority
+- Expected impact: Saves ~18.4k tok/chat
+- Change: Refactor workspace/CLAUDE.md into a slim router: move each department section into workspace/departments/<dept>.md and replace it with a one-line pointer. Preserve /compact directives verbatim.

@@ -22,3 +22,11 @@ Capture a note into the right department file in the Second Brain.
 
 ## Learned Preferences (RL Log)
 <!-- Appended by RUBRIC Editor / Recos. Newest last. -->
+
+## Applied Recos
+
+### 2026-10-25 · rc-5 · Route /grammar & /note via Jev to Haiku
+- Applied: 2026-10-25T03:23:17.064Z
+- Source: VOLTA Recos (/apps/recos) · Skills · priority
+- Expected impact: Saves ~$6.20/wk
+- Change: Set model: haiku and effort: low in skills/grammar/SKILL.md and skills/note/SKILL.md, and add "jev: prefer-haiku" to both frontmatters.

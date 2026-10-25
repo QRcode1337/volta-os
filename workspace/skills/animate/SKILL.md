@@ -57,3 +57,12 @@ _Project: Claude 5.5 Agentic OS — Master Cut v3_
 - _Evidence:_ Pin #1 (Clip 02 Home Dashboard Overview @ 00:01:28): "Speed up the zoom transition into the Artifact Ring by 1.5x and increase the orange glow (#FF5500) on the matched BETASHARES node."
 - _Evidence:_ Pin #5 (Clip 04 Database Skills & Wildcards @ 00:04:07): "Wildcard 20% slice should animate in after the 80% block, not at the same time."
 - _Evidence:_ Pin #8 (Clip 01 Hook @ 00:00:00): "Make the title reveal land 6 frames earlier"
+
+### 2026-10-25 · VOLTA Editor feedback (Pin #1 & Pin #5)
+_Project: Claude 5.5 Agentic OS — Master Cut v3_
+
+- **Rule (motion timing):** Default zoom / camera transitions to fast-out easing `cubic-bezier(0.16, 1, 0.3, 1)` at ~1.5x the previous speed; no single transition may exceed 600ms.
+- **Rule (highlight contrast):** Active / matched elements get a high-contrast `#FF5500` glow (≥ 18px blur, 0.9 alpha) while inactive siblings dim to 35% opacity.
+- **Rule (entrance sequencing):** Never animate primary and secondary blocks simultaneously — stagger secondary / wildcard elements to enter ~150ms after the primary block settles.
+- _Evidence:_ Pin #1 (Clip 02 Home Dashboard Overview @ 00:01:28): "Speed up the zoom transition into the Artifact Ring by 1.5x and increase the orange glow (#FF5500) on the matched BETASHARES node."
+- _Evidence:_ Pin #5 (Clip 04 Database Skills & Wildcards @ 00:04:07): "Wildcard 20% slice should animate in after the 80% block, not at the same time."

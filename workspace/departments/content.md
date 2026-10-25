@@ -18,3 +18,11 @@
 - Hooks under 8 seconds. First line states the payoff.
 - Every thumbnail batch: 4 corpus-aligned + 1 WILDCARD.
 - Never reuse a thumbnail layout two uploads in a row.
+
+## Applied Recos
+
+### 2026-10-25 · rc-1 · Shrink CLAUDE.md into Department Routers
+- Applied: 2026-10-25T03:23:17.064Z
+- Source: VOLTA Recos (/apps/recos) · Memory · priority
+- Expected impact: Saves ~18.4k tok/chat
+- Change: Refactor workspace/CLAUDE.md into a slim router: move each department section into workspace/departments/<dept>.md and replace it with a one-line pointer. Preserve /compact directives verbatim.

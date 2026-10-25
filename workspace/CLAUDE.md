@@ -71,3 +71,11 @@ After compacting, re-read only the department router for the active task — nev
 - `/clean-up` reports first and asks before removing anything outside `/tmp` and known caches.
 - Never write outside `./workspace` from the OS bridge. Never commit `.env*`.
 - Client data stays in its client folder; never mix BetaShares and competitor material in one artifact.
+
+## Applied Recos
+
+### 2026-10-25 · rc-1 · Shrink CLAUDE.md into Department Routers
+- Applied: 2026-10-25T03:23:17.064Z
+- Source: VOLTA Recos (/apps/recos) · Memory · priority
+- Expected impact: Saves ~18.4k tok/chat
+- Change: Refactor workspace/CLAUDE.md into a slim router: move each department section into workspace/departments/<dept>.md and replace it with a one-line pointer. Preserve /compact directives verbatim.

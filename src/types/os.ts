@@ -20,7 +20,7 @@ export interface MicroAppItem {
   subtitle: string;
   route: string;
   port: number;
-  iconType: 'ltm' | 'honcho' | 'systems' | 'sessions' | 'search' | 'editor' | 'scripts' | 'generations' | 'studio' | 'recos' | 'brain' | 'excalidraw' | 'elements' | 'carousels';
+  iconType: 'ltm' | 'honcho' | 'launchpad' | 'music' | 'systems' | 'sessions' | 'search' | 'editor' | 'scripts' | 'generations' | 'studio' | 'recos' | 'brain' | 'excalidraw' | 'elements' | 'carousels';
   accentColor: string;
   /** True for tool apps that still run on sample content rather than the user's real data. */
   sample?: boolean;
@@ -92,18 +92,6 @@ export interface BrainNode {
   content?: string;
 }
 
-export interface RecommendationCard {
-  id: string;
-  category: 'Priority' | 'Apps' | 'Routines' | 'Memory' | 'Skills';
-  title: string; // e.g., "Shrink CLAUDE.md"
-  benefit: string;
-  actionDescription: string;
-  effortLabel: string; // e.g., "2 mins · Low risk"
-  savingsLabel: string; // e.g., "~14k tok/session"
-  promptPayload: string;
-  status: 'pending' | 'in_cart' | 'done' | 'skipped';
-}
-
 export interface VideoPinComment {
   id: string;
   clipId: string;
@@ -115,15 +103,6 @@ export interface VideoPinComment {
 }
 
 // ───────────────────────── Integration types (Phase 0 additions) ─────────────────────────
-
-/** Recos: the original `category` stays the card's primary bucket; `priority` flags it into the Priority tab. */
-export interface RecommendationCardExt extends RecommendationCard {
-  bucket: 'Apps' | 'Routines' | 'Memory' | 'Skills';
-  priority: boolean;
-  filesTouched: string[]; // workspace-relative paths Claude would edit
-  weeklyTokensSaved: number;
-  weeklyUsdSaved: number;
-}
 
 export interface VideoClip {
   id: string; // "clip-01"
@@ -235,6 +214,8 @@ export interface EditorInboxItem {
   durationSec: number;
   source: 'generations' | 'scripts' | 'carousels' | 'studio';
   sceneKey?: string;
+  /** Notion page the cues were built from (Scripts). */
+  notion?: { title: string; url: string };
   cues?: { atSec: number; voiceover: string; visualCue: string }[];
   createdAt: string; // ISO
   /** Real generated file (Generations): absolute path on disk and the /api/media/file URL that serves it. */

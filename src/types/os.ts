@@ -20,7 +20,7 @@ export interface MicroAppItem {
   subtitle: string;
   route: string;
   port: number;
-  iconType: 'ltm' | 'honcho' | 'systems' | 'sessions' | 'search' | 'editor' | 'scripts' | 'generations' | 'recos' | 'brain' | 'excalidraw' | 'elements' | 'carousels';
+  iconType: 'ltm' | 'honcho' | 'systems' | 'sessions' | 'search' | 'editor' | 'scripts' | 'generations' | 'studio' | 'recos' | 'brain' | 'excalidraw' | 'elements' | 'carousels';
   accentColor: string;
   /** True for tool apps that still run on sample content rather than the user's real data. */
   sample?: boolean;
@@ -233,7 +233,7 @@ export interface EditorInboxItem {
   title: string;
   kind: 'ANIMATION' | 'A-ROLL CUT';
   durationSec: number;
-  source: 'generations' | 'scripts' | 'carousels';
+  source: 'generations' | 'scripts' | 'carousels' | 'studio';
   sceneKey?: string;
   cues?: { atSec: number; voiceover: string; visualCue: string }[];
   createdAt: string; // ISO

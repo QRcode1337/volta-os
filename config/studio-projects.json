@@ -1,0 +1,259 @@
+{
+  "version": 1,
+  "_doc": [
+    "VOLTA Studio project + preset registry. The server runs ONLY the argv arrays defined here (no shell, no client strings).",
+    "argv elements: a literal string, or {\"each\":\"<arg>\",\"flag\":\"-i\"} (repeat flag+value for a files arg).",
+    "Placeholders inside a string: {argName} (validated user arg), {out} (allocated output path), {projectDir}. A string that is exactly {argName} for an enum whose value is an array expands to several argv elements.",
+    "Executables: ffmpeg, node, npx, npm, python3, bash (resolved on a fixed PATH) or ./node_modules/.bin/<tool> inside the project.",
+    "output: {\"ext\":\"mp4\"} allocates {out}. Default folder is /Volumes/Windsor/VOLTA/studio/renders/<projectId>/ (needs >= 3 GiB free); set output.dir (absolute, ~ ok, or relative to the project) to write elsewhere.",
+    "outputDirs: folders scanned for recent outputs (relative to the project, or absolute). The Windsor renders folder for the project is always scanned too.",
+    "progress: remotion | ffmpeg | generic. durationFrom (ffmpeg): {\"arg\":\"duration\"} | {\"sum\":\"<files arg>\"} | {\"file\":\"<file arg>\"}."
+  ],
+  "projects": [
+    {
+      "id": "hermes-pipeline",
+      "name": "Hermes Video Pipeline",
+      "kind": "pipeline",
+      "path": "~/Documents/PROJECTS/hermes-video-pipeline",
+      "notes": "Brief to vertical social clip pipeline (README.md). 55 mp4s live under production/. node orchestrator.js runs the full demo pipeline; render workers are the Remotion and HyperFrames projects it feeds.",
+      "outputDirs": ["production", "outputs"],
+      "docs": ["README.md"],
+      "presets": [
+        {
+          "id": "orchestrator-demo",
+          "label": "Run orchestrator demo",
+          "description": "node orchestrator.js: runs the whole brief-to-output pipeline and writes outputs/demo_<timestamp>/.",
+          "confirm": "Runs the full Hermes demo pipeline (agents may call external APIs) and writes a new outputs/demo_* folder. Continue?",
+          "argv": ["node", "orchestrator.js"],
+          "progress": "generic"
+        },
+        {
+          "id": "smoke-test",
+          "label": "Release 04 smoke test",
+          "description": "python3 tests/release4_smoke_test.py (the project's npm test).",
+          "argv": ["python3", "tests/release4_smoke_test.py"],
+          "progress": "generic"
+        }
+      ]
+    },
+    {
+      "id": "hermes-remotion-promo",
+      "name": "Hermes Remotion Promo",
+      "kind": "remotion",
+      "path": "~/Documents/PROJECTS/hermes-video-pipeline/remotion-promo",
+      "notes": "Blank Remotion 4.0.471 project (composition MyComp) used for promoA scenes. Entry src/index.ts.",
+      "rootFiles": ["src/Root.tsx"],
+      "outputDirs": ["out"],
+      "presets": [
+        {
+          "id": "render",
+          "label": "Render composition",
+          "description": "remotion render src/index.ts <composition> to the Windsor renders folder (2 workers).",
+          "argv": ["./node_modules/.bin/remotion", "render", "src/index.ts", "{composition}", "{out}", "--concurrency=2", "{quality}"],
+          "args": {
+            "composition": { "type": "composition", "label": "Composition" },
+            "quality": { "type": "enum", "label": "Quality", "default": "standard", "values": { "standard": [], "draft": ["--scale=0.5", "--crf=30"] } }
+          },
+          "output": { "ext": "mp4" },
+          "progress": "remotion"
+        }
+      ],
+      "compositionsArgv": ["./node_modules/.bin/remotion", "compositions", "src/index.ts"]
+    },
+    {
+      "id": "openmontage-composer",
+      "name": "OpenMontage Composer",
+      "kind": "remotion",
+      "path": "~/Documents/PROJECTS/OpenMontage/remotion-composer",
+      "notes": "Remotion composer for OpenMontage animated explainers (Explainer, CinematicRenderer, TitledVideo, ...). Entry src/index.tsx; package.json build renders Explainer to out/video.mp4.",
+      "rootFiles": ["src/Root.tsx"],
+      "outputDirs": ["out", "../output"],
+      "presets": [
+        {
+          "id": "render",
+          "label": "Render composition",
+          "description": "remotion render src/index.tsx <composition> to the Windsor renders folder (2 workers). Compositions that need input props may fail without them.",
+          "argv": ["./node_modules/.bin/remotion", "render", "src/index.tsx", "{composition}", "{out}", "--concurrency=2", "{quality}", "{props}"],
+          "args": {
+            "composition": { "type": "composition", "label": "Composition" },
+            "quality": { "type": "enum", "label": "Quality", "default": "standard", "values": { "standard": [], "draft": ["--scale=0.5", "--crf=30"] } },
+            "props": { "type": "enum", "label": "Props", "default": "defaults", "values": { "defaults": [], "titled_video_props.json": ["--props=titled_video_props.json"] } }
+          },
+          "output": { "ext": "mp4" },
+          "progress": "remotion"
+        }
+      ],
+      "compositionsArgv": ["./node_modules/.bin/remotion", "compositions", "src/index.tsx"]
+    },
+    {
+      "id": "dialectics-video",
+      "name": "Dialectics Video",
+      "kind": "remotion",
+      "path": "~/Documents/PROJECTS/dialectics-video",
+      "notes": "Remotion prompt-to-motion-graphics template (Next.js + Remotion 4.0.434). Entry src/remotion/index.ts; compositions DialecticsVideo (1800f) and DynamicComp. Existing renders in out/.",
+      "rootFiles": ["src/remotion/Root.tsx"],
+      "outputDirs": ["out"],
+      "presets": [
+        {
+          "id": "render",
+          "label": "Render composition",
+          "description": "remotion render src/remotion/index.ts <composition> to the Windsor renders folder (2 workers).",
+          "argv": ["./node_modules/.bin/remotion", "render", "src/remotion/index.ts", "{composition}", "{out}", "--concurrency=2", "{quality}"],
+          "args": {
+            "composition": { "type": "composition", "label": "Composition" },
+            "quality": { "type": "enum", "label": "Quality", "default": "standard", "values": { "standard": [], "draft": ["--scale=0.5", "--crf=30"] } }
+          },
+          "output": { "ext": "mp4" },
+          "progress": "remotion"
+        }
+      ],
+      "compositionsArgv": ["./node_modules/.bin/remotion", "compositions", "src/remotion/index.ts"]
+    },
+    {
+      "id": "remotion-animation-workflow",
+      "name": "Remotion Animation Workflow",
+      "kind": "remotion",
+      "path": "~/Documents/PROJECTS/RemotionAnimation-Workflow",
+      "notes": "Skills, spec templates and a starter scaffold (no package.json or entry yet), so there is nothing to render here. Copy starter/ into a new project, then add it to config/studio-projects.json.",
+      "outputDirs": ["starter/out"],
+      "docs": ["README.md", "templates/spec-template.md"],
+      "presets": []
+    },
+    {
+      "id": "tiktok-four-files",
+      "name": "TikTok Four Files",
+      "kind": "pipeline",
+      "path": "~/Documents/PROJECTS/tiktok-four-files",
+      "notes": "Plan and narration only (posts Thu Oct 29, 8 PM ET). No render tooling; use the ffmpeg tools to cut and mux the finished clips.",
+      "outputDirs": [],
+      "docs": ["PLAN.md", "narration.md"],
+      "presets": []
+    },
+    {
+      "id": "tiktok-warm-grain-grid",
+      "name": "TikTok Warm Grain Grid",
+      "kind": "hyperframes",
+      "path": "~/Documents/PROJECTS/tiktok-warm-grain-grid",
+      "notes": "HyperFrames project (index.html + compositions/, hyperframes.json). Its package.json pins hyperframes@0.6.64 and runs it with npx --yes, so the first run downloads the CLI.",
+      "outputDirs": ["renders"],
+      "presets": [
+        {
+          "id": "lint",
+          "label": "Lint composition",
+          "description": "npx hyperframes lint: static composition checks (no render).",
+          "argv": ["npx", "--yes", "hyperframes@0.6.64", "lint"],
+          "progress": "generic"
+        },
+        {
+          "id": "render",
+          "label": "Render project",
+          "description": "npx hyperframes render to the Windsor renders folder. Heavy: spawns Chrome workers.",
+          "confirm": "HyperFrames renders spawn headless Chrome and use several GB of RAM. Start the render?",
+          "argv": ["npx", "--yes", "hyperframes@0.6.64", "render", "--quality", "{quality}", "--workers", "2", "--output", "{out}"],
+          "args": {
+            "quality": { "type": "enum", "label": "Quality", "default": "draft", "values": ["draft", "standard", "high"] }
+          },
+          "output": { "ext": "mp4" },
+          "progress": "generic"
+        }
+      ]
+    },
+    {
+      "id": "universal-consciousness-p1",
+      "name": "Universal Consciousness P1",
+      "kind": "ffmpeg",
+      "path": "~/Documents/PROJECTS/universal-consciousness-p1",
+      "notes": "Still-image + narration slideshow built with ffmpeg shell scripts (hyperframes.json here is metadata only, there is no HyperFrames composition). Scripts write to output/.",
+      "outputDirs": ["output", "videos"],
+      "presets": [
+        {
+          "id": "render-full",
+          "label": "render.sh (full cut)",
+          "description": "bash render.sh: renders 7 beats from assets/*.png + *.mp3 and concatenates output/universal-consciousness-p1-final.mp4.",
+          "confirm": "Re-encodes 7 beats with ffmpeg and overwrites output/universal-consciousness-p1-final.mp4. Continue?",
+          "argv": ["bash", "render.sh"],
+          "progress": "generic"
+        },
+        {
+          "id": "render-tiktok-v2",
+          "label": "render_tiktok_v2.sh",
+          "description": "bash render_tiktok_v2.sh: vertical TikTok cut.",
+          "confirm": "Runs render_tiktok_v2.sh, which rewrites files in output/. Continue?",
+          "argv": ["bash", "render_tiktok_v2.sh"],
+          "progress": "generic"
+        }
+      ]
+    },
+    {
+      "id": "ffmpeg-tools",
+      "name": "ffmpeg Tools",
+      "kind": "ffmpeg",
+      "path": "/Volumes/Windsor/VOLTA/studio",
+      "notes": "Cut, join, reframe and mux. Inputs are picked from any project's outputs or the Generations manifest by file id; the server builds the argv. Outputs land in the Windsor renders folder.",
+      "outputDirs": [],
+      "presets": [
+        {
+          "id": "trim",
+          "label": "Trim",
+          "description": "Cut a section out of a video (re-encoded, frame-accurate).",
+          "argv": ["ffmpeg", "-hide_banner", "-nostdin", "-y", "-ss", "{start}", "-i", "{in}", "-t", "{duration}", "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", "{out}"],
+          "args": {
+            "in": { "type": "file", "label": "Source video", "kinds": ["video"] },
+            "start": { "type": "number", "label": "Start (s)", "min": 0, "max": 86400, "default": 0 },
+            "duration": { "type": "number", "label": "Length (s)", "min": 0.1, "max": 3600, "default": 3 }
+          },
+          "output": { "ext": "mp4" },
+          "progress": "ffmpeg",
+          "durationFrom": { "arg": "duration" }
+        },
+        {
+          "id": "concat",
+          "label": "Concat",
+          "description": "Join 2 to 12 videos in order. Everything is scaled and padded to the first clip's frame size at 30 fps.",
+          "argv": ["ffmpeg", "-hide_banner", "-nostdin", "-y", { "each": "clips", "flag": "-i" }, "-filter_complex", "{filter}", "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", "{out}"],
+          "args": {
+            "clips": { "type": "files", "label": "Clips (in order)", "kinds": ["video"], "min": 2, "max": 12 }
+          },
+          "derive": { "filter": { "fn": "concatFilter", "from": "clips" } },
+          "output": { "ext": "mp4" },
+          "progress": "ffmpeg",
+          "durationFrom": { "sum": "clips" }
+        },
+        {
+          "id": "vertical-9x16",
+          "label": "Make vertical 9:16",
+          "description": "Reframe to 1080x1920: blurred-background fit (keeps the whole frame) or centre crop.",
+          "argv": ["ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", "{in}", "-vf", "{mode}", "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-r", "30", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", "{out}"],
+          "args": {
+            "in": { "type": "file", "label": "Source video", "kinds": ["video"] },
+            "mode": {
+              "type": "enum",
+              "label": "Reframe",
+              "default": "blur-fit",
+              "values": {
+                "blur-fit": "split[a][b];[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=30:5[bg];[b]scale=1080:1920:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1",
+                "center-crop": "crop='min(iw,ih*9/16)':'min(ih,iw*16/9)',scale=1080:1920,setsar=1"
+              }
+            }
+          },
+          "output": { "ext": "mp4" },
+          "progress": "ffmpeg",
+          "durationFrom": { "file": "in" }
+        },
+        {
+          "id": "mux-audio",
+          "label": "Mux audio",
+          "description": "Replace a video's soundtrack with an audio file (video stream copied, audio AAC, stops at the shorter one). Pick the audio from outputs or Generations voice items.",
+          "argv": ["ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", "{video}", "-i", "{audio}", "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", "{out}"],
+          "args": {
+            "video": { "type": "file", "label": "Video", "kinds": ["video"] },
+            "audio": { "type": "file", "label": "Audio", "kinds": ["audio"] }
+          },
+          "output": { "ext": "mp4" },
+          "progress": "ffmpeg",
+          "durationFrom": { "file": "video" }
+        }
+      ]
+    }
+  ]
+}

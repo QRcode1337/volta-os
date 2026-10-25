@@ -84,6 +84,7 @@ export const MICRO_APPS: MicroAppItem[] = [
   { id: 'editor', name: 'VOLTA Editor', subtitle: 'Review cuts & pin timestamp feedback', route: '/apps/editor', port: OS_PORT, iconType: 'editor', accentColor: '#FF5500', sample: true },
   { id: 'scripts', name: 'VOLTA Scripts', subtitle: 'Draft & teleprompter view for YouTube', route: '/apps/scripts', port: OS_PORT, iconType: 'scripts', accentColor: '#FF5500', sample: true },
   { id: 'generations', name: 'Generations', subtitle: 'Image, video & voice generation (xAI, ElevenLabs)', route: '/apps/generations', port: OS_PORT, iconType: 'generations', accentColor: '#FF5500' },
+  { id: 'studio', name: 'VOLTA Studio', subtitle: 'Render queue: HyperFrames · Remotion · ffmpeg', route: '/apps/studio', port: OS_PORT, iconType: 'studio', accentColor: '#FF5500' },
   { id: 'recos', name: 'VOLTA Recos', subtitle: 'Weekly agent improvement cart', route: '/apps/recos', port: OS_PORT, iconType: 'recos', accentColor: '#FF5500', sample: true },
   { id: 'brain', name: 'Second Brain', subtitle: '424,846 interconnected workspace files', route: '/second-brain', port: OS_PORT, iconType: 'brain', accentColor: '#FF5500' },
   { id: 'carousels', name: 'VOLTA Carousels', subtitle: 'Instagram carousel slide approval', route: '/apps/carousels', port: OS_PORT, iconType: 'carousels', accentColor: '#FF5500', sample: true },

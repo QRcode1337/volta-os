@@ -66,14 +66,7 @@ export async function requireSpace(dir: string, bytes: number, what: string): Pr
   return free;
 }
 
-/** A regular, non-empty file whose bytes are on disk (an iCloud-evicted file has a size but no blocks). */
-export async function onDisk(file: string): Promise<boolean> {
-  const st = await fs.stat(file).catch(() => null);
-  return !!st?.isFile() && st.size > 0 && st.blocks > 0;
-}
-
-/** True when a read failed because the file is an iCloud placeholder that this process may not download. */
-export const isEvictedError = (err: unknown) => (err as NodeJS.ErrnoException)?.code === 'EDEADLK';
+export { isEvictedError, onDisk } from '@/lib/server/icloud';
 
 export const tildePath = (p: string) => (p.startsWith(os.homedir()) ? `~${p.slice(os.homedir().length)}` : p);
 

@@ -10,7 +10,7 @@ function subscribe(onChange: () => void) {
 }
 
 /** true below md, false at md+, null during SSR/hydration (viewport unknown). */
-function useIsPhone(): boolean | null {
+export function useIsPhone(): boolean | null {
   return useSyncExternalStore(
     subscribe,
     () => window.matchMedia(MOBILE_MEDIA_QUERY).matches,

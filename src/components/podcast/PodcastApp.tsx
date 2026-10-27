@@ -12,7 +12,7 @@ import { GenerateDialog, type GenerateChoice } from './GenerateDialog';
 import { JobCard } from './JobCard';
 import { SubscribeCard } from './SubscribeCard';
 import { TopicWeights } from './TopicWeights';
-import { api, fmtBytes, fmtDay, fmtDuration, fmtUsd } from './podcast-client';
+import { api, fmtBytes, fmtDay, fmtDuration, fmtUsd, researchHealth } from './podcast-client';
 
 export function PodcastApp() {
   const { toasts, push, dismiss } = useToasts();
@@ -178,24 +178,32 @@ export function PodcastApp() {
             </div>
           )}
           <ul className="mt-3 space-y-1.5">
-            {episodes.map((e) => (
-              <li key={e.date}>
-                <button
-                  type="button"
-                  onClick={() => setSelected(e.date)}
-                  className={cn('w-full rounded-lg border px-3 py-2.5 text-left transition-colors', selected === e.date ? 'border-orange bg-orange/10' : 'border-subtle bg-panel hover:border-highlight')}
-                >
-                  <span className="flex items-baseline justify-between gap-2">
-                    <span className="font-mono text-[10.5px] uppercase tracking-[0.05em] text-orange">{fmtDay(e.date)}</span>
-                    <span className="font-mono text-[10.5px] text-muted">{fmtDuration(e.durationSec)}</span>
-                  </span>
-                  <span className="mt-1 line-clamp-2 block text-[12.5px] leading-snug text-paper">{e.title}</span>
-                  <span className="mt-1 block font-mono text-[10px] text-muted">
-                    {e.stories.length} stories · audio {fmtUsd(e.cost.ttsUsd)}
-                  </span>
-                </button>
-              </li>
-            ))}
+            {episodes.map((e) => {
+              const rh = researchHealth(e);
+              return (
+                <li key={e.date}>
+                  <button
+                    type="button"
+                    onClick={() => setSelected(e.date)}
+                    className={cn('w-full rounded-lg border px-3 py-2.5 text-left transition-colors', selected === e.date ? 'border-orange bg-orange/10' : 'border-subtle bg-panel hover:border-highlight')}
+                  >
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="font-mono text-[10.5px] uppercase tracking-[0.05em] text-orange">{fmtDay(e.date)}</span>
+                      <span className="font-mono text-[10.5px] text-muted">{fmtDuration(e.durationSec)}</span>
+                    </span>
+                    <span className="mt-1 line-clamp-2 block text-[12.5px] leading-snug text-paper">{e.title}</span>
+                    <span className="mt-1 block font-mono text-[10px] text-muted">
+                      {e.stories.length} stories · audio {fmtUsd(e.cost.ttsUsd)}
+                    </span>
+                    {rh?.degraded && (
+                      <span className="mt-1 flex items-center gap-1 font-mono text-[10px] text-amber" title="Web research mostly failed for this episode; open it for the reason.">
+                        <AlertTriangle className="h-3 w-3 shrink-0" /> limited research · {rh.succeeded}/{rh.attempted} topics
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </aside>
 

@@ -48,7 +48,7 @@ export function useToasts(ttlMs = 3200) {
 
 export function ToastStack({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: number) => void }) {
   return (
-    <div className="pointer-events-none fixed bottom-5 right-5 z-[70] flex w-[360px] max-w-[calc(100vw-40px)] flex-col gap-2" aria-live="polite">
+    <div className="toast-stack pointer-events-none fixed bottom-5 right-5 z-[70] flex w-[360px] max-w-[calc(100vw-40px)] flex-col gap-2" aria-live="polite">
       {toasts.map((t) => (
         <div
           key={t.id}

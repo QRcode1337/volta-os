@@ -100,6 +100,31 @@ export interface CostBreakdown {
   claudeListUsd: number;
 }
 
+/** One topic's web-research outcome (the `claude -p` + WebSearch call). */
+export interface ResearchTopicStatus {
+  topic: string;
+  ok: boolean;
+  cached: boolean;
+  stories: number;
+  /** The real reason the call failed (CLI JSON error / stderr / exit code), secrets masked. */
+  error?: string;
+}
+
+/** Episode-level research health. `degraded` = fewer than `minOk` topics were researched, so the episode leans on feeds only. */
+export interface ResearchSummary {
+  attempted: number;
+  succeeded: number;
+  /** Topics that had to succeed for the research to count as healthy (half the attempted topics, rounded up). */
+  minOk: number;
+  degraded: boolean;
+  /** Stories the research stage contributed to the candidate pool. */
+  stories: number;
+  /** Set when research did not run at all (e.g. the claude CLI is missing). */
+  skipped?: string;
+  topics: ResearchTopicStatus[];
+  errors: { topic: string; error: string }[];
+}
+
 export interface EpisodeRecord {
   date: string;
   title: string;
@@ -120,6 +145,8 @@ export interface EpisodeRecord {
   researchMs: number;
   jevUsed: boolean;
   warnings: string[];
+  /** Research health. Absent on episodes made before 2026-10-27's fix. */
+  research?: ResearchSummary;
 }
 
 export interface Manifest {
@@ -142,6 +169,8 @@ export interface JobState {
   error: string | null;
   estUsd: number;
   episode: EpisodeRecord | null;
+  /** Set once the research stage ends. */
+  research?: ResearchSummary;
 }
 
 export interface CostEstimate {

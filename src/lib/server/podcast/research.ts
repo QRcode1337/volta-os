@@ -1,5 +1,5 @@
 import 'server-only';
-import type { Confidence, PodcastConfig, SourceRef, TopicConfig } from './types';
+import type { Confidence, PodcastConfig, ResearchSummary, SourceRef, TopicConfig } from './types';
 import { classifyTopic, type Candidate } from './candidates';
 import { llm } from './llm';
 import { readCacheJson, writeCacheJson } from './storage';
@@ -127,10 +127,55 @@ interface CachedTopic {
 /** An empty answer is almost always a miss, so it is only trusted for this long before the topic is researched again. */
 const EMPTY_TTL_MS = 90 * 60_000;
 
+/** Topics the research stage covers: focus topics first, then by weight, so if the clock runs short the user's priorities are done. */
+export const researchTopics = (cfg: PodcastConfig): TopicConfig[] => cfg.topics.filter((t) => t.weight > 0).sort((a, b) => Number(b.focus) - Number(a.focus) || b.weight - a.weight);
+
+/** Research is healthy when at least half the attempted topics came back (an honest empty answer counts as researched). */
+export const minResearchOk = (attempted: number): number => Math.ceil(attempted / 2);
+
+/** Episode-level research health from the stage outcome. `skipped` = research never ran (then every planned topic counts as missed). */
+export function summarizeResearch(outcome: ResearchOutcome, planned: number, skipped?: string): ResearchSummary {
+  const attempted = skipped ? planned : outcome.results.length;
+  const succeeded = outcome.results.filter((r) => r.ok).length;
+  const minOk = minResearchOk(attempted);
+  return {
+    attempted,
+    succeeded,
+    minOk,
+    degraded: attempted > 0 && succeeded < minOk,
+    stories: outcome.candidates.length,
+    ...(skipped ? { skipped } : {}),
+    topics: outcome.results.map(({ topic, ok, cached, stories, error }) => ({ topic, ok, cached, stories, ...(error ? { error } : {}) })),
+    errors: outcome.results.filter((r) => !r.ok).map((r) => ({ topic: r.topic, error: r.error ?? 'failed' })),
+  };
+}
+
+/** The per-call label ("claude -p (research ai): ") differs per topic; drop it so identical failures group together. */
+const bareError = (e: string) => e.replace(/^claude -p \(research [^)]*\):\s*/, '');
+
+/**
+ * Warnings for the job/episode: a headline when research is degraded, then one line per distinct failure reason (eight
+ * topics failing the same way become one line naming all eight, with the full reason instead of eight truncated copies).
+ */
+export function researchWarnings(s: ResearchSummary, label: (topic: string) => string): { headline: string | null; details: string[] } {
+  const groups = new Map<string, string[]>();
+  for (const e of s.errors) {
+    const k = bareError(e.error);
+    groups.set(k, [...(groups.get(k) ?? []), label(e.topic)]);
+  }
+  const sorted = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
+  const details = sorted.map(([err, topics]) => (topics.length === 1 ? `Research (${topics[0]}) failed: ${err}` : `Research failed for ${topics.length} topics (${topics.join(', ')}): ${err}`));
+  if (!s.degraded) return { headline: null, details };
+  const basis = s.succeeded === 0 ? 'only from the fixed sources (Notion, arXiv, RSS, Feeds), with no web-verified stories' : 'mostly from the fixed sources (Notion, arXiv, RSS, Feeds)';
+  const headline = s.skipped
+    ? `Limited research: web research did not run (${s.skipped}). This episode was built ${basis}.`
+    : `Limited research: only ${s.succeeded}/${s.attempted} topics were researched on the web (at least ${s.minOk} expected). This episode was built ${basis}.${sorted[0] ? ` Main cause: ${clip(sorted[0][0], 240)}` : ''}`;
+  return { headline, details };
+}
+
 export async function runResearch(cfg: PodcastConfig, date: string, opts: { fresh: boolean }, onDetail: (s: string) => void): Promise<ResearchOutcome> {
   const t0 = Date.now();
-  // Focus topics first, then by weight: if the clock runs short, the user's priorities are already done.
-  const topics = cfg.topics.filter((t) => t.weight > 0).sort((a, b) => Number(b.focus) - Number(a.focus) || b.weight - a.weight);
+  const topics = researchTopics(cfg);
   let done = 0;
   const results: ResearchTopicResult[] = [];
   const all: Candidate[] = [];

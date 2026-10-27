@@ -2,6 +2,7 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 import type { GenRequest, ImageRequest, MediaProvider, Quote, ShotBatchRequest, ShotItem, VideoModelInfo, VideoRequest, VoiceRequest } from '@/types/media';
 import { MAX_REQUEST_USD, MediaError, QUOTE_TTL_MS } from './config';
+import { assertWithinDailyCap } from './budget';
 import { elevenUsdPerCredit, round6 } from './pricing';
 import { requireStorage, todayDir } from './storage';
 import { getQuota, listTtsModels, listVoices } from './elevenlabs';
@@ -217,6 +218,10 @@ export async function createQuote(raw: unknown): Promise<Quote> {
   if (estUsd > MAX_REQUEST_USD) {
     throw new MediaError(`Estimated $${estUsd.toFixed(2)} is over the $${MAX_REQUEST_USD} per-request safety cap. Reduce count, duration or resolution${b.kind === 'shots' ? ', or split the shots into smaller batches' : ''}.`, 422);
   }
+  const spend = await assertWithinDailyCap(estUsd);
+  if (estUsd > 0 && spend.totalUsd + estUsd > spend.capUsd * 0.8) {
+    warnings.push(`This takes today's spend to $${(spend.totalUsd + estUsd).toFixed(2)} of the $${spend.capUsd.toFixed(2)} daily cap.`);
+  }
   if (storage.freeBytes < 4 * 1024 ** 3) warnings.push(`Windsor has ${(storage.freeBytes / 1024 ** 3).toFixed(1)} GiB free.`);
 
   prune();
@@ -234,6 +239,7 @@ export async function createQuote(raw: unknown): Promise<Quote> {
     outputDir: todayDir(),
     credits,
     creditsRemainingAfter,
+    daily: { spentUsd: spend.totalUsd, capUsd: spend.capUsd },
     warnings,
   };
   registry.quotes.set(quoteId, { quote, req, expiresAt, used: false, credits });

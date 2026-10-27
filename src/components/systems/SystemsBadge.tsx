@@ -7,10 +7,12 @@ import type { SystemsSummary } from '@/types/systems';
 import { cn } from '@/lib/cn';
 import { useSharedJson } from '@/components/dashboard/widgets/shared-json';
 
-const BADGE_POLL_MS = 120_000;
+/** Shared-store key and cadence; the phone Systems tab dot and the home "Needs you" views read the same entry. */
+export const SYSTEMS_SUMMARY_URL = '/api/systems?summary=1';
+export const BADGE_POLL_MS = 120_000;
 
 export function SystemsBadge() {
-  const { data, error, loading } = useSharedJson<SystemsSummary>('/api/systems?summary=1', BADGE_POLL_MS);
+  const { data, error, loading } = useSharedJson<SystemsSummary>(SYSTEMS_SUMMARY_URL, BADGE_POLL_MS);
   const crit = data?.attention.filter((a) => a.severity === 'critical').length ?? 0;
   const warn = (data?.attention.length ?? 0) - crit;
   const tone = !data ? 'muted' : crit ? 'critical' : warn ? 'warn' : 'ok';

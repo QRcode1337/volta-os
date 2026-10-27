@@ -1,5 +1,5 @@
 import 'server-only';
-import type { EpisodeRecord, PodcastConfig, Story } from './types';
+import type { EpisodeRecord, PodcastConfig, ResearchSummary, Story } from './types';
 
 // Show notes (markdown with source links). Built programmatically from the structured stories: nothing here is LLM text,
 // so every link is exactly a URL the pipeline collected.
@@ -21,6 +21,13 @@ export function sourceLine(s: Story['sources'][number]): string {
   return s.url ? `[${label}](${s.url})${pub}` : `${label}${pub}`;
 }
 
+/** One plain sentence for listeners when web research mostly failed (null when research was healthy). */
+export function researchNotice(r: ResearchSummary | undefined): string | null {
+  if (!r?.degraded) return null;
+  const what = r.skipped ? 'Web research did not run for this episode' : `Web research covered only ${r.succeeded} of ${r.attempted} topics in this episode`;
+  return `${what}, so most stories come from feeds and preprints and were not independently verified.`;
+}
+
 export function buildNotes(args: {
   cfg: PodcastConfig;
   date: string;
@@ -31,11 +38,13 @@ export function buildNotes(args: {
   runnersUp: Story[];
   notices: string[];
   info: string[];
+  research?: ResearchSummary;
 }): string {
   const { cfg, date, stories } = args;
   const label = (id: string) => cfg.topics.find((t) => t.id === id)?.label ?? id;
   const day = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  const out: string[] = [`# ${args.title}`, '', `*${day} · ${Math.round(args.durationSec / 60)} min · ${stories.length} stories*`, '', args.description, '', '## Stories', ''];
+  const limited = researchNotice(args.research);
+  const out: string[] = [`# ${args.title}`, '', `*${day} · ${Math.round(args.durationSec / 60)} min · ${stories.length} stories*`, '', args.description, '', ...(limited ? [`> **Limited research.** ${limited}`, ''] : []), '## Stories', ''];
   stories.forEach((s, i) => {
     out.push(`### ${i + 1}. ${s.headline}`, '', `*${label(s.topic)} · ${EVIDENCE_LABEL[s.evidence]} · confidence ${s.confidence}${s.date ? ` · ${s.date}` : ''}* · cited as [${s.id}]`, '', s.whatHappened, '');
     if (s.whyItMatters) out.push(`**Why it matters:** ${s.whyItMatters}`, '');
@@ -54,7 +63,8 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 
 /** Compact HTML for the RSS item description (podcast apps render basic HTML). */
 export function notesHtml(ep: EpisodeRecord): string {
-  const parts = [`<p>${esc(ep.description)}</p>`];
+  const limited = researchNotice(ep.research);
+  const parts = [`<p>${esc(ep.description)}</p>`, ...(limited ? [`<p><i>Limited research: ${esc(limited)}</i></p>`] : [])];
   ep.stories.forEach((s, i) => {
     const links = s.sources
       .filter((x) => x.url)

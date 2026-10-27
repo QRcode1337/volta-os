@@ -1,11 +1,11 @@
 import 'server-only';
-import { execFile } from 'node:child_process';
+import { execFile, type ExecFileException } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { complete as omniComplete } from '../llm';
 import { LLM_CWD, loadConfig } from './config';
-import { errMsg, maskSecrets } from './util';
+import { clip, errMsg, maskSecrets } from './util';
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 // The ONE place the podcast talks to an LLM. Every stage calls `llm({ task, ... })` with a task name that matches
@@ -38,9 +38,11 @@ export interface LlmResult {
   turns?: number;
   /** claude -p list-price equivalent (informational; the Max plan is not billed per token). */
   listCostUsd?: number;
+  /** Errors from the backends earlier in the task's chain that failed before this one answered (empty: the primary answered). */
+  fallbackFrom: string[];
 }
 
-type Backend = (req: LlmRequest) => Promise<LlmResult>;
+type Backend = (req: LlmRequest) => Promise<Omit<LlmResult, 'fallbackFrom'>>;
 
 // ───────────── backend: claude -p (Max plan) ─────────────
 
@@ -75,6 +77,76 @@ const claudeModel = (task: LlmTask): string => {
   return task === 'research-web' ? c.research.model : task === 'quick' ? c.quick.model : task === 'deep-reasoning' ? 'opus' : c.script.model;
 };
 
+interface ClaudeJson {
+  result?: unknown;
+  is_error?: boolean;
+  subtype?: string;
+  error?: unknown;
+  api_error_status?: number | null;
+  num_turns?: number;
+  total_cost_usd?: number;
+}
+
+/** `--output-format json` prints one JSON object; take the last line that parses (anything before it is noise). */
+function parseClaudeJson(stdout: string): ClaudeJson | null {
+  const lines = stdout.trim().split('\n').reverse();
+  for (const l of lines) {
+    const t = l.trim();
+    if (!t.startsWith('{')) continue;
+    try {
+      return JSON.parse(t) as ClaudeJson;
+    } catch {
+      // not this line
+    }
+  }
+  try {
+    return JSON.parse(stdout) as ClaudeJson; // pretty-printed across lines
+  } catch {
+    return null;
+  }
+}
+
+const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim();
+
+/** The CLI's own explanation from its JSON: the error result text, an explicit error field, the subtype and HTTP status. */
+function jsonReason(j: ClaudeJson): string {
+  const parts: string[] = [];
+  if (typeof j.result === 'string' && j.result.trim()) parts.push(oneLine(j.result));
+  if (typeof j.error === 'string' && j.error.trim()) parts.push(oneLine(j.error));
+  else if (j.error && typeof j.error === 'object') parts.push(oneLine(JSON.stringify(j.error)));
+  if (j.subtype && j.subtype !== 'success') parts.push(`[${j.subtype}]`);
+  if (typeof j.api_error_status === 'number') parts.push(`(HTTP ${j.api_error_status})`);
+  return parts.join(' ');
+}
+
+/**
+ * Why a `claude -p` call failed, in words the user can act on. With `--output-format json` the CLI reports most failures
+ * (login, quota, rate limit, max turns) as JSON on STDOUT with a non-zero exit, and stderr is often empty. Node's
+ * `error.message` is just "Command failed: <the whole argv>", which carries the system prompt and no reason, so it is
+ * never used. Secrets are masked; the result is capped so it fits in a warning.
+ */
+export function describeClaudeFailure(error: ExecFileException | null, stdout: string, stderr: string, timeoutMs: number): string {
+  if (error?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') return 'output exceeded the 32 MB buffer';
+  if (error?.killed) return `timed out after ${Math.round(timeoutMs / 1000)}s`; // `killed` is only set when Node itself killed it (the timeout)
+  const parts: string[] = [];
+  const j = stdout.trim() ? parseClaudeJson(stdout) : null;
+  if (j) {
+    const why = jsonReason(j);
+    if (why) parts.push(why);
+  } else if (stdout.trim()) {
+    parts.push(`stdout: ${oneLine(stdout).slice(-400)}`);
+  }
+  if (stderr.trim()) parts.push(`stderr: ${oneLine(stderr).slice(-400)}`);
+  if (error) {
+    const code = error.code;
+    if (typeof code === 'string') parts.push(`could not start the CLI (${code})`);
+    else if (typeof code === 'number') parts.push(`exit code ${code}`);
+    else if (error.signal) parts.push(`killed by ${error.signal}`);
+  }
+  if (!parts.length) parts.push(error ? 'failed with no output' : 'empty result');
+  return clip(maskSecrets(parts.join(' · ')), 600);
+}
+
 const claudeCli: Backend = (req) => {
   const bin = claudeBin();
   if (!bin) return Promise.reject(new Error('claude CLI not found (set PODCAST_CLAUDE_BIN)'));
@@ -95,21 +167,15 @@ const claudeCli: Backend = (req) => {
     req.web ? '--allowedTools=WebSearch,WebFetch' : '--tools=',
   ];
   const started = Date.now();
-  return new Promise<LlmResult>((resolve, reject) => {
+  return new Promise<Omit<LlmResult, 'fallbackFrom'>>((resolve, reject) => {
     const child = execFile(bin, args, { cwd: LLM_CWD, env: childEnv(bin), timeout: req.timeoutMs, killSignal: 'SIGKILL', maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
-      if (error) {
-        const why = error.killed ? `timed out after ${Math.round(req.timeoutMs / 1000)}s` : maskSecrets((stderr || error.message).trim().slice(0, 300));
-        return reject(new Error(`claude -p (${req.label}): ${why}`));
+      if (error) return reject(new Error(`claude -p (${req.label}): ${describeClaudeFailure(error, stdout, stderr, req.timeoutMs)}`));
+      const j = parseClaudeJson(stdout);
+      if (!j) return reject(new Error(`claude -p (${req.label}): unparseable output${stdout.trim() ? ` — ${clip(maskSecrets(oneLine(stdout)), 300)}` : ' (stdout empty)'}`));
+      if (j.is_error || typeof j.result !== 'string' || !j.result.trim()) {
+        return reject(new Error(`claude -p (${req.label}): ${describeClaudeFailure(null, stdout, stderr, req.timeoutMs)}`));
       }
-      try {
-        const j = JSON.parse(stdout) as { result?: string; is_error?: boolean; subtype?: string; num_turns?: number; total_cost_usd?: number };
-        if (j.is_error || typeof j.result !== 'string' || !j.result.trim()) {
-          return reject(new Error(`claude -p (${req.label}): ${j.subtype || 'empty result'}${typeof j.result === 'string' ? ` — ${maskSecrets(j.result.slice(0, 200))}` : ''}`));
-        }
-        resolve({ text: j.result.trim(), backend: 'claude-cli', model, durationMs: Date.now() - started, turns: j.num_turns, listCostUsd: j.total_cost_usd });
-      } catch {
-        reject(new Error(`claude -p (${req.label}): unparseable output`));
-      }
+      resolve({ text: j.result.trim(), backend: 'claude-cli', model, durationMs: Date.now() - started, turns: j.num_turns, listCostUsd: j.total_cost_usd });
     });
     child.stdin?.on('error', () => {});
     child.stdin?.end(req.prompt); // prompt via stdin: no argv length limits, no variadic-flag swallowing
@@ -144,7 +210,7 @@ export async function llm(req: LlmRequest): Promise<LlmResult> {
   const errors: string[] = [];
   for (const backend of ROUTES[req.task]) {
     try {
-      return await backend(req);
+      return { ...(await backend(req)), fallbackFrom: [...errors] };
     } catch (e) {
       errors.push(errMsg(e));
     }

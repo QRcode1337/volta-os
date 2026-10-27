@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { STUDIO_ROOT, windsorMounted } from './storage';
 import type { ArgSpecPublic, MediaClass, PresetPublic, StudioKind, StudioProject } from '@/types/studio';
+import { isEvictedFileSync } from '@/lib/server/icloud';
 
 // Loads config/studio-projects.json. The ONLY commands Studio will ever run are the argv arrays defined there.
 
@@ -241,14 +242,7 @@ export function projectRoots(p: Project): string[] {
 }
 
 /** iCloud-evicted file: has a size but no blocks on disk. Reading it from this server fails with EDEADLK. */
-export function isDataless(file: string): boolean {
-  try {
-    const st = fs.statSync(file);
-    return st.size > 0 && st.blocks === 0;
-  } catch {
-    return false;
-  }
-}
+export const isDataless = isEvictedFileSync;
 
 /**
  * Cheap iCloud check on the files a preset certainly reads: the executable, package.json and any argv entry that is a

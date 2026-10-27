@@ -1,7 +1,7 @@
 'use client';
 // Presentational pieces for VOLTA Tasks: status styling, inline `code` rendering, cards and the detail drawer.
-import { useEffect, type ReactNode } from 'react';
-import { AlertTriangle, ChevronDown, ChevronRight, Copy, ExternalLink, FileText, Lock, X } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { AlertTriangle, BookOpen, ChevronDown, ChevronRight, Copy, ExternalLink, FileText, Lock, RefreshCw, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { isStale, type ActionItem, type ActionStatus, type ActionsSource } from './types';
 
@@ -160,12 +160,18 @@ export function TaskDetail({
   staleDays,
   onClose,
   onCopy,
+  onOpenNote,
+  remote,
 }: {
   item: ActionItem;
   source: ActionsSource;
   staleDays: number;
   onClose: () => void;
   onCopy: (text: string, what: string) => void;
+  /** Open a wiki note (`wiki/…/x.md`) in the in-app viewer. */
+  onOpenNote: (rel: string) => void;
+  /** Page opened from the phone: Mac `open` commands are hidden, notes open in VOLTA instead. */
+  remote: boolean;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -177,10 +183,11 @@ export function TaskDetail({
   const st = STATUS_STYLE[item.status];
   const stale = isStale(item, staleDays);
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    // z-[60]: above the phone MobileTabBar (z-50), which used to cover the bottom of the drawer.
+    <div className="fixed inset-0 z-[60] flex justify-end">
       <button type="button" aria-label="Close detail" onClick={onClose} className="absolute inset-0 bg-black/50" />
-      <aside role="dialog" aria-label="Task detail" className="relative flex h-full w-[560px] max-w-full flex-col border-l border-highlight bg-panel shadow-[0_0_60px_rgba(0,0,0,0.6)]">
-        <header className="flex shrink-0 items-center gap-2 border-b border-subtle px-4 py-3">
+      <aside role="dialog" aria-label="Task detail" className="relative flex h-full w-[560px] max-w-full flex-col border-l border-highlight bg-panel pb-[env(safe-area-inset-bottom)] shadow-[0_0_60px_rgba(0,0,0,0.6)]">
+        <header className="flex shrink-0 items-center gap-2 border-b border-subtle px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
           <span className={cn('h-2 w-2 rounded-full', st.dot)} />
           <span className={cn('font-mono text-[11px] font-semibold uppercase tracking-[0.08em]', st.text)}>{st.label}</span>
           {stale && (
@@ -188,7 +195,7 @@ export function TaskDetail({
               <AlertTriangle className="h-2.5 w-2.5" /> STALE {item.ageDays}d
             </span>
           )}
-          <button type="button" onClick={onClose} aria-label="Close" className="ml-auto rounded-full border border-subtle p-1.5 text-muted hover:text-paper">
+          <button type="button" onClick={onClose} aria-label="Close" className="ml-auto rounded-full border border-subtle p-1.5 text-muted hover:text-paper max-md:p-2.5">
             <X className="h-3.5 w-3.5" />
           </button>
         </header>
@@ -222,16 +229,27 @@ export function TaskDetail({
               <span className="text-paper">actions.md</span> · section <span className="text-paper">## {item.section || '(none)'}</span> (line {item.sectionLine}) · item at <span className="text-paper">line {item.line}</span>
               <span className="text-muted"> · marker [{item.marker}]</span>
             </p>
-            <button
-              type="button"
-              onClick={() => onCopy(source.openHint, 'Command copied.')}
-              className="group mt-1 flex items-center gap-2 rounded-md border border-subtle bg-obsidian px-2.5 py-2 text-left font-mono text-[11.5px] text-paper hover:border-orange/60"
-              title="Copy"
-            >
-              <span className="text-orange">$</span>
-              <span className="min-w-0 flex-1 truncate">{source.openHint}</span>
-              <Copy className="h-3.5 w-3.5 shrink-0 text-muted group-hover:text-orange" />
-            </button>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onOpenNote(SOURCE_NOTE)}
+                className="inline-flex min-h-9 items-center gap-2 rounded-md border border-orange/50 bg-orange/[0.08] px-2.5 py-1.5 font-mono text-[11.5px] text-orange hover:border-orange"
+              >
+                <BookOpen className="h-3.5 w-3.5" /> View actions.md
+              </button>
+              {!remote && (
+                <button
+                  type="button"
+                  onClick={() => onCopy(source.openHint, 'Command copied.')}
+                  className="group flex min-w-0 flex-1 items-center gap-2 rounded-md border border-subtle bg-obsidian px-2.5 py-2 text-left font-mono text-[11.5px] text-paper hover:border-orange/60"
+                  title="Copy"
+                >
+                  <span className="text-orange">$</span>
+                  <span className="min-w-0 flex-1 truncate">{source.openHint}</span>
+                  <Copy className="h-3.5 w-3.5 shrink-0 text-muted group-hover:text-orange" />
+                </button>
+              )}
+            </div>
             <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
               <Lock className="h-3 w-3" /> Read-only: edit the file or ask OpenClaw to change status
             </p>
@@ -244,13 +262,13 @@ export function TaskDetail({
                   <button
                     key={l.target}
                     type="button"
-                    onClick={() => onCopy(`open ${l.target}`, 'Command copied.')}
-                    className="flex items-center gap-2 rounded-md border border-subtle px-2.5 py-1.5 text-left font-mono text-[11px] text-secondary hover:border-highlight hover:text-paper"
-                    title={`Copy: open ${l.target}`}
+                    onClick={() => onOpenNote(l.target.replace(/^~\/\.openclaw\//, ''))}
+                    className="flex min-h-9 items-center gap-2 rounded-md border border-subtle px-2.5 py-1.5 text-left font-mono text-[11px] text-secondary hover:border-highlight hover:text-paper"
+                    title={`Read ${l.target}`}
                   >
                     <FileText className="h-3.5 w-3.5 shrink-0 text-muted" />
                     <span className="min-w-0 flex-1 truncate">{l.target}</span>
-                    <Copy className="h-3 w-3 shrink-0 text-muted" />
+                    <BookOpen className="h-3 w-3 shrink-0 text-muted" />
                   </button>
                 ) : (
                   <a
@@ -266,6 +284,89 @@ export function TaskDetail({
                 ),
               )}
             </div>
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+/** actions.md itself, in the repo-relative form /api/actions/note takes. */
+export const SOURCE_NOTE = 'wiki/main/actions.md';
+
+interface WikiNote {
+  path: string;
+  content: string;
+  mtime: string;
+  truncated: boolean;
+}
+
+/** Read-only view of a wiki note, fetched from the Mac, so links work from the phone too. Sits above the detail drawer. */
+export function NoteViewer({ rel, onClose, onCopy, remote }: { rel: string; onClose: () => void; onCopy: (text: string, what: string) => void; remote: boolean }) {
+  const [state, setState] = useState<{ rel: string; note?: WikiNote; error?: string } | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    const ctl = new AbortController();
+    fetch(`/api/actions/note?path=${encodeURIComponent(rel)}`, { signal: ctl.signal })
+      .then(async (r) => {
+        const json = (await r.json()) as WikiNote & { error?: string };
+        setState(r.ok ? { rel, note: json } : { rel, error: json.error || `HTTP ${r.status}` });
+      })
+      .catch((err: Error) => {
+        if (err.name !== 'AbortError') setState({ rel, error: err.message });
+      });
+    return () => ctl.abort();
+  }, [rel, attempt]);
+  useEffect(() => {
+    // Capture phase + stopPropagation: Escape closes only this viewer, not the drawer underneath.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      onClose();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onClose]);
+  const current = state?.rel === rel ? state : null;
+  const display = `~/.openclaw/${rel}`;
+  return (
+    <div className="fixed inset-0 z-[65] flex justify-end">
+      <button type="button" aria-label="Close note" onClick={onClose} className="absolute inset-0 bg-black/40" />
+      <aside role="dialog" aria-label={`Note ${display}`} className="relative flex h-full w-[640px] max-w-full flex-col border-l border-highlight bg-panel pb-[env(safe-area-inset-bottom)] shadow-[0_0_60px_rgba(0,0,0,0.6)]">
+        <header className="flex shrink-0 items-center gap-2 border-b border-subtle px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+          <FileText className="h-3.5 w-3.5 shrink-0 text-orange" />
+          <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-paper" title={display}>
+            {display}
+          </span>
+          {!remote && (
+            <button type="button" onClick={() => onCopy(`open ${display}`, 'Command copied.')} title={`Copy: open ${display}`} className="rounded-full border border-subtle p-1.5 text-muted hover:text-paper">
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          )}
+          <button type="button" onClick={onClose} aria-label="Close note" className="rounded-full border border-subtle p-1.5 text-muted hover:text-paper max-md:p-2.5">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </header>
+        <div className="hud-scroll min-h-0 flex-1 overflow-y-auto px-4 py-4" aria-live="polite" aria-busy={!current}>
+          {!current ? (
+            <p className="flex items-center gap-2 font-mono text-[11px] text-muted">
+              <RefreshCw className="h-3 w-3 robo-spin" /> Loading note…
+            </p>
+          ) : current.error ? (
+            <div className="flex flex-col items-start gap-2 rounded-md border border-[#EF4444]/40 bg-[#EF4444]/5 px-3 py-2.5">
+              <p className="font-mono text-[11px] text-[#EF4444]">Couldn’t read the note: {current.error}</p>
+              <button type="button" onClick={() => setAttempt((n) => n + 1)} className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted hover:text-paper">
+                Retry
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="mb-3 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
+                <Lock className="h-3 w-3" /> Read-only · updated {new Date(current.note!.mtime).toLocaleString()}
+                {current.note!.truncated && ' · first 512 KB'}
+              </p>
+              <pre className="whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-secondary">{current.note!.content}</pre>
+            </>
           )}
         </div>
       </aside>

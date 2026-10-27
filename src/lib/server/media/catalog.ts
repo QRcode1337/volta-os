@@ -3,7 +3,8 @@ import type { MediaStatus } from '@/types/media';
 import { GEN_ROOT, elevenKey, errorMessage, geminiKey, xaiKey } from './config';
 import { listOmniModels } from './gemini';
 import { getQuota, listTtsModels, listVoices } from './elevenlabs';
-import { checkStorage, todaySpendUsd } from './storage';
+import { dailySpend } from './budget';
+import { checkStorage } from './storage';
 import { listImageModels, listVideoModels } from './xai';
 
 export async function getStatus(): Promise<MediaStatus> {
@@ -11,7 +12,7 @@ export async function getStatus(): Promise<MediaStatus> {
 
   const [storage, spend, imgs, vids, voices, models, quota] = await Promise.all([
     checkStorage(),
-    todaySpendUsd().catch(() => 0),
+    dailySpend().catch(() => null),
     xaiKey() ? settled(listImageModels()) : Promise.resolve({} as { v?: never; e?: string }),
     xaiKey() ? settled(listVideoModels()) : Promise.resolve({} as { v?: never; e?: string }),
     elevenKey() ? settled(listVoices()) : Promise.resolve({} as { v?: never; e?: string }),
@@ -22,7 +23,8 @@ export async function getStatus(): Promise<MediaStatus> {
   return {
     now: new Date().toISOString(),
     storage: storage.ok ? storage : { ok: false, root: GEN_ROOT, reason: storage.reason },
-    todaySpendUsd: spend,
+    todaySpendUsd: spend?.generationsUsd ?? 0,
+    spend,
     xai: xaiKey()
       ? {
           configured: true,

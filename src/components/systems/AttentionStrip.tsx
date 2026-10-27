@@ -1,24 +1,26 @@
 'use client';
-import { AlertOctagon, AlertTriangle, ArrowDownRight, Bot, CheckCircle2, Copy, Play, RefreshCw, Sparkles, X } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, ArrowDownRight, Bot, CheckCircle2, Copy, Monitor, Play, RefreshCw, Sparkles, X } from 'lucide-react';
 import type { AgentHandoff, AttentionItem, FixRunResult, SystemsReport } from '@/types/systems';
 import { cn } from '@/lib/cn';
 import { CopyCommand, type OnCopy } from './CopyCommand';
 
 /** What the fix buttons last produced, shown under the list until dismissed. */
-export type FixOutcome = { kind: 'run'; title: string; result: FixRunResult } | { kind: 'agent'; result: AgentHandoff };
+export type FixOutcome = { kind: 'run'; title: string; result: FixRunResult } | { kind: 'agent'; result: AgentHandoff; item?: AttentionItem };
 
 export interface FixHandlers {
   /** Key of the action in flight: `run:<id>`, `agent:<id>` or `agent:*`. */
   busy: string | null;
   onRun: (a: AttentionItem) => void;
-  /** No item → every attention item in one prompt. */
-  onAgent: (a?: AttentionItem) => void;
+  /** No item → every attention item in one prompt. `onMac` opens Terminal on the Mac (default: only when the page is on the Mac). */
+  onAgent: (a?: AttentionItem, onMac?: boolean) => void;
+  /** Page opened from the phone over the tailnet: the agent prompt is handed back instead of opening Terminal unseen. */
+  remote: boolean;
   outcome: FixOutcome | null;
   onDismiss: () => void;
 }
 
 const pill =
-  'inline-flex h-6 shrink-0 items-center gap-1 rounded-full border px-2 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] transition-colors disabled:opacity-50';
+  'inline-flex h-6 max-md:h-9 max-md:px-3 shrink-0 items-center gap-1 rounded-full border px-2 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] transition-colors disabled:opacity-50';
 
 export function AttentionStrip({ report, onCopy, onJump, fix }: { report: SystemsReport; onCopy: OnCopy; onJump: (target: string) => void; fix: FixHandlers }) {
   const items = report.attention;
@@ -31,7 +33,7 @@ export function AttentionStrip({ report, onCopy, onJump, fix }: { report: System
             All clear — {report.counts.up} of {report.services.length} services up, storage and memory within thresholds.
           </p>
         </div>
-        {fix.outcome && <Outcome o={fix.outcome} onCopy={onCopy} onDismiss={fix.onDismiss} />}
+        {fix.outcome && <Outcome o={fix.outcome} onCopy={onCopy} fix={fix} />}
       </div>
     );
   }
@@ -48,7 +50,7 @@ export function AttentionStrip({ report, onCopy, onJump, fix }: { report: System
           type="button"
           onClick={() => fix.onAgent()}
           disabled={!!fix.busy}
-          title="Open Claude Code in Terminal with every item below in one fix prompt (you approve each step)"
+          title={fix.remote ? 'One fix prompt for every item below, to copy into Claude or start on the Mac' : 'Open Claude Code in Terminal with every item below in one fix prompt (you approve each step)'}
           className={cn(pill, 'ml-auto h-7 border-orange/60 bg-orange/10 px-3 text-orange hover:border-orange hover:bg-orange/20')}
         >
           {fix.busy === 'agent:*' ? <RefreshCw className="h-3 w-3 robo-spin" /> : <Sparkles className="h-3 w-3" />} Fix all with agent
@@ -59,7 +61,7 @@ export function AttentionStrip({ report, onCopy, onJump, fix }: { report: System
           <Item key={a.id} a={a} onCopy={onCopy} onJump={onJump} fix={fix} />
         ))}
       </ul>
-      {fix.outcome && <Outcome o={fix.outcome} onCopy={onCopy} onDismiss={fix.onDismiss} />}
+      {fix.outcome && <Outcome o={fix.outcome} onCopy={onCopy} fix={fix} />}
     </section>
   );
 }
@@ -94,7 +96,7 @@ function Item({ a, onCopy, onJump, fix }: { a: AttentionItem; onCopy: OnCopy; on
             type="button"
             onClick={() => fix.onAgent(a)}
             disabled={!!fix.busy}
-            title="Open Claude Code in Terminal with a fix prompt for this item (you approve each step)"
+            title={fix.remote ? 'Fix prompt for this item, to copy into Claude or start on the Mac' : 'Open Claude Code in Terminal with a fix prompt for this item (you approve each step)'}
             className={cn(pill, 'border-orange/50 bg-orange/[0.08] text-orange hover:border-orange hover:bg-orange/15')}
           >
             {fix.busy === `agent:${a.id}` ? <RefreshCw className="h-3 w-3 robo-spin" /> : <Bot className="h-3 w-3" />} Fix with agent
@@ -109,7 +111,9 @@ function Item({ a, onCopy, onJump, fix }: { a: AttentionItem; onCopy: OnCopy; on
   );
 }
 
-function Outcome({ o, onCopy, onDismiss }: { o: FixOutcome; onCopy: OnCopy; onDismiss: () => void }) {
+function Outcome({ o, onCopy, fix }: { o: FixOutcome; onCopy: OnCopy; fix: FixHandlers }) {
+  const onDismiss = fix.onDismiss;
+  let onMac: (() => void) | null = null;
   let head;
   let body: string;
   let copy: { text: string; what: string; label: string };
@@ -132,22 +136,34 @@ function Outcome({ o, onCopy, onDismiss }: { o: FixOutcome; onCopy: OnCopy; onDi
       <>
         <Bot className="h-3.5 w-3.5 shrink-0 text-orange" />
         <span className="min-w-0 truncate">
-          {r.opened ? 'Claude Code opened in Terminal on your Mac' : r.error ? `Couldn’t open Terminal (${r.error}) — copy the prompt` : 'Fix prompt ready — paste it into Claude'} ·{' '}
+          {r.opened ? 'Claude Code opened in Terminal on your Mac' : r.error ? `Couldn’t open Terminal (${r.error}) — copy the prompt` : fix.remote ? 'Fix prompt ready — copy it into Claude, or start it on the Mac' : 'Fix prompt ready — paste it into Claude'} ·{' '}
           {r.items.length} item{r.items.length === 1 ? '' : 's'}
         </span>
       </>
     );
     body = r.prompt;
     copy = { text: r.prompt, what: 'agent fix prompt', label: 'Copy prompt' };
+    if (!r.opened && fix.remote) onMac = () => fix.onAgent(o.item, true);
   }
   return (
     <div className="flex flex-col gap-2 rounded-[10px] border border-subtle bg-panel px-3 py-2.5">
-      <div className="flex items-center gap-2 font-mono text-[10.5px] text-paper">
+      <div className="flex flex-wrap items-center gap-2 font-mono text-[10.5px] text-paper">
         {head}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          <button type="button" onClick={() => onCopy(copy.text, copy.what)} className={cn(pill, 'border-subtle bg-panel-elevated text-secondary hover:text-paper')}>
+          <button type="button" onClick={() => onCopy(copy.text, copy.what)} className={cn(pill, 'border-orange/50 bg-orange/[0.08] text-orange hover:border-orange')}>
             <Copy className="h-3 w-3" /> {copy.label}
           </button>
+          {onMac && (
+            <button
+              type="button"
+              onClick={onMac}
+              disabled={!!fix.busy}
+              title="Open Claude Code in Terminal on the Mac with this prompt, to approve there later"
+              className={cn(pill, 'border-subtle bg-panel-elevated text-secondary hover:text-paper')}
+            >
+              {fix.busy?.startsWith('agent:') ? <RefreshCw className="h-3 w-3 robo-spin" /> : <Monitor className="h-3 w-3" />} Start on Mac
+            </button>
+          )}
           <button type="button" onClick={onDismiss} aria-label="Dismiss" className="flex h-6 w-6 items-center justify-center rounded-full text-muted hover:text-paper">
             <X className="h-3.5 w-3.5" />
           </button>

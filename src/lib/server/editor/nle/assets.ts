@@ -4,6 +4,7 @@ import path from 'node:path';
 import { describeEditorMedia } from '../media';
 import { probeFile } from '../../studio/index-projects';
 import { NleError, UPLOADS_DIR } from './paths';
+import { isEvicted } from '@/lib/server/icloud';
 
 // Asset ids → files on disk. The browser only ever sends ids: o_/g_/m_ resolve through the Editor media bin
 // (Studio outputs, Generations, music); u_ through the Edit-mode uploads folder. Raw paths are never accepted.
@@ -119,7 +120,7 @@ export async function resolveAsset(id: string): Promise<NleAsset> {
   }
   const st = await fs.stat(item.path).catch(() => null);
   if (!st?.isFile()) throw new NleError(`"${item.name}" is missing on disk (is the drive mounted?).`, 404);
-  if (st.size > 0 && st.blocks === 0) throw new NleError(`"${item.name}" is an iCloud placeholder that is not downloaded.`, 409);
+  if (isEvicted(st)) throw new NleError(`"${item.name}" is an iCloud placeholder that is not downloaded.`, 409);
   const media = item.media as NleMedia;
   // the bin skips probing for some sources (music): probe here so fps / size / audio are known
   const pr = item.width != null || media === 'audio' ? null : await probeFile(item.path, st.size, st.mtimeMs);

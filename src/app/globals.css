@@ -153,4 +153,8 @@ textarea,
   .h-screen.w-screen {
     height: calc(100dvh - var(--mobile-tabbar-space));
   }
+  /* Toast stacks sit above the tab bar and the collapsed UsageRoboBar (46px + 8px gaps) instead of on top of them. */
+  .toast-stack {
+    bottom: calc(var(--mobile-tabbar-space) + 62px);
+  }
 }

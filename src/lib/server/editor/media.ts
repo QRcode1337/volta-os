@@ -11,6 +11,7 @@ import { getProject, loadConfig, projectExists, type Project } from '../studio/c
 import { OUTPUT_SCAN_LIMIT, probeFile, projectOutputs, resolveOutputFile } from '../studio/index-projects';
 import { FEEDBACK_DIR } from './feedback';
 import { StudioError, windsorMounted } from '../studio/storage';
+import { isEvicted } from '@/lib/server/icloud';
 
 // The Editor media bin: every real Studio output (per configured project, incl. the Windsor renders folder) plus the
 // Generations manifest. Paths are resolved by the existing Studio / Generations registries; the browser only gets ids + URLs.
@@ -92,7 +93,7 @@ async function genItem(rec: GenItemRecord): Promise<EditorMediaItem | null> {
     return null; // drive unplugged or file removed
   }
   if (!st.isFile()) return null;
-  const offline = st.size > 0 && st.blocks === 0;
+  const offline = isEvicted(st);
   const probed = offline ? null : await probeFile(rec.file, st.size, st.mtimeMs);
   // ffprobe reports a 0.04s / 25 fps "video" for a still image: stills have no duration or frame rate of their own
   const pr = media === 'image' && probed ? { ...probed, durationSec: null, fps: null } : probed;

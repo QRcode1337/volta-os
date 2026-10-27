@@ -9,7 +9,7 @@ import { gatherFixedSources } from './gather';
 import { claudeBin } from './llm';
 import { buildNotes } from './notes';
 import { rankAndSelect } from './rank';
-import { runResearch, type ResearchOutcome } from './research';
+import { researchTopics, researchWarnings, runResearch, summarizeResearch, type ResearchOutcome } from './research';
 import { writeScript, writeTitle } from './script';
 import { PodcastError, getEpisode, paths, pruneOld, requireStorage, upsertEpisode, writeFileAtomic } from './storage';
 import { assemble, estimate, estimateForWords, ffmpegAvailable, synthesize } from './tts';
@@ -138,13 +138,17 @@ async function run(job: JobState, cfg: PodcastConfig, opts: StartOptions): Promi
     // 2. deep research (claude -p + web tools), cached per day
     begin('research', 'starting web research');
     let research: ResearchOutcome = { candidates: [], results: [], wallMs: 0, callMs: 0, listCostUsd: 0 };
-    if (claudeBin()) {
-      research = await runResearch(cfg, date, { fresh: !!opts.freshResearch }, detail);
-      for (const r of research.results) if (!r.ok) warn(`Research (${r.topic}) failed: ${r.error}`);
-    } else {
-      warn('Research skipped: the claude CLI was not found. Set PODCAST_CLAUDE_BIN.');
-    }
-    end(`${research.candidates.length} stories from ${research.results.filter((r) => r.ok).length}/${research.results.length} topics, ${Math.round(research.wallMs / 1000)}s wall`);
+    const skipped = claudeBin() ? undefined : 'the claude CLI was not found; set PODCAST_CLAUDE_BIN';
+    if (!skipped) research = await runResearch(cfg, date, { fresh: !!opts.freshResearch }, detail);
+    // Degraded research does not stop the run: the episode still ships (the feed has no draft state and the 06:00 run is
+    // unattended), but it is flagged everywhere it is seen: the headline warning, the episode record, show notes and the RSS item.
+    const researchSummary = summarizeResearch(research, researchTopics(cfg).length, skipped);
+    job.research = researchSummary;
+    const rw = researchWarnings(researchSummary, (id) => cfg.topics.find((t) => t.id === id)?.label ?? id);
+    if (rw.headline) job.warnings.unshift(rw.headline);
+    rw.details.forEach(warn);
+    if (skipped && !rw.headline) warn(`Research skipped: ${skipped}.`);
+    end(`${research.candidates.length} stories from ${researchSummary.succeeded}/${researchSummary.attempted} topics${researchSummary.degraded ? ` (DEGRADED: at least ${researchSummary.minOk} expected)` : ''}, ${Math.round(research.wallMs / 1000)}s wall`);
 
     // 3. dedupe + rank + pick 6-10
     begin('rank', 'de-duplicating and ranking');
@@ -188,11 +192,11 @@ async function run(job: JobState, cfg: PodcastConfig, opts: StartOptions): Promi
     };
     const stories: Story[] = ranked.stories;
     const info = [
-      `Research: ${research.results.filter((r) => r.ok).length}/${research.results.length} topics researched on the web (${Math.round(research.wallMs / 1000)} s), merged with ${fixed.counts.notion} Notion, ${fixed.counts.arxiv} arXiv, ${fixed.counts.rss} RSS and ${fixed.counts.feeds} Feeds items; ${ranked.poolSize} unique candidates, ${stories.length} chosen${ranked.jevUsed ? ' with JEV ranking' : ''}.`,
+      `Research: ${researchSummary.succeeded}/${researchSummary.attempted} topics researched on the web (${Math.round(research.wallMs / 1000)} s), merged with ${fixed.counts.notion} Notion, ${fixed.counts.arxiv} arXiv, ${fixed.counts.rss} RSS and ${fixed.counts.feeds} Feeds items; ${ranked.poolSize} unique candidates, ${stories.length} chosen${ranked.jevUsed ? ' with JEV ranking' : ''}.`,
       `Script: ${script.words} words by ${script.backend}. Audio: ${cfg.tts.model}, voices ${cfg.hosts.map((h) => `${h.name}=${h.voice}`).join(', ')}.`,
       `Cost: Gemini TTS $${cost.ttsUsd.toFixed(3)} (${cost.ttsAudioTokens.toLocaleString()} audio tokens). Claude steps ran on the Max plan (list-price equivalent $${cost.claudeListUsd.toFixed(2)}, not billed).`,
     ];
-    const notes = buildNotes({ cfg, date, title: meta.title, description: meta.description, durationSec: audio.durationSec, stories, runnersUp: ranked.runnersUp, notices: job.warnings, info });
+    const notes = buildNotes({ cfg, date, title: meta.title, description: meta.description, durationSec: audio.durationSec, stories, runnersUp: ranked.runnersUp, notices: job.warnings, info, research: researchSummary });
     await fs.mkdir(PODCAST_ROOT, { recursive: true });
     await writeFileAtomic(p.notes, notes);
     await writeFileAtomic(p.script, `${script.raw}\n`);
@@ -219,6 +223,7 @@ async function run(job: JobState, cfg: PodcastConfig, opts: StartOptions): Promi
       researchMs: research.wallMs,
       jevUsed: ranked.jevUsed,
       warnings: [...job.warnings],
+      research: researchSummary,
     };
     await upsertEpisode(episode);
     await fs.rm(p.workDir, { recursive: true, force: true }).catch(() => {});

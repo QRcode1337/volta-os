@@ -2,7 +2,7 @@
 import { Check, Loader2, X } from 'lucide-react';
 import { STAGES, type JobState } from '@/lib/server/podcast/types';
 import { cn } from '@/lib/cn';
-import { fmtSecs } from './podcast-client';
+import { fmtSecs, researchHealth } from './podcast-client';
 
 const LABEL: Record<string, string> = { gather: 'Sources', research: 'Research', rank: 'Rank', script: 'Script', tts: 'Voices', assemble: 'Master', store: 'Save' };
 
@@ -10,10 +10,11 @@ const LABEL: Record<string, string> = { gather: 'Sources', research: 'Research',
 export function JobCard({ job }: { job: JobState }) {
   const byStage = new Map(job.timings.map((t) => [t.stage, t]));
   const running = job.status === 'running';
+  const limited = !running && !!researchHealth(job)?.degraded;
   return (
-    <section className={cn('rounded-lg border bg-panel p-4', job.status === 'failed' ? 'border-[#EF4444]/50' : running ? 'border-orange/50' : 'border-subtle')}>
+    <section className={cn('rounded-lg border bg-panel p-4', job.status === 'failed' ? 'border-[#EF4444]/50' : running ? 'border-orange/50' : limited ? 'border-amber/50' : 'border-subtle')}>
       <div className="flex items-center justify-between">
-        <h2 className="hud-label !text-orange">{running ? 'Generating' : job.status === 'failed' ? 'Last run failed' : 'Last run'}</h2>
+        <h2 className="hud-label !text-orange">{running ? 'Generating' : job.status === 'failed' ? 'Last run failed' : 'Last run'}{limited ? ' · limited research' : ''}</h2>
         <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-muted">
           {job.date} · {job.trigger}
         </span>

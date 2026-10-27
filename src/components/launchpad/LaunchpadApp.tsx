@@ -7,6 +7,7 @@ import { BookOpen, Cloud, FlaskConical, GitBranch, Network, Palette, Pin, Refres
 import type { ObsidianVault } from '@/types/ltm';
 import type { LaunchpadSectionName, NetlifyData, NotionData, ReposData, Section as ApiSection, ServicesData } from '@/lib/server/launchpad/types';
 import { cn } from '@/lib/cn';
+import { isLoopbackUrl, useRemoteClient } from '@/lib/remote-client';
 import { AppTopBar } from '@/components/elements/kit/AppTopBar';
 import { Chip, ErrorNote, GRID, LinkCard, Section, SkeletonGrid, StatusDot, SubHeading, probeLabel, relTime, toneOfProbe, type Tone } from './parts';
 
@@ -64,6 +65,7 @@ function deployTone(state: string | null): Tone {
 }
 
 function ServicesSections({ s }: { s: Loaded<ServicesData> }) {
+  const remote = useRemoteClient();
   if (s.loading && !s.data) return <SkeletonGrid n={6} />;
   if (!s.data) return <ErrorNote>Could not load service status: {s.error}</ErrorNote>;
   const { agents, tailnet } = s.data;
@@ -72,7 +74,16 @@ function ServicesSections({ s }: { s: Loaded<ServicesData> }) {
       {s.error && <div className="mb-3"><ErrorNote tone="warn">Showing the last good status; refresh failed: {s.error}</ErrorNote></div>}
       <div className={GRID}>
         {agents.map((a) => (
-          <LinkCard key={a.id} href={a.href} label={a.label} detail={a.detail} note={a.note} tone={toneOfProbe(a.probe)} statusLabel={probeLabel(a.probe)} />
+          <LinkCard
+            key={a.id}
+            href={remote ? (a.remoteHref ?? a.href) : a.href}
+            label={a.label}
+            detail={remote && a.remoteHref ? a.remoteHref.replace(/^https?:\/\//, '') : a.detail}
+            note={a.note}
+            tone={toneOfProbe(a.probe)}
+            statusLabel={probeLabel(a.probe)}
+            macOnly={remote && !a.remoteHref && isLoopbackUrl(a.href)}
+          />
         ))}
       </div>
 

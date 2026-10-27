@@ -115,7 +115,7 @@ export function useToasts() {
 
 export function ToastStack({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
   return (
-    <div className="pointer-events-none fixed bottom-5 right-5 z-[80] flex w-[340px] flex-col gap-2">
+    <div className="toast-stack pointer-events-none fixed bottom-5 right-5 z-[80] flex w-[340px] max-w-[calc(100vw-2.5rem)] flex-col gap-2">
       {toasts.map((t) => (
         <div
           key={t.id}

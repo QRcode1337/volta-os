@@ -1,4 +1,5 @@
 // Client helpers for VOLTA Briefing: typed fetch + formatters. No server imports.
+import type { EpisodeRecord } from '@/lib/server/podcast/types';
 
 export async function api<T>(url: string, body?: unknown, method?: 'POST' | 'PUT'): Promise<T> {
   const res = await fetch(url, {
@@ -46,3 +47,35 @@ export function fmtDay(date: string): string {
 }
 
 export const fmtSecs = (ms: number | null) => (ms === null ? '…' : ms < 1000 ? `${ms} ms` : ms < 90_000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`);
+
+export interface ResearchHealth {
+  succeeded: number;
+  attempted: number;
+  minOk: number;
+  degraded: boolean;
+  skipped?: string;
+  /** One entry per distinct failure reason, with the topics that hit it. */
+  failures: { error: string; topics: string[] }[];
+  /** Made before research errors were recorded: counts come from the stage note and the real reason was not kept. */
+  legacy: boolean;
+}
+
+/** Research health of an episode. Older episodes have no `research` field, so the counts are read from the research stage note. */
+export function researchHealth(ep: Pick<EpisodeRecord, 'research' | 'timings'>): ResearchHealth | null {
+  const r = ep.research;
+  if (r) {
+    const groups = new Map<string, string[]>();
+    for (const e of r.errors) {
+      const k = e.error.replace(/^claude -p \(research [^)]*\):\s*/, '');
+      groups.set(k, [...(groups.get(k) ?? []), e.topic]);
+    }
+    const failures = [...groups.entries()].map(([error, topics]) => ({ error, topics })).sort((a, b) => b.topics.length - a.topics.length);
+    return { succeeded: r.succeeded, attempted: r.attempted, minOk: r.minOk, degraded: r.degraded, skipped: r.skipped, failures, legacy: false };
+  }
+  const m = ep.timings.find((t) => t.stage === 'research')?.note?.match(/(\d+)\/(\d+) topics/);
+  if (!m) return null;
+  const succeeded = Number(m[1]);
+  const attempted = Number(m[2]);
+  const minOk = Math.ceil(attempted / 2);
+  return { succeeded, attempted, minOk, degraded: attempted > 0 && succeeded < minOk, failures: [], legacy: true };
+}

@@ -7,7 +7,8 @@ import { cn } from '@/lib/cn';
 import { AppTopBar } from '@/components/elements/kit/AppTopBar';
 import { ToastStack, useToasts } from '@/components/elements/kit/toast';
 import { copyText } from '@/components/elements/kit/clipboard';
-import { TaskColumn, TaskDetail } from './TaskParts';
+import { NoteViewer, SOURCE_NOTE, TaskColumn, TaskDetail } from './TaskParts';
+import { useRemoteClient } from '@/lib/remote-client';
 import { ACTION_STATUSES, DEFAULT_STALE_DAYS, isStale, type ActionItem, type ActionStatus, type ActionsResponse } from './types';
 
 const POLL_MS = 60_000;
@@ -124,6 +125,10 @@ export function TasksApp() {
   const staleCount = useMemo(() => items.filter((i) => isStale(i, staleDays)).length, [items, staleDays]);
   const selected = useMemo(() => items.find((i) => i.id === selectedId) ?? null, [items, selectedId]);
   const filtering = query !== '' || agent !== 'all' || section !== 'all' || staleOnly;
+
+  const remote = useRemoteClient();
+  const [notePath, setNotePath] = useState<string | null>(null);
+  const closeNote = useCallback(() => setNotePath(null), []);
 
   const onCopy = useCallback(
     async (text: string, what: string) => {
@@ -245,7 +250,16 @@ export function TasksApp() {
             Clear filters ({filtered.length}/{items.length})
           </button>
         )}
-        {source && (
+        {source && remote && (
+          <button
+            type="button"
+            onClick={() => setNotePath(SOURCE_NOTE)}
+            className="ml-auto inline-flex h-9 items-center gap-2 rounded-full border border-subtle px-3 font-mono text-[10.5px] text-muted hover:border-highlight hover:text-paper"
+          >
+            View actions.md
+          </button>
+        )}
+        {source && !remote && (
           <button
             type="button"
             onClick={() => void onCopy(source.openHint, 'Command copied.')}
@@ -292,7 +306,10 @@ export function TasksApp() {
         ) : null}
       </main>
 
-      {selected && source && <TaskDetail item={selected} source={source} staleDays={staleDays} onClose={() => setSelectedId(null)} onCopy={(t, w) => void onCopy(t, w)} />}
+      {selected && source && (
+        <TaskDetail item={selected} source={source} staleDays={staleDays} onClose={() => setSelectedId(null)} onCopy={(t, w) => void onCopy(t, w)} onOpenNote={setNotePath} remote={remote} />
+      )}
+      {notePath && <NoteViewer rel={notePath} onClose={closeNote} onCopy={(t, w) => void onCopy(t, w)} remote={remote} />}
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </div>
   );

@@ -143,7 +143,7 @@ export interface ToastState {
 export function EditorToast({ toast }: { toast: ToastState | null }) {
   if (!toast) return null;
   return (
-    <div className="pointer-events-none fixed bottom-6 left-1/2 z-[60] -translate-x-1/2">
+    <div className="toast-stack pointer-events-none fixed bottom-6 left-1/2 z-[60] -translate-x-1/2">
       <div
         key={toast.id}
         role="status"

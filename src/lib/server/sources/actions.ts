@@ -15,6 +15,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { cached } from './cache';
 import { redactSecrets } from '../redact';
+import { isEvicted } from '../icloud';
 import type { ActionCounts, ActionItem, ActionLink, ActionsResponse, ActionsSource, ActionStatus } from '@/components/tasks/types';
 import { ACTION_STATUSES } from '@/components/tasks/types';
 
@@ -224,4 +225,47 @@ export async function getActions(opts: { refresh?: boolean; countsOnly?: boolean
   const today = localToday(now);
   const items: ActionItem[] = parsed.items.map((it) => ({ ...it, ageDays: daysSince(it.created ?? it.updated, today) }));
   return { ...base, items };
+}
+
+// ── Wiki notes the board links to, read-only, so the phone can read them instead of copying a Mac `open` command ──
+
+const WIKI_ROOT = path.join(OPENCLAW_ROOT, 'wiki');
+const NOTE_RE = /^wiki\/[\w./-]+\.md$/;
+const NOTE_MAX_BYTES = 512 * 1024;
+
+export class NoteError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+export interface WikiNote {
+  /** Display path, home-relative. */
+  path: string;
+  content: string;
+  mtime: string;
+  truncated: boolean;
+}
+
+/** `rel` is the repo-relative form the board emits (`wiki/main/concepts/x.md`); only files under ~/.openclaw/wiki. */
+export async function readWikiNote(rel: string): Promise<WikiNote> {
+  if (!NOTE_RE.test(rel) || rel.split('/').includes('..')) throw new NoteError(400, 'path must look like wiki/…/note.md');
+  let real: string;
+  try {
+    real = await fs.realpath(path.join(OPENCLAW_ROOT, rel));
+  } catch {
+    throw new NoteError(404, `~/.openclaw/${rel} does not exist`);
+  }
+  if (!real.startsWith((await fs.realpath(WIKI_ROOT)) + path.sep)) throw new NoteError(400, 'path is outside ~/.openclaw/wiki');
+  const st = await fs.stat(real);
+  if (!st.isFile()) throw new NoteError(404, `~/.openclaw/${rel} is not a file`);
+  if (isEvicted(st)) throw new NoteError(409, `~/.openclaw/${rel} is in iCloud only (not downloaded to the Mac)`);
+  const fh = await fs.open(real, 'r');
+  try {
+    const buf = Buffer.alloc(Math.min(st.size, NOTE_MAX_BYTES));
+    await fh.read(buf, 0, buf.length, 0);
+    return { path: `~/.openclaw/${rel}`, content: redactSecrets(buf.toString('utf8')), mtime: st.mtime.toISOString(), truncated: st.size > NOTE_MAX_BYTES };
+  } finally {
+    await fh.close();
+  }
 }

@@ -80,7 +80,7 @@ export function Toaster({ className }: { className?: string }) {
     <div
       aria-live="polite"
       aria-atomic="false"
-      className={cn('pointer-events-none fixed bottom-14 right-4 z-[110] flex w-[min(360px,calc(100vw-2rem))] flex-col gap-2', className)}
+      className={cn('toast-stack pointer-events-none fixed bottom-14 right-4 z-[110] flex w-[min(360px,calc(100vw-2rem))] flex-col gap-2', className)}
     >
       {items.map((t) => {
         const { color, Icon } = TONE[t.tone ?? 'info'];

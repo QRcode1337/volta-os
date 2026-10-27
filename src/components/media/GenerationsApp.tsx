@@ -289,9 +289,7 @@ export function GenerationsApp() {
                     </span>
                   </span>
                 )}
-                <span className="hud-label hidden md:inline">
-                  today <span className="text-green">est. {fmtUsd(status.todaySpendUsd)}</span>
-                </span>
+                <SpendMeter status={status} />
                 {status.storage.ok && (
                   <span className="hud-label hidden xl:inline" title={status.storage.root}>
                     <HardDrive className="mr-1 inline h-3 w-3" />
@@ -418,3 +416,35 @@ export function GenerationsApp() {
 }
 
 export default GenerationsApp;
+
+/** Today's spend vs the server-enforced daily cap. Visible at every width (the phone included). */
+function SpendMeter({ status }: { status: MediaStatus }) {
+  const s = status.spend;
+  if (!s) {
+    return (
+      <span className="hud-label shrink-0 whitespace-nowrap !text-[#EF4444]" title="The spend ledger could not be read; paid generation is refused until it can.">
+        spend unknown
+      </span>
+    );
+  }
+  const pct = s.capUsd > 0 ? Math.min(1, s.totalUsd / s.capUsd) : 1;
+  const tone = pct >= 1 ? 'text-[#EF4444]' : pct >= 0.8 ? 'text-orange' : 'text-green';
+  const bar = pct >= 1 ? 'bg-[#EF4444]' : pct >= 0.8 ? 'bg-orange' : 'bg-green';
+  const title = [
+    `Today (${s.date}): $${s.totalUsd.toFixed(2)} of the $${s.capUsd.toFixed(2)} daily cap, $${s.remainingUsd.toFixed(2)} left.`,
+    `Generations $${s.generationsUsd.toFixed(2)} + podcast TTS $${s.podcastUsd.toFixed(2)} (estimates).`,
+    `Per-request cap $${s.perRequestCapUsd.toFixed(2)}.`,
+  ].join('\n');
+  return (
+    <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap" title={title} aria-label={title}>
+      <span className="hud-label">today</span>
+      <span className="hidden h-1.5 w-14 overflow-hidden rounded-full bg-highlight sm:block">
+        <span className={cn('block h-full', bar)} style={{ width: `${pct * 100}%` }} />
+      </span>
+      <span className="font-mono text-[10.5px]">
+        <span className={tone}>{fmtUsd(s.totalUsd)}</span>
+        <span className="text-muted"> / {Number.isInteger(s.capUsd) ? `$${s.capUsd}` : fmtUsd(s.capUsd)}</span>
+      </span>
+    </span>
+  );
+}

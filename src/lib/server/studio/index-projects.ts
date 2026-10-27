@@ -18,6 +18,7 @@ import {
   type Project,
 } from './config';
 import { COMPOSITIONS_CACHE, RENDERS_ROOT, STUDIO_ROOT, StudioError, isInside, projectRendersDir, windsorMounted } from './storage';
+import { isEvicted } from '@/lib/server/icloud';
 
 // Project index: recent outputs (with ffprobe), compositions, and the id -> path registry behind /api/studio/file.
 // The browser only ever sees ids; paths are resolved here and checked against the project's roots.
@@ -158,7 +159,7 @@ async function walk(dir: string, root: string, depth: number, maxDepth: number, 
       if (!MEDIA_EXT[ext]) continue;
       try {
         const st = await fs.stat(full);
-        out.push({ file: full, root, size: st.size, mtimeMs: st.mtimeMs, ext, offline: st.size > 0 && st.blocks === 0 });
+        out.push({ file: full, root, size: st.size, mtimeMs: st.mtimeMs, ext, offline: isEvicted(st) });
       } catch {
         // vanished mid-scan
       }
@@ -322,7 +323,7 @@ export async function resolveOutputFile(id: string): Promise<ResolvedFile> {
     mime: MIME[ext],
     name: path.basename(real),
     projectId: project.id,
-    offline: st.size > 0 && st.blocks === 0,
+    offline: isEvicted(st),
   };
 }
 

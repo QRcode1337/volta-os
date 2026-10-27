@@ -17,6 +17,8 @@ export interface LinkItem {
   note?: string;
   /** Opens inside VOLTA OS (still in a new tab). */
   internal?: boolean;
+  /** The same loopback service through a `tailscale serve` entry, for opening it from another device. */
+  remoteHref?: string;
   probe: ProbeResult;
 }
 

@@ -3,6 +3,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import type { BrainGraph, BrainGraphNode, RecentNote } from '@/types/sources';
 import { obsidianUrl, registeredVaults, vaultSnapshot, type NoteFileEntry, type VaultSnapshot } from '../vaults';
+import { isEvicted } from '@/lib/server/icloud';
 
 // Notes across the user's registered Obsidian vaults: recent edits + a wikilink graph. Read-only.
 
@@ -217,7 +218,7 @@ export async function readNote(nodeId: string): Promise<{ content: string; path:
   if (!abs.startsWith(path.resolve(vault.path) + path.sep)) return null;
   try {
     const st = await fsp.stat(abs);
-    if (st.size > 0 && st.blocks === 0) {
+    if (isEvicted(st)) {
       return { content: `> This note is stored in iCloud only (not downloaded to this Mac).\n> Open it in Obsidian to download it.`, path: abs };
     }
     if (st.size > MAX_READ_BYTES) {

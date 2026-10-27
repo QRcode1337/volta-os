@@ -2,6 +2,7 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import type { GenItemRecord, GenRequest, ImageRequest, JobState, MediaKind, MediaProvider, Quote, ShotBatchRequest, VideoRequest, VoiceRequest } from '@/types/media';
+import { assertWithinDailyCap } from './budget';
 import { MediaError, errorMessage } from './config';
 import { getQuota, synthesize } from './elevenlabs';
 import { registry, rateLimit } from './quotes';
@@ -39,6 +40,8 @@ export async function startGeneration(quoteId: unknown): Promise<{ jobId: string
   try {
     rateLimit(registry.recentGenerates, 10, 60_000, 'generate');
     await requireStorage();
+    // Re-checked here (not just at quote time): other jobs or the podcast may have spent since the quote.
+    await assertWithinDailyCap(stored.quote.estUsd);
     if (stored.req.kind === 'voice') {
       const quota = await getQuota();
       if ((stored.credits ?? 0) > quota.remaining) throw new MediaError('Not enough ElevenLabs credits left for this request.', 422);

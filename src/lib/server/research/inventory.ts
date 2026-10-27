@@ -2,6 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { isEvicted as isPlaceholder } from '@/lib/server/icloud';
 import type { FileKind, InventoryState } from '@/components/research/types';
 import { loadConfig, type ResearchConfig, type RootCfg } from './config';
 
@@ -85,7 +86,7 @@ const PACKAGE_DOCS = new Set(['.pages', '.numbers', '.key', '.rtfd']);
 
 export const kindOf = (ext: string): FileKind => EXT_KIND[ext] ?? 'other';
 export const entryId = (root: string, rel: string) => createHash('sha1').update(`${root}/${rel}`).digest('hex').slice(0, 12);
-export const isPlaceholder = (st: { size: number; blocks: number }) => st.size > 0 && st.blocks === 0;
+export { isPlaceholder };
 
 async function windsorMounted(): Promise<boolean> {
   try {

@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { cached } from '../sources/cache';
 import { redactSecrets } from '../redact';
 import type { RepoInfo, ReposData } from './types';
+import { isEvictedFile } from '@/lib/server/icloud';
 
 const run = promisify(execFile);
 
@@ -27,15 +28,8 @@ interface Found {
   skip?: string;
 }
 
-/** iCloud-evicted placeholders report a size but no allocated blocks; reading them would trigger a download. */
-async function isDataless(p: string): Promise<boolean> {
-  try {
-    const st = await fs.stat(p);
-    return st.isFile() && st.size > 0 && st.blocks === 0;
-  } catch {
-    return false;
-  }
-}
+/** iCloud-evicted placeholders: reading them would trigger a download. */
+const isDataless = isEvictedFile;
 
 /** Depth-limited walk for `.git` (dir or worktree file). Does not descend into a repo it has found. */
 async function findRepos(root: string, deadline: number): Promise<{ found: Found[]; truncated: boolean }> {

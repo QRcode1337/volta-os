@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { isEvicted as isPlaceholder } from '@/lib/server/icloud';
 import { brctlCommand, cleanTitle } from '@/components/music/format';
 import type { EmbeddedTags, MusicLibrary, MusicRoot, MusicTrack, RootCandidate } from '@/components/music/types';
 import { cached } from '../sources/cache';
@@ -66,7 +67,7 @@ export function bustIndex(): void {
 
 export const trackIdFor = (rootId: string, rel: string) => `m_${createHash('sha1').update(`${rootId}/${rel}`).digest('hex').slice(0, 16)}`;
 export const metaKeyFor = (t: { rootId: string; rel: string }) => `${t.rootId}/${t.rel}`;
-export const isPlaceholder = (st: { size: number; blocks: number }) => st.size > 0 && st.blocks === 0;
+export { isPlaceholder };
 
 async function isInside(p: string, root: string): Promise<boolean> {
   try {

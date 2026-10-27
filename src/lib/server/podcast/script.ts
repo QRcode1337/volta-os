@@ -162,7 +162,9 @@ export async function writeScript(stories: Story[], cfg: PodcastConfig, date: st
   }
   if (parsed.turns.length < 20 || v.words < 900) throw new Error(`Script too thin (${parsed.turns.length} turns, ${v.words} words) from ${r.backend}.`);
   for (const i of v.issues) warnings.push(`Script: ${i}`);
-  if (r.backend !== 'claude-cli') warnings.push(`Script written by the local fallback (${r.model}); quality and grounding may be lower.`);
+  // Only a real fallback is worth a warning: the long-write chain is [OmniRoute, claude -p] (llm.ts ROUTES), so OmniRoute
+  // answering is the normal case. `fallbackFrom` holds the errors of the backends that failed before the one that answered.
+  if (r.fallbackFrom.length) warnings.push(`Script written by the fallback backend (${r.backend}, ${r.model}) because the primary failed: ${clip(r.fallbackFrom.join(' | '), 300)}`);
   return { turns: parsed.turns, words: v.words, raw: parsed.raw, backend: `${r.backend}:${r.model}`, listCostUsd: listCost, warnings };
 }
 

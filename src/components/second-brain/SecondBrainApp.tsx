@@ -643,7 +643,7 @@ export function SecondBrainApp() {
       </main>
 
       {/* ── Toasts ── */}
-      <div className="pointer-events-none fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-2">
+      <div className="toast-stack pointer-events-none fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-2">
         {toasts.map((t) => (
           <div
             key={t.id}

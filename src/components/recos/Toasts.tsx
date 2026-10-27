@@ -15,7 +15,7 @@ const TONE = { success: 'text-green', info: 'text-amber', error: 'text-red-400' 
 
 export function Toasts({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: number) => void }) {
   return (
-    <div className="pointer-events-none fixed bottom-6 left-1/2 z-[70] flex -translate-x-1/2 flex-col items-center gap-2" aria-live="polite">
+    <div className="toast-stack pointer-events-none fixed bottom-6 left-1/2 z-[70] flex -translate-x-1/2 flex-col items-center gap-2" aria-live="polite">
       {toasts.map((t) => {
         const Icon = ICONS[t.tone];
         return (

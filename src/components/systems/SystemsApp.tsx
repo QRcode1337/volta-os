@@ -13,6 +13,7 @@ import { ModelsPanel } from './ModelsPanel';
 import { ServiceCard } from './ServiceCard';
 import { StoragePanel } from './StoragePanel';
 import { formatAgo } from './format';
+import { useRemoteClient } from '@/lib/remote-client';
 
 const API_URL = '/api/systems';
 const FIX_URL = '/api/systems/fix';
@@ -79,9 +80,11 @@ export function SystemsApp() {
     }
   }, [push]);
 
+  const remote = useRemoteClient();
   const fix: FixHandlers = {
     busy,
     outcome,
+    remote,
     onDismiss: () => setOutcome(null),
     onRun: async (a: AttentionItem) => {
       const r = await postFix<FixRunResult>(`run:${a.id}`, { action: 'run', id: a.id });
@@ -90,11 +93,13 @@ export function SystemsApp() {
       push(r.code === 0 ? `Ran ${a.command?.label.toLowerCase() ?? 'command'} — re-probing` : `Command ${r.error ?? `exited ${r.code}`}`, { tone: r.code === 0 ? 'success' : 'error' });
       void reload();
     },
-    onAgent: async (a?: AttentionItem) => {
-      const r = await postFix<AgentHandoff>(a ? `agent:${a.id}` : 'agent:*', { action: 'agent', ...(a ? { ids: [a.id] } : {}), open: true });
+    // From the phone, Terminal would open on a Mac nobody is looking at: hand the prompt back, with "Start on Mac" as the opt-in.
+    onAgent: async (a?: AttentionItem, onMac = !remote) => {
+      const r = await postFix<AgentHandoff>(a ? `agent:${a.id}` : 'agent:*', { action: 'agent', ...(a ? { ids: [a.id] } : {}), open: onMac });
       if (!r) return;
-      setOutcome({ kind: 'agent', result: r });
-      push(r.opened ? 'Claude Code opened in Terminal — approve its steps there' : 'Couldn’t open Terminal — copy the prompt below', { tone: r.opened ? 'success' : 'error', ttl: 6_000 });
+      setOutcome({ kind: 'agent', result: r, item: a });
+      if (!onMac) push('Fix prompt ready — copy it below', { tone: 'success' });
+      else push(r.opened ? 'Claude Code opened in Terminal on the Mac — approve its steps there' : 'Couldn’t open Terminal — copy the prompt below', { tone: r.opened ? 'success' : 'error', ttl: 6_000 });
     },
   };
 

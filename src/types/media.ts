@@ -93,10 +93,26 @@ export interface ElevenQuota {
   resetsAt: string | null;
 }
 
+/** Today's recorded spend (local calendar day) against the server-enforced daily cap. */
+export interface DailySpend {
+  date: string;
+  /** Generations manifest est. USD for files saved today. */
+  generationsUsd: number;
+  /** Podcast Gemini TTS USD for episodes created today (list price from reported usage). */
+  podcastUsd: number;
+  totalUsd: number;
+  capUsd: number;
+  remainingUsd: number;
+  perRequestCapUsd: number;
+}
+
 export interface MediaStatus {
   now: string;
   storage: { ok: true; root: string; freeBytes: number } | { ok: false; root: string; reason: string };
+  /** Generations-only est. spend today (kept for older clients; see `spend` for the capped total). */
   todaySpendUsd: number;
+  /** Null when the spend ledger couldn't be read (paid generation is then refused). */
+  spend: DailySpend | null;
   xai:
     | { configured: false; missing: 'XAI_API_KEY' }
     | {
@@ -128,6 +144,8 @@ export interface Quote {
   /** Voice: credits this request uses and the quota left after it. */
   credits?: number;
   creditsRemainingAfter?: number;
+  /** Today's spend before this request and the daily cap it was checked against. */
+  daily?: { spentUsd: number; capUsd: number };
   warnings: string[];
 }
 

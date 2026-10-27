@@ -4,9 +4,13 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Brain, Home, MoreHorizontal, Search, Server, type LucideIcon } from 'lucide-react';
+import type { SystemsSummary } from '@/types/systems';
 import { cn } from '@/lib/cn';
+import { useSharedJson } from '@/components/dashboard/widgets/shared-json';
+import { BADGE_POLL_MS, SYSTEMS_SUMMARY_URL } from '@/components/systems/SystemsBadge';
 import { MOBILE_MENU_STATE_EVENT, MOBILE_TABBAR_HEIGHT_PX } from './constants';
 import { openMobileMenu } from './MobileMenu';
+import { useIsPhone } from './ResponsiveHome';
 
 // Re-exported for convenience in client code. Server code (layout.tsx) must import it from './constants'.
 export { MOBILE_TABBAR_HEIGHT_PX };
@@ -45,12 +49,35 @@ const ITEM =
   'relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-[3px] font-mono text-[9.5px] font-semibold uppercase tracking-[0.08em] transition-colors focus-visible:outline-none focus-visible:bg-panel-hover';
 
 /**
+ * Red (critical) / amber (warning) dot on the Systems tab icon while /api/systems has attention items. Same shared
+ * store key and 2 min poll as SystemsBadge and the home "Needs you" card, so it adds no request where they're mounted.
+ */
+function SystemsAlertDot() {
+  const { data } = useSharedJson<SystemsSummary>(SYSTEMS_SUMMARY_URL, BADGE_POLL_MS);
+  const n = data?.attention.length ?? 0;
+  if (!n) return null;
+  const crit = data!.attention.filter((a) => a.severity === 'critical').length;
+  return (
+    <span
+      role="img"
+      aria-label={crit ? `${crit} critical system alert${crit === 1 ? '' : 's'}` : `${n} system warning${n === 1 ? '' : 's'}`}
+      className={cn(
+        'absolute -right-1 -top-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-obsidian',
+        crit ? 'animate-pulse bg-[#EF4444]' : 'bg-amber',
+      )}
+    />
+  );
+}
+
+/**
  * Fixed bottom tab bar, phones only (< md). Home / Search / Memory / Systems are links; More opens MobileMenu.
  * Reserve MOBILE_TABBAR_HEIGHT_PX + env(safe-area-inset-bottom) at the bottom of page content below md.
  */
 export function MobileTabBar() {
   const pathname = usePathname() ?? '/';
   const [menuOpen, setMenuOpen] = useState(false);
+  // The bar is mounted on every page at every width (CSS hides it at md+); only poll Systems on an actual phone.
+  const isPhone = useIsPhone();
 
   useEffect(() => {
     const onState = (e: Event) => setMenuOpen(!!(e as CustomEvent<{ open?: boolean }>).detail?.open);
@@ -80,7 +107,10 @@ export function MobileTabBar() {
             className={cn(ITEM, active ? 'text-orange' : 'text-muted active:text-paper')}
           >
             {active && <span aria-hidden className="absolute inset-x-4 top-0 h-[2px] rounded-b-full bg-orange shadow-[0_0_10px_rgba(255,85,0,0.6)]" />}
-            <Icon size={20} strokeWidth={active ? 2.3 : 1.8} aria-hidden />
+            <span className="relative flex">
+              <Icon size={20} strokeWidth={active ? 2.3 : 1.8} aria-hidden />
+              {t.id === 'systems' && isPhone && <SystemsAlertDot />}
+            </span>
             <span>{t.label}</span>
           </Link>
         );

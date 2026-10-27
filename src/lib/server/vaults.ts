@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { LtmSessionNote, ObsidianVault } from '@/types/ltm';
 import { cached } from './sources/cache';
+import { isEvicted } from '@/lib/server/icloud';
 
 // Read-only view of the user's registered Obsidian vaults and the Pieces-Vault LTM session notes.
 
@@ -43,7 +44,7 @@ export async function walkVaultNotes(root: string, dir = '', out: NoteFileEntry[
       const abs = path.join(root, rel);
       try {
         const st = await fs.stat(abs);
-        out.push({ rel, abs, mtimeMs: st.mtimeMs, size: st.size, dataless: st.size > 0 && st.blocks === 0 });
+        out.push({ rel, abs, mtimeMs: st.mtimeMs, size: st.size, dataless: isEvicted(st) });
       } catch {
         // vanished (iCloud eviction etc.)
       }

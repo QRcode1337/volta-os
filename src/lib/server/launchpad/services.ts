@@ -1,7 +1,7 @@
 import 'server-only';
 import { probe } from './probe';
 import { tailnetEntries } from './tailscale';
-import type { LinkItem, ProbeResult, ServicesData } from './types';
+import type { LinkItem, ProbeResult, ServicesData, TailnetEntry } from './types';
 
 // Static catalogue of the user's local services and creative tools. Each probed URL is a constant (or built from a
 // constant + an env port override), never derived from request input.
@@ -58,7 +58,32 @@ async function resolve(defs: Def[], force: boolean): Promise<LinkItem[]> {
   );
 }
 
+const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
+/** A loopback href re-pointed at the root `tailscale serve` entry that proxies the same port, if there is one. */
+function remoteHrefFor(href: string, entries: TailnetEntry[]): string | undefined {
+  let u: URL;
+  try {
+    u = new URL(href);
+  } catch {
+    return undefined;
+  }
+  if (!LOOPBACK.has(u.hostname)) return undefined;
+  const port = u.port || (u.protocol === 'https:' ? '443' : '80');
+  for (const e of entries) {
+    if (e.path !== '/') continue;
+    try {
+      const t = new URL(e.target);
+      if (LOOPBACK.has(t.hostname) && (t.port || (t.protocol === 'https:' ? '443' : '80')) === port) return e.url.replace(/\/$/, '') + u.pathname + u.search;
+    } catch {
+      // static or text handler: not a proxy
+    }
+  }
+  return undefined;
+}
+
 export async function loadServices(force = false): Promise<ServicesData> {
   const [agents, tailnet, creative] = await Promise.all([resolve(AGENTS, force), tailnetEntries(force), resolve(CREATIVE, force)]);
+  for (const a of agents) a.remoteHref = remoteHrefFor(a.href, tailnet.entries);
   return { agents, tailnet, creative, probedAt: new Date().toISOString() };
 }

@@ -11,6 +11,11 @@ export const MIN_FREE_BYTES = 2 * 1024 ** 3;
 
 /** Refuse any single request estimated above this (USD). Override with VOLTA_GEN_MAX_USD. */
 export const MAX_REQUEST_USD = Number(process.env.VOLTA_GEN_MAX_USD) > 0 ? Number(process.env.VOLTA_GEN_MAX_USD) : 5;
+/**
+ * Refuse any paid generation that would push today's recorded spend (local calendar day; Generations manifest +
+ * podcast TTS) over this (USD). Override with VOLTA_GEN_DAILY_USD. Enforced at quote time and again at generate time.
+ */
+export const DAILY_CAP_USD = Number(process.env.VOLTA_GEN_DAILY_USD) > 0 ? Number(process.env.VOLTA_GEN_DAILY_USD) : 20;
 export const QUOTE_TTL_MS = 5 * 60 * 1000;
 
 export const xaiKey = () => (process.env.XAI_API_KEY ?? '').trim();

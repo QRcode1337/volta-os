@@ -61,6 +61,7 @@ export function LinkCard({
   statusLabel,
   badge,
   newTab = true,
+  macOnly = false,
 }: {
   href: string;
   label: string;
@@ -70,7 +71,23 @@ export function LinkCard({
   statusLabel: string;
   badge?: ReactNode;
   newTab?: boolean;
+  /** Loopback-only service viewed from another device: shown, but not a link (it would open the phone's own localhost). */
+  macOnly?: boolean;
 }) {
+  if (macOnly) {
+    return (
+      <div aria-disabled="true" className="block rounded-lg border border-dashed border-subtle bg-panel/60 p-3" title="Only reachable on the Mac: it isn't exposed with tailscale serve">
+        <span className="flex items-center gap-2">
+          <StatusDot tone={tone} label={statusLabel} />
+          <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-secondary">{label}</span>
+          <Chip>Mac only</Chip>
+        </span>
+        {detail && <span className="mt-1.5 block truncate font-mono text-[10.5px] text-muted">{detail}</span>}
+        <span className="mt-1 block text-[11.5px] leading-snug text-muted">Open it on the Mac, or add a tailscale serve entry for this port.</span>
+        <span className="mt-1.5 block font-mono text-[9.5px] uppercase tracking-[0.06em] text-muted">{statusLabel}</span>
+      </div>
+    );
+  }
   return (
     <a href={href} {...(newTab ? { target: '_blank', rel: 'noopener noreferrer' } : { rel: 'noopener noreferrer' })} className={CARD}>
       <span className="flex items-center gap-2">

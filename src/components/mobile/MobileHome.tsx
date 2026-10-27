@@ -3,6 +3,7 @@
 // this tree sets no overflow (that would break the sticky header). Rendered by page.tsx behind `md:hidden`.
 
 import { MobileHeader } from './home/MobileHeader';
+import { NeedsYouCard } from './home/NeedsYouCard';
 import { AwaitingCard } from './home/AwaitingCard';
 import { TodayCard } from './home/TodayCard';
 import { LtmCard } from './home/LtmCard';
@@ -17,6 +18,7 @@ export function MobileHome() {
       <MobileHeader />
       {/* The tab bar's space is reserved by the shell (globals.css shortens .h-screen.w-screen below md). */}
       <main className="flex min-w-0 flex-col gap-3 px-4 pt-3 pb-4">
+        <NeedsYouCard />
         <AwaitingCard />
         <TodayCard />
         <LtmCard />

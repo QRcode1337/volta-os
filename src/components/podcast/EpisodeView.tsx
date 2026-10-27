@@ -5,7 +5,8 @@ import type { EpisodeRecord, PodcastConfig, Story } from '@/lib/server/podcast/t
 import { MarkdownView } from '@/components/notion/MarkdownView';
 import { cn } from '@/lib/cn';
 import { Player } from './Player';
-import { api, fileUrl, fmtBytes, fmtDay, fmtSecs, fmtUsd } from './podcast-client';
+import { ResearchNotice } from './ResearchNotice';
+import { api, fileUrl, fmtBytes, fmtDay, fmtSecs, fmtUsd, researchHealth } from './podcast-client';
 
 type Tab = 'notes' | 'stories' | 'transcript' | 'run';
 const TABS: { id: Tab; label: string }[] = [
@@ -46,10 +47,12 @@ export function EpisodeView({ episode, config, busy, onRegenerate }: { episode: 
   }, [episode.date, episode.createdAt]);
 
   const labelOf = (id: string) => config.topics.find((t) => t.id === id)?.label ?? id;
+  const research = researchHealth(episode);
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
       <Player src={fileUrl(episode.date)} title={episode.title} durationHint={episode.durationSec} />
+      {research?.degraded && <ResearchNotice health={research} labelOf={labelOf} />}
       <div className="flex flex-wrap items-center gap-2">
         <nav className="flex flex-wrap gap-1" aria-label="Episode sections">
           {TABS.map((t) => (
@@ -141,7 +144,10 @@ export function EpisodeView({ episode, config, busy, onRegenerate }: { episode: 
               <dt className="text-muted">Claude steps</dt>
               <dd className="font-mono text-paper">Max plan, not billed <span className="text-muted">(list-price equivalent {fmtUsd(episode.cost.claudeListUsd)})</span></dd>
               <dt className="text-muted">Research</dt>
-              <dd className="font-mono text-paper">{fmtSecs(episode.researchMs)} wall clock</dd>
+              <dd className={cn('font-mono', research?.degraded ? 'text-amber' : 'text-paper')}>
+                {research ? `${research.succeeded}/${research.attempted} topics${research.degraded ? ' (limited)' : ''} · ` : ''}
+                {fmtSecs(episode.researchMs)} wall clock
+              </dd>
               <dt className="text-muted">Ranking</dt>
               <dd className="font-mono text-paper">{episode.jevUsed ? 'JEV + heuristics' : 'heuristics only (JEV unavailable)'}</dd>
               <dt className="text-muted">File</dt>

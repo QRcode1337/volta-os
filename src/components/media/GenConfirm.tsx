@@ -68,6 +68,14 @@ export function GenConfirm({
               <span className="font-mono text-paper">{quote.creditsRemainingAfter.toLocaleString()} credits</span>
             </div>
           )}
+          {quote.daily && quote.estUsd > 0 && (
+            <div className={row}>
+              <span className="text-muted">Today after</span>
+              <span className="font-mono text-paper">
+                {fmtUsd(quote.daily.spentUsd + quote.estUsd)} <span className="text-muted">/ {fmtUsd(quote.daily.capUsd)} daily cap</span>
+              </span>
+            </div>
+          )}
           <div className={row}>
             <span className="text-muted">Saves to</span>
             <span className="break-all text-right font-mono text-[11px] text-paper">{quote.outputDir}/</span>

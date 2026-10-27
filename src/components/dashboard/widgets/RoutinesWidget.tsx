@@ -94,7 +94,7 @@ interface UpcomingRow {
  * job counts toward "failing" via the server's single `health` verdict.
  */
 export function RoutinesWidget({ className }: { className?: string }) {
-  const { data, error, loading, refreshing, reload } = useSharedJson<{ routines: RealRoutine[] }>('/api/routines', POLL_MS);
+  const { data, error, loading, refreshing, reload } = useSharedJson<{ routines: RealRoutine[]; warnings?: string[] }>('/api/routines', POLL_MS);
   const now = useNow(60_000); // null until mounted → no time math during SSR/hydration
   const fitRef = useRef<HTMLDivElement>(null);
   const fit = useElementSize(fitRef);
@@ -305,6 +305,11 @@ export function RoutinesWidget({ className }: { className?: string }) {
       {showNote && (
         <p className="shrink-0 font-mono text-[9px] leading-[14px] text-amber" title={errorText(error)}>
           refresh failed · showing last data
+        </p>
+      )}
+      {!showNote && !!data?.warnings?.length && (
+        <p className="shrink-0 font-mono text-[9px] leading-[14px] text-amber" title={data.warnings.join('\n')}>
+          partial list · OpenClaw jobs missing
         </p>
       )}
     </HudPanel>

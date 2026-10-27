@@ -19,11 +19,14 @@ interface Row {
   content?: string | null;
 }
 
-const g = globalThis as unknown as { __ltmDb?: DatabaseSyncT };
+/** Password managers and credential apps: their captures are never shown, searched or served. */
+export const HIDDEN_APPS = ['Passwords', 'Keychain Access', '1Password', '1Password 7', 'Bitwarden', 'Proton Pass', 'LastPass', 'Dashlane', 'Enpass', 'KeePassXC', 'Strongbox', 'Authenticator'];
+
+const g = globalThis as unknown as { __ltmDbFiltered?: DatabaseSyncT };
 
 /** Loads node:sqlite at runtime so the bundler never tries to resolve it. */
 function openDb(): DatabaseSyncT {
-  if (g.__ltmDb) return g.__ltmDb;
+  if (g.__ltmDbFiltered) return g.__ltmDbFiltered;
   if (!fs.existsSync(LTM_DB_PATH)) {
     throw new LtmUnavailableError(
       fs.existsSync(path.dirname(path.dirname(LTM_DB_PATH)))
@@ -32,8 +35,13 @@ function openDb(): DatabaseSyncT {
     );
   }
   const sqlite = process.getBuiltinModule('node:sqlite') as typeof import('node:sqlite');
-  const db = new sqlite.DatabaseSync(LTM_DB_PATH, { readOnly: true });
-  g.__ltmDb = db;
+  // The ingest job writes in rollback-journal mode; wait briefly for its lock instead of failing at once.
+  const db = new sqlite.DatabaseSync(LTM_DB_PATH, { readOnly: true, timeout: 2000 });
+  // Unqualified `memory` resolves to the temp schema before main, so this view hides captures of credential apps
+  // from every query in this module (lists, search, counts, frames).
+  const hidden = HIDDEN_APPS.map((a) => `'${a.replace(/'/g, "''")}'`).join(',');
+  db.exec(`CREATE TEMP VIEW memory AS SELECT * FROM main.memory WHERE COALESCE(app_name,'') NOT IN (${hidden})`);
+  g.__ltmDbFiltered = db;
   return db;
 }
 
@@ -51,9 +59,10 @@ function withDb<T>(fn: (db: DatabaseSyncT) => T): T {
       } catch {
         // already gone
       }
-      g.__ltmDb = undefined;
+      g.__ltmDbFiltered = undefined;
       throw new LtmUnavailableError('Drive was unmounted');
     }
+    if ((err as { errcode?: number }).errcode === 5) throw new LtmUnavailableError('LTM database is busy (ingest running); try again shortly');
     throw err;
   }
 }

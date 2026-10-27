@@ -1,5 +1,6 @@
 import 'server-only';
 import { execFile } from 'node:child_process';
+import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -22,6 +23,11 @@ const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Se
 const OPENCLAW_TTL_MS = 5 * 60_000;
 const OPENCLAW_MAX_STALE_MS = 30 * 60_000;
 const LAUNCHD_TTL_MS = 60_000; // launchctl + plutil is ~80 ms; keeps running/exit status fresh
+// The dev server's LaunchAgent PATH has no ~/bin, where the OpenClaw wrapper lives, so resolve the binary explicitly.
+const OPENCLAW_BIN =
+  process.env.OPENCLAW_BIN ??
+  [path.join(os.homedir(), 'bin/openclaw'), path.join(os.homedir(), '.local/bin/openclaw'), '/opt/homebrew/bin/openclaw'].find((p) => fs.existsSync(p)) ??
+  'openclaw';
 
 interface OpenClawJob {
   id: string;
@@ -98,7 +104,7 @@ function healthOf(r: Pick<RealRoutine, 'enabled' | 'source' | 'running' | 'sched
 }
 
 async function loadOpenclawJobs(): Promise<Routine[]> {
-  const { stdout } = await run('nice', ['-n', '10', 'openclaw', 'cron', 'list', '--json'], { timeout: 20_000, maxBuffer: 8 * 1024 * 1024 });
+  const { stdout } = await run('nice', ['-n', '10', OPENCLAW_BIN, 'cron', 'list', '--json'], { timeout: 20_000, maxBuffer: 8 * 1024 * 1024 });
   const jobs = (JSON.parse(stdout) as { jobs?: OpenClawJob[] }).jobs ?? [];
   return jobs.map((j) => {
     const isCron = j.schedule.kind === 'cron' && j.schedule.expr;
@@ -132,14 +138,18 @@ async function loadOpenclawJobs(): Promise<Routine[]> {
 }
 
 let openclawFailedAt = 0;
+let openclawError: string | null = null;
 
 /** OpenClaw jobs; [] when the CLI is missing or the gateway is down (retried at most every OPENCLAW_TTL_MS). */
 async function openclawJobs(): Promise<Routine[]> {
   if (Date.now() - openclawFailedAt < OPENCLAW_TTL_MS) return [];
   try {
-    return await cached('routines:openclaw', OPENCLAW_TTL_MS, loadOpenclawJobs, { maxStaleMs: OPENCLAW_MAX_STALE_MS });
+    const jobs = await cached('routines:openclaw', OPENCLAW_TTL_MS, loadOpenclawJobs, { maxStaleMs: OPENCLAW_MAX_STALE_MS });
+    openclawError = null;
+    return jobs;
   } catch (err) {
     openclawFailedAt = Date.now();
+    openclawError = (err as Error).message.split('\n')[0];
     console.error('[volta routines] `openclaw cron list` failed — showing launchd jobs only:', (err as Error).message);
     return [];
   }
@@ -350,6 +360,11 @@ export async function getRoutines(): Promise<RealRoutine[]> {
   ];
   // Next run first; jobs without one (keep-alive services) last.
   return all.sort((x, y) => (x.nextRunAt ?? '9').localeCompare(y.nextRunAt ?? '9'));
+}
+
+/** Why the list may be incomplete (call after getRoutines). Empty when every source answered. */
+export function routinesWarnings(): string[] {
+  return openclawError ? [`OpenClaw cron jobs are missing: \`openclaw cron list\` failed (${openclawError}). Showing LaunchAgents only.`] : [];
 }
 
 export interface LaunchAgentState {

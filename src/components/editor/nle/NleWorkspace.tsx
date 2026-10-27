@@ -405,7 +405,7 @@ export function NleWorkspace({ modeSwitch }: { modeSwitch?: ReactNode }) {
           >
             <FolderOpen size={12} /> <ChevronDown size={11} />
           </button>
-          <span className={cn('ml-1 shrink-0 font-mono text-[10px] max-sm:hidden', savedChip.cls)} title="Projects save to ~/Documents/PROJECTS/ErisMornCloud/volta/editor/projects (and this browser)">
+          <span className={cn('ml-1 shrink-0 font-mono text-[10px] max-sm:hidden', savedChip.cls)} title="Projects save to ~/Library/Application Support/VOLTA/editor/projects (and this browser)">
             ● {savedChip.text}
           </span>
           {menu && (

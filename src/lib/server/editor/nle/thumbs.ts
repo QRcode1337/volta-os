@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { resolveAsset } from './assets';
-import { CACHE_DIR, FFMPEG, NleError, ensureDir, limiter, pruneCache, sha1 } from './paths';
+import { CACHE_DIR, FFMPEG, NleError, ensureDir, limiter, onDisk, pruneCache, sha1 } from './paths';
 
 // Filmstrip sprites for timeline clips: `count` frames tiled horizontally (count x 1), each 90 px tall, frame i sampled
 // at (i + 0.5) * duration / count. One ffmpeg call: one fast-seeked input per frame, hstacked. Cached in cache/.
@@ -33,8 +33,7 @@ export async function getThumbs(id: string, rawCount: number): Promise<{ meta: T
   const file = path.join(CACHE_DIR, `thumbs_${key}.jpg`);
   const meta: ThumbsMeta = { url: `/api/editor/nle/thumbs?id=${encodeURIComponent(a.id)}&count=${count}&img=1`, count, frameW, frameH: FRAME_H, duration };
   const etag = `"${key}"`;
-  const have = await fs.stat(file).catch(() => null);
-  if (have?.isFile() && have.size > 0) return { meta, file, etag };
+  if (await onDisk(file)) return { meta, file, etag };
   let p = inflight.get(key);
   if (!p) {
     p = run(() => buildSprite(a.path, a.media === 'image', count, duration, frameW, file)).then(() => meta);

@@ -83,7 +83,7 @@ const pad2 = (n: number) => String(n).padStart(2, '0');
 const shortName = (name: string) => name.split(/\s+[—–-]\s+/)[0].replace(/^(ai|com)\.[a-z0-9-]+\./i, '');
 
 export function RoutinesAnalyticsView({ query = '' }: Props) {
-  const api = useApi<{ routines: RealRoutine[] }>('/api/routines', 60_000);
+  const api = useApi<{ routines: RealRoutine[]; warnings?: string[] }>('/api/routines', 60_000);
   const now = useNow();
   const [filter, setFilter] = useState<Filter>('all');
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -254,6 +254,11 @@ export function RoutinesAnalyticsView({ query = '' }: Props) {
             </div>
           )}
           {api.error && <div className="mt-2 font-mono text-[10px] text-amber">Refresh failed ({api.error}) — showing the last good data.</div>}
+          {api.data?.warnings?.map((w) => (
+            <div key={w} className="mt-2 font-mono text-[10px] text-amber">
+              {w}
+            </div>
+          ))}
         </section>
 
         {/* ── Weekly matrix + interval jobs ── */}

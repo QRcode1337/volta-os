@@ -1,7 +1,11 @@
 import { localJson } from '@/lib/server/route-helpers';
-import { getRoutines } from '@/lib/server/sources/routines';
+import { getRoutines, routinesWarnings } from '@/lib/server/sources/routines';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export const GET = localJson(async () => ({ routines: await getRoutines() }));
+// `warnings` says when a source failed, so pages never mistake a partial list for the whole one.
+export const GET = localJson(async () => {
+  const routines = await getRoutines();
+  return { routines, warnings: routinesWarnings() };
+});

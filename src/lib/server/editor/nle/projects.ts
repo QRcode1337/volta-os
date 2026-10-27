@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { NleProjectSummary, NleSequence } from '@/types/nle';
 import { sequenceDuration } from '@/lib/nle/model';
-import { NleError, PROJECTS_DIR, TRASH_DIR, ensureDir, requireSpace, writeAtomic } from './paths';
+import { NleError, PROJECTS_DIR, TRASH_DIR, ensureDir, isEvictedError, requireSpace, writeAtomic } from './paths';
 
 // Saved Edit-mode sequences: one JSON file per sequence in projects/. Deletes move to projects/.trash/.
 
@@ -68,6 +68,7 @@ export async function loadProject(id: string): Promise<NleSequence> {
     return JSON.parse(await fs.readFile(fileOf(id), 'utf8')) as NleSequence;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') throw new NleError('Sequence not found.', 404);
+    if (isEvictedError(err)) throw new NleError(`Sequence ${id} is offline in iCloud; download it first (brctl download).`, 409);
     throw new NleError(`Sequence file is unreadable: ${(err as Error).message}`, 500);
   }
 }

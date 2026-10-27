@@ -1,5 +1,6 @@
 // VOLTA Systems — live health of the agent fleet, services, local models, storage and memory (GET /api/systems).
-// Read-only: the server only probes, lists and measures; it never starts, stops or changes anything.
+// GET is read-only. The only actions are user-clicked fixes via POST /api/systems/fix (fix.ts): an attention item's own
+// documented command, or a Claude Code session opened in Terminal with a fix prompt.
 
 /** up = answering normally · degraded = answering but unhealthy (or alive without answering) · down = not answering · unknown = not probed. */
 export type SystemStatus = 'up' | 'degraded' | 'down' | 'unknown';
@@ -83,7 +84,7 @@ export interface ServiceCheck {
   launchAgents: LaunchAgentState[];
   facts: ServiceFact[];
   containers?: ContainerInfo[];
-  /** Documented start/restart command for the user to run — VOLTA never runs it. */
+  /** Documented start/restart command — copyable; VOLTA runs it only when it backs an attention item's Run button. */
   command: CopyCommand | null;
   notes: string[];
   /** Core services raise a critical alert when down; optional ones a warning. */
@@ -204,6 +205,28 @@ export interface AttentionItem {
   /** DOM id of the card/panel to scroll to. */
   target: string;
   command?: CopyCommand;
+}
+
+/** POST /api/systems/fix {action:'run', id}: the attention item's own command, re-derived server-side and run once. */
+export interface FixRunResult {
+  id: string;
+  command: string;
+  /** Exit code; null when it could not start or hit the timeout. */
+  code: number | null;
+  /** Tail of stdout + stderr (redacted). */
+  output: string;
+  error: string | null;
+  durationMs: number;
+}
+
+/** POST /api/systems/fix {action:'agent', ids?, open?}: a Claude Code fix prompt for those items (all when no ids). */
+export interface AgentHandoff {
+  prompt: string;
+  /** Attention titles the prompt covers. */
+  items: string[];
+  /** An interactive `claude` session was opened in Terminal with the prompt. */
+  opened: boolean;
+  error: string | null;
 }
 
 /** GET /api/systems?summary=1 — the light payload behind SystemsBadge (no folder sizes, no per-service detail). */

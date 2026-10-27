@@ -1,13 +1,13 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshCw, Server, TriangleAlert } from 'lucide-react';
-import type { SystemsReport } from '@/types/systems';
+import type { AgentHandoff, AttentionItem, FixRunResult, SystemsReport } from '@/types/systems';
 import { cn } from '@/lib/cn';
 import { AppTopBar } from '@/components/elements/kit/AppTopBar';
 import { ToastStack, useToasts } from '@/components/elements/kit/toast';
 import { copyText } from '@/components/elements/kit/clipboard';
 import { useSharedJson } from '@/components/dashboard/widgets/shared-json';
-import { AttentionStrip } from './AttentionStrip';
+import { AttentionStrip, type FixHandlers, type FixOutcome } from './AttentionStrip';
 import { MemoryGauge } from './MemoryGauge';
 import { ModelsPanel } from './ModelsPanel';
 import { ServiceCard } from './ServiceCard';
@@ -15,6 +15,7 @@ import { StoragePanel } from './StoragePanel';
 import { formatAgo } from './format';
 
 const API_URL = '/api/systems';
+const FIX_URL = '/api/systems/fix';
 const POLL_MS = 30_000;
 /** While folder sizes are still being measured, look again once after this long. */
 const SIZES_RECHECK_MS = 10_000;
@@ -59,6 +60,43 @@ export function SystemsApp() {
     },
     [push],
   );
+
+  // One-click fixes: ids go to the server, which re-derives the command / prompt from a fresh probe.
+  const [busy, setBusy] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<FixOutcome | null>(null);
+  const postFix = useCallback(async <T,>(key: string, body: object): Promise<T | null> => {
+    setBusy(key);
+    try {
+      const res = await fetch(FIX_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      const json = (await res.json()) as T & { error?: string };
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      return json;
+    } catch (err) {
+      push((err as Error).message, { tone: 'error', ttl: 6_000 });
+      return null;
+    } finally {
+      setBusy(null);
+    }
+  }, [push]);
+
+  const fix: FixHandlers = {
+    busy,
+    outcome,
+    onDismiss: () => setOutcome(null),
+    onRun: async (a: AttentionItem) => {
+      const r = await postFix<FixRunResult>(`run:${a.id}`, { action: 'run', id: a.id });
+      if (!r) return;
+      setOutcome({ kind: 'run', title: a.title, result: r });
+      push(r.code === 0 ? `Ran ${a.command?.label.toLowerCase() ?? 'command'} — re-probing` : `Command ${r.error ?? `exited ${r.code}`}`, { tone: r.code === 0 ? 'success' : 'error' });
+      void reload();
+    },
+    onAgent: async (a?: AttentionItem) => {
+      const r = await postFix<AgentHandoff>(a ? `agent:${a.id}` : 'agent:*', { action: 'agent', ...(a ? { ids: [a.id] } : {}), open: true });
+      if (!r) return;
+      setOutcome({ kind: 'agent', result: r });
+      push(r.opened ? 'Claude Code opened in Terminal — approve its steps there' : 'Couldn’t open Terminal — copy the prompt below', { tone: r.opened ? 'success' : 'error', ttl: 6_000 });
+    },
+  };
 
   const jump = useCallback((target: string) => {
     document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -111,7 +149,7 @@ export function SystemsApp() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-obsidian">
-      <AppTopBar accent="Systems" subtitle="fleet health · read-only" center={center} right={right} />
+      <AppTopBar accent="Systems" subtitle="fleet health · one-click fixes" center={center} right={right} />
 
       <main className="hud-scroll min-h-0 flex-1 overflow-y-auto">
         {!data ? (
@@ -137,14 +175,14 @@ export function SystemsApp() {
           </div>
         ) : (
           <div className="mx-auto flex max-w-[1720px] flex-col gap-5 p-4 sm:p-5">
-            <AttentionStrip report={data} onCopy={copy} onJump={jump} />
+            <AttentionStrip report={data} onCopy={copy} onJump={jump} fix={fix} />
 
             <section aria-label="Services" className="flex flex-col gap-2.5">
               <div className="flex items-center gap-2">
                 <Server className="h-3.5 w-3.5 text-orange" />
                 <h2 className="hud-label">Services</h2>
                 <span className="font-mono text-[10px] text-muted">
-                  {data.services.length} probed in {data.durationMs} ms · start/restart commands are copy-only
+                  {data.services.length} probed in {data.durationMs} ms · fix from Needs attention above
                 </span>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">

@@ -148,10 +148,11 @@ function attentionFor(services: ServiceCheck[], volumes: StorageReport['volumes'
   return out.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'critical' ? -1 : 1));
 }
 
-const getCore = () => cached('systems:core', CORE_TTL_MS, loadCore, { maxStaleMs: CORE_MAX_STALE_MS });
+const getCore = (force = false) => cached('systems:core', CORE_TTL_MS, loadCore, { maxStaleMs: CORE_MAX_STALE_MS, force });
 
-export async function getSystemsReport(): Promise<SystemsReport> {
-  const [core, sizes] = await Promise.all([getCore(), peekSizes()]);
+/** `force` re-probes now (after a fix ran) instead of serving the cached cycle. */
+export async function getSystemsReport(force = false): Promise<SystemsReport> {
+  const [core, sizes] = await Promise.all([getCore(force), peekSizes()]);
   const { volumes, ...rest } = core;
   return { ...rest, storage: { volumes, sizes } };
 }

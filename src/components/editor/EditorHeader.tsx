@@ -84,6 +84,8 @@ export interface EditorHeaderProps {
   onCopyAll: () => void;
   onApply: () => void;
   onClear: () => void;
+  /** Review / Edit switch (rendered next to the logo). */
+  modeSwitch?: ReactNode;
 }
 
 export const EditorHeader = memo(function EditorHeader(p: EditorHeaderProps) {
@@ -103,6 +105,7 @@ export const EditorHeader = memo(function EditorHeader(p: EditorHeaderProps) {
           VOLTA <span className="font-doto font-extrabold text-orange">EDITOR</span>
         </span>
       </div>
+      {p.modeSwitch}
       <div className="ml-auto flex min-w-0 shrink items-center gap-2 max-md:overflow-x-auto max-md:py-1 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden">
         <TeachToggle on={p.teachCut} label="/cut" tip={TEACH_TOOLTIPS.cut} onToggle={() => p.onToggleTeach('cut')} />
         <TeachToggle on={p.teachAnimate} label="/animate" tip={TEACH_TOOLTIPS.animate} onToggle={() => p.onToggleTeach('animate')} />

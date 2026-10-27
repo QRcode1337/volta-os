@@ -121,7 +121,7 @@ async function jsonFetch<T>(url: string, body?: unknown, keepalive = false): Pro
   return data;
 }
 
-export function EditorApp() {
+export function EditorApp({ modeSwitch }: { modeSwitch?: React.ReactNode } = {}) {
   const [state, dispatch] = useReducer(editorReducer, undefined, initialState);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [preview, setPreview] = useState(false);
@@ -778,6 +778,7 @@ export function EditorApp() {
         onCopyAll={copyAll}
         onApply={apply}
         onClear={clearTimeline}
+        modeSwitch={modeSwitch}
       />
       <div className="flex min-h-0 flex-1 gap-2 px-2 pt-2 max-md:flex-col max-md:overflow-y-auto max-md:pb-2">
         <div className="h-full min-h-0 w-[24%] min-w-[250px] max-md:h-[70dvh] max-md:w-full max-md:min-w-0 max-md:shrink-0">

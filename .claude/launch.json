@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
+    { "name": "volta-os", "url": "http://127.0.0.1:50000", "port": 50000 },
     { "name": "rubric-os", "runtimeExecutable": "npm", "runtimeArgs": ["run", "start"], "port": 50000 },
     { "name": "rubric-os-dev", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 50000 }
   ]

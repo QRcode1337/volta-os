@@ -245,16 +245,19 @@ export function HudSection() {
 
       <Specimen id="hud-headers" title="Header bars, pills & model badges" description="Micro-app chrome (contract §7), HudPill states and the color-coded ModelEffortBadge." code={HEADER_CODE}>
         <div className="flex flex-col gap-5">
-          <div className="flex h-14 items-center gap-4 rounded-lg border border-subtle bg-panel px-4">
-            <span className="inline-flex h-8 items-center gap-1.5 rounded-full border border-subtle bg-panel-elevated px-3 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary">
-              <ArrowLeft size={14} /> Back to VOLTA OS
+          <div className="flex h-14 min-w-0 items-center gap-2 rounded-lg border border-subtle bg-panel px-3 md:gap-4 md:px-4">
+            <span
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-subtle bg-panel-elevated font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary md:h-8 md:w-auto md:justify-start md:px-3"
+              title="Back to VOLTA OS"
+            >
+              <ArrowLeft size={14} /> <span className="max-md:sr-only">Back to VOLTA OS</span>
             </span>
-            <PixelMascotLogo size={24} />
-            <span className="flex items-baseline gap-2">
+            <PixelMascotLogo size={24} className="max-[400px]:hidden" />
+            <span className="flex items-baseline gap-2 max-md:shrink-0">
               <span className="text-[17px] font-bold text-paper">VOLTA</span>
               <span className="font-doto text-[18px] font-bold text-orange">Editor</span>
             </span>
-            <div className="ml-auto flex items-center gap-1.5">
+            <div className="ml-auto flex items-center gap-1.5 max-md:min-w-0 max-md:overflow-x-auto max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden [&>*]:max-md:shrink-0">
               <ModelEffortBadge model="OPUS" effort="HIGH" size="md" />
               <HudPill label="Preview" onClick={() => notify('HudPill · "Preview"')} />
               <HudPill label="Copy all (7)" primary onClick={() => notify('Primary HudPill · "Copy all (7)"', 'success')} />

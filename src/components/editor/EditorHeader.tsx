@@ -22,7 +22,7 @@ const FILTERS: { value: ClipFilter; label: string }[] = [
 
 function TeachToggle({ on, label, tip, onToggle }: { on: boolean; label: string; tip: string; onToggle: () => void }) {
   return (
-    <div className="group relative">
+    <div className="group relative max-md:shrink-0">
       <button
         type="button"
         role="switch"
@@ -30,7 +30,7 @@ function TeachToggle({ on, label, tip, onToggle }: { on: boolean; label: string;
         title={tip}
         onClick={onToggle}
         className={cn(
-          'flex h-7 items-center gap-2 rounded-full border pl-1 pr-3 font-mono text-[10.5px] font-semibold transition-all',
+          'flex h-9 items-center gap-2 rounded-full border pl-1 pr-3 font-mono text-[10.5px] md:h-7 font-semibold transition-all',
           on ? 'border-green/70 bg-green/10 text-green shadow-[0_0_14px_rgba(34,197,94,0.35)]' : 'border-subtle bg-panel-elevated text-secondary hover:text-paper',
         )}
       >
@@ -59,7 +59,7 @@ function HBtn({ onClick, children, primary, disabled, title }: { onClick: () => 
       disabled={disabled}
       title={title}
       className={cn(
-        'inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 font-mono text-[10.5px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 font-mono md:h-7 text-[10.5px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50',
         primary ? 'border-orange bg-orange text-obsidian hover:brightness-110' : 'border-subtle bg-panel-elevated text-secondary hover:border-highlight hover:text-paper',
       )}
     >
@@ -88,20 +88,25 @@ export interface EditorHeaderProps {
 
 export const EditorHeader = memo(function EditorHeader(p: EditorHeaderProps) {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-subtle bg-panel/80 px-3">
-      <Link href="/" className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-subtle px-2 font-mono text-[10.5px] text-secondary hover:border-highlight hover:text-paper">
+    <header className="flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-2 border-b border-subtle bg-panel/80 px-3 pt-[env(safe-area-inset-top,0px)] md:h-14 md:pt-0">
+      <Link
+        href="/"
+        aria-label="Back to VOLTA OS"
+        title="Back to VOLTA OS"
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center gap-1 rounded-full border border-subtle font-mono text-[10.5px] text-secondary hover:border-highlight hover:text-paper md:h-7 md:w-auto md:justify-start md:rounded-md md:px-2"
+      >
         <ArrowLeft size={13} /> <span className="hidden xl:inline">Back to VOLTA OS</span>
       </Link>
-      <div className="flex shrink-0 items-center gap-2 pl-1">
-        <PixelMascotLogo size={22} />
+      <div className="flex shrink-0 items-center gap-2 pl-1 max-md:pl-0">
+        <PixelMascotLogo size={22} className="max-[400px]:hidden" />
         <span className="text-[17px] font-bold tracking-tight text-paper">
           VOLTA <span className="font-doto font-extrabold text-orange">EDITOR</span>
         </span>
       </div>
-      <div className="ml-auto flex min-w-0 shrink items-center gap-2">
+      <div className="ml-auto flex min-w-0 shrink items-center gap-2 max-md:overflow-x-auto max-md:py-1 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden">
         <TeachToggle on={p.teachCut} label="/cut" tip={TEACH_TOOLTIPS.cut} onToggle={() => p.onToggleTeach('cut')} />
         <TeachToggle on={p.teachAnimate} label="/animate" tip={TEACH_TOOLTIPS.animate} onToggle={() => p.onToggleTeach('animate')} />
-        <label className="flex h-7 items-center gap-1 rounded-md border border-subtle bg-panel-elevated px-2 font-mono text-[10.5px] text-secondary" title="Filter the files on the timeline by review status">
+        <label className="flex h-9 items-center gap-1 rounded-md md:h-7 max-md:shrink-0 border border-subtle bg-panel-elevated px-2 font-mono text-[10.5px] text-secondary" title="Filter the files on the timeline by review status">
           <span className="hidden 2xl:inline">Filter:</span>
           <select value={p.filter} onChange={(e) => p.onFilter(e.target.value as ClipFilter)} className="bg-transparent text-paper outline-none" aria-label="Clip filter">
             {FILTERS.map((f) => (
@@ -124,7 +129,11 @@ export const EditorHeader = memo(function EditorHeader(p: EditorHeaderProps) {
           <Wand2 size={12} className={p.applying ? 'robo-spin' : ''} /> <span className="hidden min-[1620px]:inline">{p.applying ? 'Applying...' : 'Apply & Teach (workspace copy)'}</span>
         </HBtn>
         <HBtn onClick={p.onCopyAll} primary title="Copy every unresolved pin + RL directives as a structured prompt">
-          <ClipboardCopy size={12} /> Copy All Comments ({p.unresolvedCount})
+          <ClipboardCopy size={12} />{' '}
+          {/* relative: anchors the sr-only label inside the scrolling header strip so it can't widen the page. */}
+          <span className="relative">
+            <span className="max-md:sr-only">Copy All Comments </span>({p.unresolvedCount})
+          </span>
         </HBtn>
       </div>
     </header>

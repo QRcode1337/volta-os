@@ -386,21 +386,21 @@ export function SecondBrainApp() {
       `}</style>
 
       {/* ── Top bar ── (fixed-width groups stay compact below 2xl so the search keeps ≥ 220px at 1280) */}
-      <header className="relative z-40 flex h-14 shrink-0 items-center gap-3 border-b border-subtle bg-panel/90 px-3 backdrop-blur">
-        <div className="flex min-w-0 shrink items-center gap-3">
+      <header className="relative z-40 flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-2 border-b border-subtle bg-panel/90 px-3 pt-[env(safe-area-inset-top,0px)] backdrop-blur md:h-14 md:gap-3 md:pt-0">
+        <div className="flex min-w-0 shrink items-center gap-2 md:gap-3">
           <Link
             href="/"
             title="Back to VOLTA OS"
             aria-label="Back to VOLTA OS"
-            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-subtle bg-panel-elevated px-2.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-secondary transition-colors hover:border-highlight hover:text-paper 2xl:px-3"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-subtle bg-panel-elevated font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-secondary transition-colors hover:border-highlight hover:text-paper md:h-8 md:w-auto md:px-2.5 2xl:px-3"
           >
             <ArrowLeft size={13} />
             <span className="hidden 2xl:inline">Back to VOLTA OS</span>
           </Link>
-          <span className="shrink-0">
+          <span className="shrink-0 max-[400px]:hidden">
             <PixelMascotLogo size={24} />
           </span>
-          <h1 className="flex min-w-0 items-baseline gap-1.5 overflow-hidden whitespace-nowrap text-[17px] font-bold tracking-tight">
+          <h1 className="max-md:sr-only flex min-w-0 items-baseline gap-1.5 overflow-hidden whitespace-nowrap text-[17px] font-bold tracking-tight">
             <span className="hidden lg:inline">VOLTA</span>
             <span className="truncate font-doto font-bold text-orange">SECOND BRAIN</span>
           </h1>
@@ -419,8 +419,8 @@ export function SecondBrainApp() {
           </span>
         </div>
 
-        <div className="mx-auto flex min-w-[220px] max-w-[460px] flex-1 justify-center">
-          <div className="relative w-full">
+        <div className="mx-auto flex min-w-[220px] max-w-[460px] flex-1 justify-center max-md:mx-0 max-md:min-w-0">
+          <div className="relative w-full max-md:static">
             <label className="group relative flex h-9 w-full items-center">
               <Search size={14} className="pointer-events-none absolute left-3 text-muted group-focus-within:text-orange" />
               <input
@@ -470,13 +470,13 @@ export function SecondBrainApp() {
                     <X size={12} />
                   </button>
                 ) : (
-                  <kbd className="pointer-events-none mr-1 rounded border border-subtle px-1.5 font-mono text-[10px] text-muted">/</kbd>
+                  <kbd className="pointer-events-none mr-1 rounded max-md:hidden border border-subtle px-1.5 font-mono text-[10px] text-muted">/</kbd>
                 )}
               </span>
             </label>
 
             {showResults && results && (
-              <div className="sb-fade-up absolute left-0 top-full z-50 mt-1.5 w-full min-w-[320px] overflow-hidden rounded-xl border border-subtle bg-panel-elevated/95 shadow-2xl shadow-black/60 backdrop-blur">
+              <div className="sb-fade-up absolute left-0 top-full z-50 mt-1.5 w-full min-w-[320px] overflow-hidden max-md:left-3 max-md:right-3 max-md:w-auto max-md:min-w-0 rounded-xl border border-subtle bg-panel-elevated/95 shadow-2xl shadow-black/60 backdrop-blur">
                 {results.items.length === 0 ? (
                   <div className="px-3 py-3 font-mono text-[11px] text-muted">
                     {results.source === 'none'
@@ -538,7 +538,7 @@ export function SecondBrainApp() {
           </div>
         </div>
 
-        <nav className="flex shrink-0 items-center gap-0.5 rounded-full border border-subtle bg-obsidian p-0.5">
+        <nav className="flex shrink-0 items-center gap-0.5 rounded-full border border-subtle bg-obsidian p-0.5 max-md:max-w-[42vw] max-md:overflow-x-auto max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden">
           {VIEWS.map((v, i) => (
             <button
               key={v.id}
@@ -547,7 +547,7 @@ export function SecondBrainApp() {
               title={`${v.label} (${i + 1})`}
               aria-keyshortcuts={String(i + 1)}
               className={cn(
-                'relative inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 font-mono text-[10.5px] font-semibold tracking-wide transition-colors',
+                'relative inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 font-mono text-[10.5px] md:h-7 font-semibold tracking-wide transition-colors',
                 view === v.id ? 'bg-orange text-obsidian shadow-[0_0_14px_rgba(255,85,0,0.35)]' : 'text-secondary hover:bg-panel-hover hover:text-paper',
               )}
             >

@@ -779,8 +779,8 @@ export function EditorApp() {
         onApply={apply}
         onClear={clearTimeline}
       />
-      <div className="flex min-h-0 flex-1 gap-2 px-2 pt-2">
-        <div className="h-full min-h-0 w-[24%] min-w-[250px]">
+      <div className="flex min-h-0 flex-1 gap-2 px-2 pt-2 max-md:flex-col max-md:overflow-y-auto max-md:pb-2">
+        <div className="h-full min-h-0 w-[24%] min-w-[250px] max-md:h-[70dvh] max-md:w-full max-md:min-w-0 max-md:shrink-0">
           <MediaBin
             clips={state.clips}
             pins={state.pins}
@@ -804,7 +804,7 @@ export function EditorApp() {
             onDismissHandoff={dismissHandoff}
           />
         </div>
-        <div className="h-full min-h-0 w-[50%] min-w-0 flex-1">
+        <div className="h-full min-h-0 w-[50%] min-w-0 flex-1 max-md:h-[60dvh] max-md:w-full max-md:flex-none max-md:shrink-0">
           <SpatialVideoCanvas
             clip={active}
             notes={active ? noteStates[active.id] : null}
@@ -834,7 +834,7 @@ export function EditorApp() {
             onImport={importFile}
           />
         </div>
-        <div className="h-full min-h-0 w-[24%] min-w-[260px]">
+        <div className="h-full min-h-0 w-[24%] min-w-[260px] max-md:h-[70dvh] max-md:w-full max-md:min-w-0 max-md:shrink-0">
           <InspectorPanel
             tab={state.tab}
             group={state.group}

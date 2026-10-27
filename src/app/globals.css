@@ -142,3 +142,15 @@ textarea,
 .robo-spin {
   animation: robo-spin 0.9s linear infinite;
 }
+
+/* Phone (< md): reserve room for the fixed MobileTabBar (56px = MOBILE_TABBAR_HEIGHT_PX + home-indicator inset).
+   Every `h-screen w-screen` element is a full-page app shell whose inner region scrolls, so shortening the shell
+   keeps all scrollable content above the tab bar. Unlayered, so it wins over Tailwind's h-screen utility. */
+@media (max-width: 767.98px) {
+  :root {
+    --mobile-tabbar-space: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+  .h-screen.w-screen {
+    height: calc(100dvh - var(--mobile-tabbar-space));
+  }
+}

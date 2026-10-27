@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ChevronUp, RotateCw, X } from 'lucide-react';
 import type { UsageSummary } from '@/types/sources';
 import type { LimitsProvider, OmniProvider, QuotaPayload, QuotaWindow } from '@/lib/server/quota/types';
@@ -11,6 +11,7 @@ import { formatInt, formatTokens } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { dayLabel } from '@/components/ltm/ltm-client';
 import { PixelMascotLogo } from '@/components/robo-ui';
+import { MOBILE_TABBAR_HEIGHT_PX } from '@/components/mobile/constants';
 
 // Claude Code usage from local transcripts (/api/usage): raw token windows and a "today vs busiest day" meter.
 // Real plan limits come from /api/quota: CodexBar's session / weekly percentages (Claude, Codex, Cursor, Copilot, …)
@@ -664,7 +665,13 @@ export function UsageRoboBar() {
           : 'loading…';
 
   return (
-    <div ref={rootRef} className="fixed bottom-2 left-1/2 z-40 flex w-[min(760px,calc(100vw-24px))] -translate-x-1/2 flex-col">
+    // Below md the phone tab bar (MobileTabBar) owns the bottom edge: sit directly above it (+ iOS safe area) instead
+    // of overlapping it. --usage-bar-bottom only applies below md; from md up the bar is anchored at bottom-2 as before.
+    <div
+      ref={rootRef}
+      style={{ '--usage-bar-bottom': `calc(${MOBILE_TABBAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px) + 8px)` } as CSSProperties}
+      className="fixed bottom-[var(--usage-bar-bottom)] left-1/2 z-40 flex w-[min(760px,calc(100vw-24px))] -translate-x-1/2 flex-col md:bottom-2"
+    >
       {/* ── Usage drawer (expands upward) ── */}
       <div
         id="usage-robo-drawer"
@@ -679,7 +686,7 @@ export function UsageRoboBar() {
           <div className="pb-2">
             <section
               aria-label="Usage, plan limits and providers"
-              className="hud-scroll max-h-[calc(100vh-72px)] overflow-y-auto rounded-[14px] border border-subtle bg-panel/95 p-3 shadow-[0_-12px_40px_rgba(0,0,0,0.55)] backdrop-blur-md"
+              className="hud-scroll max-h-[calc(100dvh-var(--usage-bar-bottom)-62px)] overflow-y-auto md:max-h-[calc(100vh-72px)] rounded-[14px] border border-subtle bg-panel/95 p-3 shadow-[0_-12px_40px_rgba(0,0,0,0.55)] backdrop-blur-md"
             >
               <header className="mb-3 flex items-center gap-2">
                 <PixelMascotLogo size={14} />

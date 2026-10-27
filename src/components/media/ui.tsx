@@ -67,21 +67,25 @@ export function MediaTopBar({
   right?: ReactNode;
 }) {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-subtle bg-panel/80 px-4 backdrop-blur">
+    <header className="flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-2 border-b border-subtle bg-panel/80 px-3 pt-[env(safe-area-inset-top,0px)] backdrop-blur md:h-14 md:gap-4 md:px-4 md:pt-0">
       <Link
         href="/"
-        className="inline-flex h-7 items-center gap-1.5 rounded-full border border-subtle bg-panel-elevated px-3 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary transition-colors hover:border-highlight hover:text-paper"
+        aria-label="Back to VOLTA OS"
+        title="Back to VOLTA OS"
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-subtle bg-panel-elevated font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-secondary transition-colors hover:border-highlight hover:text-paper md:h-7 md:w-auto md:justify-start md:px-3"
       >
-        ← Back to VOLTA OS
+        <span>
+          ← <span className="max-md:sr-only">Back to VOLTA OS</span>
+        </span>
       </Link>
-      <div className="flex items-center gap-2.5">
-        <PixelMascotLogo size={24} />
-        <h1 className="text-[19px] font-bold leading-none tracking-tight text-paper">
+      <div className="flex items-center gap-2.5 max-md:min-w-0 max-md:max-w-[50%] max-md:shrink-0 max-md:gap-2">
+        <PixelMascotLogo size={24} className="max-[400px]:hidden" />
+        <h1 className="text-[19px] font-bold leading-none tracking-tight text-paper max-md:truncate">
           {title} <span className="font-doto text-orange">{accent}</span>
         </h1>
         {subtitle && <span className="hud-label hidden !text-muted md:inline">{subtitle}</span>}
       </div>
-      <div className="ml-auto flex items-center gap-2">{right}</div>
+      <div className="ml-auto flex items-center gap-2 max-md:min-w-0 max-md:shrink max-md:overflow-x-auto max-md:py-1 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden [&>*]:max-md:shrink-0">{right}</div>
     </header>
   );
 }

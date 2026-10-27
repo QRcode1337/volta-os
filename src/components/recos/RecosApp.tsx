@@ -231,21 +231,26 @@ export function RecosApp() {
       <style>{KEYFRAMES}</style>
 
       {/* ── Top bar ── */}
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-subtle bg-panel/80 px-4 backdrop-blur">
-        <Link href="/" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-subtle px-2.5 font-mono text-[11px] text-secondary transition-colors hover:border-highlight hover:text-paper">
-          <ArrowLeft size={13} /> Back to VOLTA OS
+      <header className="flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-2 border-b border-subtle bg-panel/80 px-3 pt-[env(safe-area-inset-top,0px)] backdrop-blur md:h-14 md:gap-3 md:px-4 md:pt-0">
+        <Link
+          href="/"
+          aria-label="Back to VOLTA OS"
+          title="Back to VOLTA OS"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-subtle font-mono text-[11px] text-secondary transition-colors hover:border-highlight hover:text-paper md:h-8 md:w-auto md:justify-start md:rounded-md md:px-2.5"
+        >
+          <ArrowLeft size={13} /> <span className="max-md:sr-only">Back to VOLTA OS</span>
         </Link>
-        <div className="ml-1 flex items-center gap-2">
-          <PixelMascotLogo size={24} />
-          <h1 className="text-[18px] font-bold tracking-tight text-paper">
+        <div className="flex items-center gap-2 md:ml-1 max-md:min-w-0">
+          <PixelMascotLogo size={24} className="max-[400px]:hidden" />
+          <h1 className="text-[18px] font-bold tracking-tight text-paper max-md:truncate">
             VOLTA <span className="font-doto font-bold text-orange">Recos</span>
           </h1>
         </div>
         <span className="hidden rounded-full border border-subtle bg-panel-elevated px-2.5 py-1 font-mono text-[10.5px] text-secondary sm:inline-flex">{weekLabel}</span>
 
-        <div className="ml-auto flex items-center gap-3">
-          <button type="button" onClick={() => load(true)} title="Re-read every signal (Notion pages are cached for 10 minutes)" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-subtle px-2.5 font-mono text-[10.5px] text-secondary transition-colors hover:border-highlight hover:text-paper">
-            <RefreshCw size={12} className={loading ? 'robo-spin' : ''} /> Refresh
+        <div className="ml-auto flex items-center gap-2 max-md:shrink-0 md:gap-3">
+          <button type="button" onClick={() => load(true)} aria-label="Refresh" title="Re-read every signal (Notion pages are cached for 10 minutes)" className="inline-flex h-9 w-9 items-center justify-center gap-1.5 rounded-md border border-subtle font-mono text-[10.5px] text-secondary transition-colors hover:border-highlight hover:text-paper md:h-8 md:w-auto md:justify-start md:px-2.5">
+            <RefreshCw size={12} className={loading ? 'robo-spin' : ''} /> <span className="max-md:sr-only">Refresh</span>
           </button>
           {recos.length > 0 && (
             <div className="hidden items-center gap-2 lg:flex">
@@ -262,12 +267,14 @@ export function RecosApp() {
             type="button"
             onClick={() => setCartOpen(true)}
             className={cn(
-              'relative inline-flex h-9 items-center gap-2 rounded-lg border px-3.5 text-[13px] font-semibold transition-all active:scale-95',
+              'relative inline-flex h-9 items-center gap-2 rounded-lg border px-2.5 text-[13px] sm:px-3.5 font-semibold transition-all active:scale-95',
               cartCount > 0 ? 'border-orange bg-orange text-obsidian hover:brightness-110 hover:shadow-[0_0_20px_rgba(255,85,0,0.4)]' : 'border-subtle bg-panel-elevated text-secondary hover:border-highlight hover:text-paper',
             )}
           >
             <ShoppingCart size={15} strokeWidth={2.5} />
-            Cart ({cartCount})
+            <span>
+              <span className="max-sm:sr-only">Cart </span>({cartCount})
+            </span>
             {cartCount > 0 && (
               <span key={bumpKey} className="recos-bump absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-obsidian bg-paper px-1 font-mono text-[10px] font-bold text-obsidian">
                 {cartCount}

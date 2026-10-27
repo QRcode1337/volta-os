@@ -3,7 +3,7 @@
 // Every spend is two-step: POST /api/media/quote -> confirm dialog -> POST /api/media/generate {quoteId}.
 // Files live on the Windsor drive; the gallery reads the on-disk manifest (GET /api/media/items).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, HardDrive, RefreshCw } from 'lucide-react';
+import { AlertTriangle, HardDrive, RefreshCw, FolderPlus } from 'lucide-react';
 import type { GenItemRecord, JobState, MediaKind, MediaStatus, Quote } from '@/types/media';
 import { cn } from '@/lib/cn';
 import { pushToEditorInbox } from '@/lib/editor-inbox';
@@ -13,6 +13,8 @@ import { copyText } from '@/components/elements/kit/clipboard';
 import { api, fileUrl, fmtBytes, fmtUsd, itemDurationSec } from './gen-client';
 import { GenComposer, buildRequest, initialForm, type GenForm } from './GenComposer';
 import { GenConfirm } from './GenConfirm';
+import { ShotListPanel } from './ShotListPanel';
+import { ExportDialog } from './ExportDialog';
 import { GenCard, Lightbox, PendingCard, type ItemActions } from './GenGallery';
 import { MediaKeyframes } from './ui';
 
@@ -54,6 +56,23 @@ export function GenerationsApp() {
   const [starting, setStarting] = useState(false);
   const [job, setJob] = useState<{ state: JobState; label: string } | null>(null);
   const [lightboxId, setLightboxId] = useState<string | null>(null);
+  const [panel, setPanel] = useState<'single' | 'shots'>('single');
+  const [exporting, setExporting] = useState(false);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem('volta:gen:panel') === 'shots') setPanel('shots');
+    } catch {
+      /* private mode */
+    }
+  }, []);
+  const choosePanel = (p: 'single' | 'shots') => {
+    setPanel(p);
+    try {
+      window.localStorage.setItem('volta:gen:panel', p);
+    } catch {
+      /* private mode */
+    }
+  };
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const labelRef = useRef('');
 
@@ -163,6 +182,22 @@ export function GenerationsApp() {
       setQuoting(false);
     }
   }, [form, quoting, job, push]);
+
+  // Shot list: same step 1, with a prebuilt {kind:'shots'} body.
+  const quoteBody = useCallback(
+    async (body: unknown, summary: string) => {
+      if (quoting || job) return;
+      setQuoting(true);
+      try {
+        setQuote({ q: await api<Quote>('/api/media/quote', body), prompt: summary });
+      } catch (err) {
+        push((err as Error).message, { tone: 'error', ttl: 9000 });
+      } finally {
+        setQuoting(false);
+      }
+    },
+    [quoting, job, push],
+  );
 
   // ── step 2: confirmed -> spend ──
   const confirm = useCallback(async () => {
@@ -293,8 +328,33 @@ export function GenerationsApp() {
             </span>
           </p>
         )}
-        {status && form && (
+        {status && (
+          <div className="mb-2 flex items-center gap-1 font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em]" role="tablist" aria-label="Generation mode">
+            {(['single', 'shots'] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                role="tab"
+                aria-selected={panel === p}
+                onClick={() => choosePanel(p)}
+                className={panel === p ? 'h-7 rounded-md bg-orange px-2.5 text-obsidian' : 'h-7 rounded-md px-2.5 text-secondary hover:text-paper'}
+              >
+                {p === 'single' ? 'Single' : 'Shot list'}
+              </button>
+            ))}
+          </div>
+        )}
+        {status && form && panel === 'single' && (
           <GenComposer ref={promptRef} status={status} form={form} patch={patch} busy={quoting || !!job || starting} onSubmit={() => void requestQuote()} />
+        )}
+        {status && panel === 'shots' && (
+          <ShotListPanel
+            status={status}
+            items={items}
+            busy={quoting || !!job || starting || !status.storage.ok}
+            onQuote={(body, summary) => void quoteBody(body, summary)}
+            onNotice={(text, tone) => push(text, { tone: tone ?? 'success', ttl: tone === 'error' ? 9000 : 4000 })}
+          />
         )}
         {status?.elevenlabs.configured && status.elevenlabs.error && <p className="mt-2 font-mono text-[10.5px] text-amber">ElevenLabs: {status.elevenlabs.error}</p>}
         {status?.xai.configured && status.xai.imageError && <p className="mt-2 font-mono text-[10.5px] text-amber">xAI images: {status.xai.imageError}</p>}
@@ -317,9 +377,18 @@ export function GenerationsApp() {
             </button>
           ))}
         </nav>
-        <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.05em] text-muted">
+        <span className="ml-auto hidden font-mono text-[10px] uppercase tracking-[0.05em] text-muted lg:inline">
           {status?.storage.root ?? '/Volumes/Windsor/VOLTA/generations'} · manifest.jsonl
         </span>
+        <button
+          type="button"
+          onClick={() => setExporting(true)}
+          disabled={!visible.length}
+          className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-full border border-subtle px-3 font-mono text-[10.5px] font-semibold uppercase tracking-[0.05em] text-secondary transition-colors hover:border-orange hover:text-paper disabled:cursor-not-allowed disabled:opacity-40 lg:ml-0"
+          title="Copy everything in this filter into a new folder on Windsor"
+        >
+          <FolderPlus className="h-3.5 w-3.5" /> Export {filter === 'all' ? 'all' : filter} ({visible.length})
+        </button>
       </div>
 
       <main className="hud-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-24 pt-4">
@@ -341,6 +410,7 @@ export function GenerationsApp() {
       </main>
 
       <GenConfirm quote={quote?.q ?? null} prompt={quote?.prompt ?? ''} busy={starting} onCancel={() => setQuote(null)} onConfirm={() => void confirm()} />
+      <ExportDialog open={exporting} filter={filter} items={visible} onClose={() => setExporting(false)} onError={(m) => push(m, { tone: 'error', ttl: 9000 })} />
       <Lightbox item={lightboxItem} onClose={() => setLightboxId(null)} onStep={step} actions={actions} />
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </div>

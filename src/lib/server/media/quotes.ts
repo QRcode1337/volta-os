@@ -1,17 +1,31 @@
 import 'server-only';
 import { randomBytes } from 'node:crypto';
-import type { GenRequest, ImageRequest, Quote, VideoRequest, VoiceRequest } from '@/types/media';
+import type { GenRequest, ImageRequest, MediaProvider, Quote, ShotBatchRequest, ShotItem, VideoModelInfo, VideoRequest, VoiceRequest } from '@/types/media';
 import { MAX_REQUEST_USD, MediaError, QUOTE_TTL_MS } from './config';
 import { elevenUsdPerCredit, round6 } from './pricing';
 import { requireStorage, todayDir } from './storage';
 import { getQuota, listTtsModels, listVoices } from './elevenlabs';
 import { listImageModels, listVideoModels } from './xai';
+import { listOmniModels } from './gemini';
 
 export const IMAGE_ASPECTS = ['auto', '1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9'] as const;
 export const VIDEO_ASPECTS = ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3', '21:9'] as const;
 export const MAX_IMAGE_COUNT = 8;
 export const MAX_VIDEO_COUNT = 3;
 export const MAX_VIDEO_SECONDS = 15;
+export const MAX_SHOTS_PER_BATCH = 12;
+
+/** Every video model a request may name: xAI's live catalog plus Gemini Omni. Provider comes along. */
+async function videoModels(): Promise<(VideoModelInfo & { provider: MediaProvider })[]> {
+  const [x, o] = await Promise.all([
+    listVideoModels().catch(() => [] as VideoModelInfo[]),
+    Promise.resolve(listOmniModels()),
+  ]);
+  return [...x.map((m) => ({ ...m, provider: 'xai' as const })), ...o.map((m) => ({ ...m, provider: 'gemini' as const }))];
+}
+
+/** Seconds the estimate charges for: the request's duration, or the model's maximum when it picks the length. */
+const billedSeconds = (m: VideoModelInfo, duration: number) => m.maxAutoSeconds ?? duration;
 
 interface StoredQuote {
   quote: Quote;
@@ -105,17 +119,17 @@ export async function createQuote(raw: unknown): Promise<Quote> {
     estUsd = unitUsd * count;
     breakdown = `${count} image${count > 1 ? 's' : ''} x $${unitUsd.toFixed(3)}${r.quality ? ` (${r.quality}, ${r.resolution})` : ''}`;
   } else if (b.kind === 'video') {
-    provider = 'xai';
-    const models = await listVideoModels();
+    const models = await videoModels();
     const m = models.find((x) => x.id === b.model);
     if (!m) throw new MediaError(`Unknown video model "${String(b.model)}". Available: ${models.map((x) => x.id).join(', ') || 'none'}.`, 400);
+    provider = m.provider;
     const resolution = typeof b.resolution === 'string' && m.resolutions.includes(b.resolution) ? b.resolution : null;
     if (!resolution) throw new MediaError(`Resolution must be one of ${m.resolutions.join(', ')} for ${m.id}.`, 400);
     const r: VideoRequest = {
       kind: 'video',
       model: m.id,
       prompt: str(b.prompt, 4000, 'Prompt'),
-      aspect: VIDEO_ASPECTS.includes(b.aspect as never) ? (b.aspect as string) : '16:9',
+      aspect: (m.aspects ?? VIDEO_ASPECTS).includes(b.aspect as never) ? (b.aspect as string) : '16:9',
       count: int(b.count, 1, MAX_VIDEO_COUNT, 'Count'),
       duration: int(b.duration, 1, MAX_VIDEO_SECONDS, 'Duration'),
       resolution,
@@ -124,8 +138,53 @@ export async function createQuote(raw: unknown): Promise<Quote> {
     model = m.id;
     count = r.count;
     const perSec = m.perSecondUsd[resolution];
-    estUsd = perSec * r.duration * count;
-    breakdown = `${count} clip${count > 1 ? 's' : ''} x ${r.duration}s x $${perSec.toFixed(2)}/s (${resolution})`;
+    const secs = billedSeconds(m, r.duration);
+    estUsd = perSec * secs * count;
+    breakdown = `${count} clip${count > 1 ? 's' : ''} x ${secs}s${m.maxAutoSeconds ? ' max' : ''} x $${perSec.toFixed(2)}/s (${resolution})`;
+    if (m.maxAutoSeconds) warnings.push(`${m.id} picks the clip length itself (3-${m.maxAutoSeconds}s); the estimate assumes the maximum.`);
+  } else if (b.kind === 'shots') {
+    if (!Array.isArray(b.items) || !b.items.length) throw new MediaError('items must be a non-empty list of shots.', 400);
+    if (b.items.length > MAX_SHOTS_PER_BATCH) throw new MediaError(`At most ${MAX_SHOTS_PER_BATCH} shots per request; generate the rest in another batch.`, 400);
+    const models = await videoModels();
+    const aspect = VIDEO_ASPECTS.includes(b.aspect as never) ? (b.aspect as string) : '16:9';
+    const items: ShotItem[] = [];
+    const lines = new Map<string, { n: number; usd: number }>();
+    for (const [i, raw] of (b.items as unknown[]).entries()) {
+      const it = (raw ?? {}) as Record<string, unknown>;
+      const label = `Shot ${i + 1}`;
+      const m = models.find((x) => x.id === it.model);
+      if (!m) throw new MediaError(`${label}: unknown video model "${String(it.model)}".`, 400);
+      if (m.aspects && !m.aspects.includes(aspect)) throw new MediaError(`${label}: ${m.id} only supports ${m.aspects.join(' / ')} (batch aspect is ${aspect}).`, 400);
+      const resolution = typeof it.resolution === 'string' && m.resolutions.includes(it.resolution) ? it.resolution : null;
+      if (!resolution) throw new MediaError(`${label}: resolution must be one of ${m.resolutions.join(', ')} for ${m.id}.`, 400);
+      const shotId = str(it.shotId, 40, `${label} id`);
+      if (!/^[\w-]+$/.test(shotId)) throw new MediaError(`${label}: bad shot id.`, 400);
+      const item: ShotItem = {
+        shotId,
+        tier: int(it.tier, 0, 4, `${label} tier`),
+        model: m.id,
+        prompt: str(it.prompt, 4000, `${label} prompt`),
+        resolution,
+        duration: int(it.duration, 1, MAX_VIDEO_SECONDS, `${label} duration`),
+      };
+      items.push(item);
+      const usd = m.perSecondUsd[resolution] * billedSeconds(m, item.duration);
+      estUsd += usd;
+      const k = `${m.id} ${resolution}`;
+      const prev = lines.get(k) ?? { n: 0, usd: 0 };
+      lines.set(k, { n: prev.n + 1, usd: prev.usd + usd });
+      if (m.maxAutoSeconds && !warnings.some((w) => w.startsWith(m.id))) {
+        warnings.push(`${m.id} picks the clip length itself (3-${m.maxAutoSeconds}s); its shots are estimated at the maximum.`);
+      }
+    }
+    const r: ShotBatchRequest = { kind: 'shots', aspect, items };
+    req = r;
+    count = items.length;
+    const used = new Set(items.map((x) => models.find((m) => m.id === x.model)!.provider));
+    provider = used.size === 1 ? [...used][0] : 'mixed';
+    const ids = [...new Set(items.map((x) => x.model))];
+    model = ids.length === 1 ? ids[0] : `${ids.length} models`;
+    breakdown = [...lines].map(([k, v]) => `${v.n} x ${k} = $${v.usd.toFixed(2)}`).join('; ');
   } else if (b.kind === 'voice') {
     provider = 'elevenlabs';
     const [models, voices, quota] = await Promise.all([listTtsModels(), listVoices(), getQuota()]);
@@ -151,12 +210,12 @@ export async function createQuote(raw: unknown): Promise<Quote> {
     estUsd = credits * elevenUsdPerCredit(quota.tier);
     breakdown = `${text.length.toLocaleString()} chars x ${m.creditMultiplier} = ${credits.toLocaleString()} credits of ${quota.remaining.toLocaleString()} left (${quota.tier} plan${estUsd === 0 ? ', no overage' : ''})`;
   } else {
-    throw new MediaError('kind must be image, video or voice.', 400);
+    throw new MediaError('kind must be image, video, shots or voice.', 400);
   }
 
   estUsd = round6(estUsd);
   if (estUsd > MAX_REQUEST_USD) {
-    throw new MediaError(`Estimated $${estUsd.toFixed(2)} is over the $${MAX_REQUEST_USD} per-request safety cap. Reduce count, duration or resolution.`, 422);
+    throw new MediaError(`Estimated $${estUsd.toFixed(2)} is over the $${MAX_REQUEST_USD} per-request safety cap. Reduce count, duration or resolution${b.kind === 'shots' ? ', or split the shots into smaller batches' : ''}.`, 422);
   }
   if (storage.freeBytes < 4 * 1024 ** 3) warnings.push(`Windsor has ${(storage.freeBytes / 1024 ** 3).toFixed(1)} GiB free.`);
 
@@ -166,7 +225,7 @@ export async function createQuote(raw: unknown): Promise<Quote> {
   const quote: Quote = {
     quoteId,
     expiresAt: new Date(expiresAt).toISOString(),
-    kind: req.kind,
+    kind: req.kind === 'shots' ? 'video' : req.kind,
     provider,
     model,
     count,

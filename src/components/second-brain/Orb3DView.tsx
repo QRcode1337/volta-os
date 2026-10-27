@@ -436,6 +436,9 @@ export function Orb3DView({ model, matches, selectedId, onSelect, insetLeft = 0,
     const targetGoal = new THREE.Vector3();
     const pointer = { x: -9999, y: -9999, inside: false, down: false, downX: 0, downY: 0, lastX: 0, lastY: 0, moved: 0 };
     let hovered = -1;
+    // Node under the pointer at pointerdown. The frame loop clears `hovered` while the button is held, so a click
+    // (down → up a few frames later) must select what was hovered when it started.
+    let downHit = -1;
     let lastInteraction = 0;
     let lastZoomPct = -1;
     let w = 1;
@@ -473,6 +476,7 @@ export function Orb3DView({ model, matches, selectedId, onSelect, insetLeft = 0,
     el.style.cursor = 'grab';
     const onDown = (e: PointerEvent) => {
       focus.idx = -1;
+      downHit = hovered;
       pointer.down = true;
       pointer.downX = pointer.lastX = e.clientX;
       pointer.downY = pointer.lastY = e.clientY;
@@ -509,7 +513,8 @@ export function Orb3DView({ model, matches, selectedId, onSelect, insetLeft = 0,
       } catch {
         /* already released */
       }
-      if (pointer.moved < 5 && hovered >= 0) onSelectRef.current(nodes[hovered].id);
+      if (pointer.moved < 5 && downHit >= 0) onSelectRef.current(nodes[downHit].id);
+      downHit = -1;
     };
     const onLeave = () => {
       pointer.inside = false;

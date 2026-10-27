@@ -5,6 +5,8 @@ import { redactSecrets } from '../redact';
 export const MOUNT_POINT = '/Volumes/Windsor';
 export const GEN_ROOT = '/Volumes/Windsor/VOLTA/generations';
 export const MANIFEST_PATH = `${GEN_ROOT}/manifest.jsonl`;
+/** "Export" copies land here, one new folder per export (same drive as the generations). */
+export const EXPORT_ROOT = '/Volumes/Windsor/VOLTA/exports';
 export const MIN_FREE_BYTES = 2 * 1024 ** 3;
 
 /** Refuse any single request estimated above this (USD). Override with VOLTA_GEN_MAX_USD. */
@@ -13,6 +15,7 @@ export const QUOTE_TTL_MS = 5 * 60 * 1000;
 
 export const xaiKey = () => (process.env.XAI_API_KEY ?? '').trim();
 export const elevenKey = () => (process.env.ELEVENLABS_API_KEY ?? '').trim();
+export const geminiKey = () => (process.env.GEMINI_API_KEY ?? '').trim();
 
 /** Error with an HTTP status that route handlers pass straight to the client (text is already masked). */
 export class MediaError extends Error {
@@ -28,7 +31,7 @@ export class MediaError extends Error {
 /** Mask the live API keys plus anything the shared secret masker recognises. Use on ALL upstream error text. */
 export function maskSecrets(text: string): string {
   let out = text;
-  for (const k of [xaiKey(), elevenKey()]) if (k.length >= 8) out = out.split(k).join('[key]');
+  for (const k of [xaiKey(), elevenKey(), geminiKey()]) if (k.length >= 8) out = out.split(k).join('[key]');
   return redactSecrets(out);
 }
 

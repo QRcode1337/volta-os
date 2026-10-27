@@ -20,6 +20,15 @@ export function GenConfirm({
   onConfirm: () => void;
 }) {
   const [left, setLeft] = useState(0);
+  // Spend stays disarmed briefly after the dialog opens: a quote can return in a few ms, and the second click of
+  // a double-click (or a repeated tap) on the button that requested it must not land on "Spend" by accident.
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    setArmed(false);
+    if (!quote) return;
+    const t = window.setTimeout(() => setArmed(true), 800);
+    return () => window.clearTimeout(t);
+  }, [quote]);
   useEffect(() => {
     if (!quote) return;
     const tick = () => setLeft(Math.max(0, Math.round((Date.parse(quote.expiresAt) - Date.now()) / 1000)));
@@ -85,7 +94,7 @@ export function GenConfirm({
           <button
             type="button"
             onClick={onConfirm}
-            disabled={busy || expired}
+            disabled={busy || expired || !armed}
             className="h-9 rounded-md border border-orange bg-orange px-4 font-mono text-[11px] font-bold uppercase tracking-[0.08em] text-obsidian hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? 'Starting...' : quote.estUsd === 0 ? 'Generate' : `Spend ~${fmtUsd(quote.estUsd)} & generate`}

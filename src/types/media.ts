@@ -1,10 +1,10 @@
 // Shared (client + server) shapes for the Generations app: real xAI / ElevenLabs generation.
 
 export type MediaKind = 'image' | 'video' | 'voice';
-export type MediaProvider = 'xai' | 'elevenlabs';
+export type MediaProvider = 'xai' | 'elevenlabs' | 'gemini';
 
 /** Validated request body for POST /api/media/quote. */
-export type GenRequest = ImageRequest | VideoRequest | VoiceRequest;
+export type GenRequest = ImageRequest | VideoRequest | VoiceRequest | ShotBatchRequest;
 
 export interface ImageRequest {
   kind: 'image';
@@ -24,6 +24,24 @@ export interface VideoRequest {
   count: number;
   duration: number;
   resolution: string;
+}
+/** One shot of a shot-list batch (POST /api/media/quote {kind: 'shots'}). */
+export interface ShotItem {
+  /** Stable id of the shot in the user's list (see lib/media/shotlist.ts). */
+  shotId: string;
+  /** Hierarchy tier 0-4 the item is generated at. */
+  tier: number;
+  model: string;
+  prompt: string;
+  resolution: string;
+  /** Seconds; ignored by Omni (it picks 3-10 s), which is quoted at its maximum. */
+  duration: number;
+}
+/** Several different video prompts quoted and generated as ONE request (so the per-request cap covers the batch). */
+export interface ShotBatchRequest {
+  kind: 'shots';
+  aspect: string;
+  items: ShotItem[];
 }
 export interface VoiceRequest {
   kind: 'voice';
@@ -47,6 +65,11 @@ export interface VideoModelInfo {
   /** USD per second by output resolution (published pricing; est.). */
   perSecondUsd: Record<string, number>;
   resolutions: string[];
+  provider?: MediaProvider;
+  /** Aspect ratios the model accepts (all of VIDEO_ASPECTS when absent). */
+  aspects?: string[];
+  /** Model chooses the length itself, up to this many seconds (quoted at this maximum). */
+  maxAutoSeconds?: number;
 }
 export interface VoiceInfo {
   id: string;
@@ -84,6 +107,7 @@ export interface MediaStatus {
         imageError?: string;
         videoError?: string;
       };
+  gemini: { configured: false; missing: 'GEMINI_API_KEY' } | { configured: true; videoModels: VideoModelInfo[] };
   elevenlabs:
     | { configured: false; missing: 'ELEVENLABS_API_KEY' }
     | { configured: true; voices: VoiceInfo[]; models: VoiceModelInfo[]; quota: ElevenQuota | null; error?: string };
@@ -93,7 +117,8 @@ export interface Quote {
   quoteId: string;
   expiresAt: string;
   kind: MediaKind;
-  provider: MediaProvider;
+  /** 'mixed' for a shot batch that spans providers. */
+  provider: MediaProvider | 'mixed';
   model: string;
   count: number;
   estUsd: number;

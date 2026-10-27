@@ -1,6 +1,7 @@
 import 'server-only';
 import type { MediaStatus } from '@/types/media';
-import { GEN_ROOT, elevenKey, errorMessage, xaiKey } from './config';
+import { GEN_ROOT, elevenKey, errorMessage, geminiKey, xaiKey } from './config';
+import { listOmniModels } from './gemini';
 import { getQuota, listTtsModels, listVoices } from './elevenlabs';
 import { checkStorage, todaySpendUsd } from './storage';
 import { listImageModels, listVideoModels } from './xai';
@@ -31,6 +32,7 @@ export async function getStatus(): Promise<MediaStatus> {
           videoError: vids.e ?? (vids.v && vids.v.length === 0 ? 'xAI lists no video models this key can use.' : undefined),
         }
       : { configured: false, missing: 'XAI_API_KEY' },
+    gemini: geminiKey() ? { configured: true, videoModels: listOmniModels() } : { configured: false, missing: 'GEMINI_API_KEY' },
     elevenlabs: elevenKey()
       ? { configured: true, voices: voices.v ?? [], models: models.v ?? [], quota: quota.v ?? null, error: voices.e ?? models.e ?? quota.e }
       : { configured: false, missing: 'ELEVENLABS_API_KEY' },

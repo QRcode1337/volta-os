@@ -15,6 +15,17 @@ export const VIDEO_PRICES: Record<string, Record<string, number>> = {
 };
 
 /**
+ * Gemini Omni Flash video, USD per output second (ai.google.dev/gemini-api/docs/pricing: $17.50 / 1M output video
+ * tokens, "an effective price of approximately $0.10 per second" at 720p). Google publishes no 360p/1080p/4K rate,
+ * so only 720p is offered. Omni picks the clip length itself (3-10 s), so quotes assume the 10 s maximum.
+ * Veo 3.1 is not listed: Google shut its Gemini API preview down on 2026-10-22 (Cloud/Vertex only now).
+ */
+export const OMNI_MODEL = 'gemini-omni-1.1-flash';
+export const OMNI_PRICES: Record<string, number> = { '720p': 0.1 };
+export const OMNI_MAX_SECONDS = 10;
+export const OMNI_ASPECTS = ['16:9', '9:16'] as const;
+
+/**
  * ElevenLabs plan price / monthly credits, used to turn credits into dollars (est.). The free plan has a hard
  * quota and no overage, so its marginal cost is $0; paid tiers are priced at their included-credit rate.
  */

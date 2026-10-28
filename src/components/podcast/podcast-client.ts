@@ -21,7 +21,9 @@ export async function api<T>(url: string, body?: unknown, method?: 'POST' | 'PUT
   return j as T;
 }
 
-export const fileUrl = (date: string) => `/api/podcast/file?date=${encodeURIComponent(date)}`;
+export const fileUrl = (date: string, variant?: string) => `/api/podcast/file?date=${encodeURIComponent(date)}${variant ? `&src=${variant}` : ''}`;
+/** Unique list key: a muse.ai and a legacy Gemini episode can share a date. */
+export const epKey = (e: { date: string; variant?: string }) => (e.variant ? `${e.date}:${e.variant}` : e.date);
 
 export function fmtDuration(sec: number): string {
   const s = Math.max(0, Math.round(sec));

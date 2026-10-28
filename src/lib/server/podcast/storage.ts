@@ -50,14 +50,18 @@ export async function readManifest(): Promise<Manifest> {
 /** Newest first. */
 export async function listEpisodes(): Promise<EpisodeRecord[]> {
   const ext = loadConfig().externalFeed?.url;
-  if (ext) return museEpisodes(ext);
+  if (ext) {
+    const legacy = (await readManifest()).episodes.map((e): EpisodeRecord => ({ ...e, variant: 'gemini' }));
+    return [...(await museEpisodes(ext)), ...legacy.sort((a, b) => b.date.localeCompare(a.date))];
+  }
   return (await readManifest()).episodes.sort((a, b) => b.date.localeCompare(a.date));
 }
 
-export async function getEpisode(date: string): Promise<EpisodeRecord | null> {
+export async function getEpisode(date: string, variant?: 'gemini'): Promise<EpisodeRecord | null> {
   if (!isDate(date)) return null;
   const ext = loadConfig().externalFeed?.url;
-  if (ext) return (await museEpisodes(ext)).find((e) => e.date === date) ?? null;
+  if (ext && !variant) return (await museEpisodes(ext)).find((e) => e.date === date) ?? null;
+  if (ext) return (await readManifest()).episodes.find((e) => e.date === date) ?? null;
   return (await readManifest()).episodes.find((e) => e.date === date) ?? null;
 }
 

@@ -151,6 +151,8 @@ export interface EpisodeRecord {
   research?: ResearchSummary;
   /** Set for episodes hosted by the external feed: play this URL; there is no local file, script or notes. */
   audioUrl?: string;
+  /** 'gemini' = an episode generated locally before the switch to muse.ai (kept as a downloadable extra, same dates can overlap). */
+  variant?: 'gemini';
 }
 
 export interface Manifest {

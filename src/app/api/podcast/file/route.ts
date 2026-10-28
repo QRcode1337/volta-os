@@ -38,14 +38,16 @@ async function serve(req: Request) {
   if (denied) return denied;
   const date = new URL(req.url).searchParams.get('date') ?? '';
   if (!isDate(date)) return NextResponse.json({ error: 'Bad date' }, { status: 400 });
-  const ep = await getEpisode(date).catch(() => null);
+  const variant = new URL(req.url).searchParams.get('src') === 'gemini' ? 'gemini' : undefined;
+  const ep = await getEpisode(date, variant).catch(() => null);
   if (!ep) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (ep.audioUrl) return proxyRemote(req, ep.audioUrl, `${date}.mp3`);
   if (!(await fs.promises.stat(ep.file).catch(() => null))) {
     return NextResponse.json({ error: 'Audio file is not available (is the Windsor drive mounted?)' }, { status: 503 });
   }
+  const dl = new URL(req.url).searchParams.get('download') === '1';
   try {
-    return await streamFile(req, ep.file, { mime: 'audio/mpeg', name: `${date}.mp3`, cache: 'private, max-age=3600', headers: PRIVATE_HEADERS });
+    return await streamFile(req, ep.file, { mime: 'audio/mpeg', name: `${date}${variant ? '-gemini' : ''}.mp3`, cache: 'private, max-age=3600', headers: dl ? { ...PRIVATE_HEADERS, 'Content-Disposition': `attachment; filename="${date}${variant ? '-gemini' : ''}.mp3"` } : PRIVATE_HEADERS });
   } catch (err) {
     return errorResponse(err, 'podcast file');
   }

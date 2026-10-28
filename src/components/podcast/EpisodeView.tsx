@@ -38,24 +38,25 @@ export function EpisodeView({ episode, config, busy, external, onRegenerate }: {
     let stop = false;
     setDetail(null);
     setErr(null);
-    api<Detail>(`/api/podcast/episode?date=${episode.date}`)
+    api<Detail>(`/api/podcast/episode?date=${episode.date}${episode.variant ? `&src=${episode.variant}` : ''}`)
       .then((d) => !stop && setDetail(d))
       .catch((e: Error) => !stop && setErr(e.message));
     return () => {
       stop = true;
     };
-  }, [episode.date, episode.createdAt]);
+  }, [episode.date, episode.variant, episode.createdAt]);
 
   const labelOf = (id: string) => config.topics.find((t) => t.id === id)?.label ?? id;
   const research = researchHealth(episode);
+  const lite = external && !!episode.audioUrl; // muse.ai episodes have only show notes
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
-      <Player src={fileUrl(episode.date)} title={episode.title} durationHint={episode.durationSec} />
+      <Player src={fileUrl(episode.date, episode.variant)} title={episode.title} durationHint={episode.durationSec} />
       {research?.degraded && <ResearchNotice health={research} labelOf={labelOf} />}
       <div className="flex flex-wrap items-center gap-2">
         <nav className="flex flex-wrap gap-1" aria-label="Episode sections">
-          {(external ? TABS.slice(0, 1) : TABS).map((t) => (
+          {(lite ? TABS.slice(0, 1) : TABS).map((t) => (
             <button
               key={t.id}
               type="button"
@@ -67,9 +68,9 @@ export function EpisodeView({ episode, config, busy, external, onRegenerate }: {
           ))}
         </nav>
         <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.05em] text-muted">
-          {fmtDay(episode.date)} · {Math.round(episode.durationSec / 60)} min · {fmtBytes(episode.bytes)}{external ? '' : ` · ${episode.stories.length} stories`}
+          {fmtDay(episode.date)} · {Math.round(episode.durationSec / 60)} min · {fmtBytes(episode.bytes)}{lite ? '' : ` · ${episode.stories.length} stories`}
         </span>
-        {!external && <button
+        {!external && !episode.variant && <button
           type="button"
           disabled={busy}
           onClick={() => onRegenerate(episode.date)}

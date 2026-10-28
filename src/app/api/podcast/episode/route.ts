@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 export const GET = route(async ({ url }) => {
   const date = url.searchParams.get('date') ?? '';
   if (!isDate(date)) throw new HttpError('`date` must be YYYY-MM-DD.', 400);
-  const episode = await getEpisode(date);
+  const episode = await getEpisode(date, url.searchParams.get('src') === 'gemini' ? 'gemini' : undefined);
   if (!episode) throw new HttpError(`No episode for ${date}.`, 404);
   if (episode.audioUrl) return { episode, notes: episode.description, script: '' };
   const [notes, script] = await Promise.all([readText(episode.notesFile), readText(episode.scriptFile)]);

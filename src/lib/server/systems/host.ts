@@ -4,7 +4,8 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import type { LaunchAgentHealth, LaunchAgentState, ServiceProcess } from '@/types/systems';
 import { cached } from '@/lib/server/sources/cache';
-import { BIN, HOME, redact, run, tilde } from './run';
+import { redactSecrets } from '../redact';
+import { BIN, HOME, run, tilde } from './run';
 
 // Host-level facts shared by every probe: who listens on which port (lsof), process uptime/RSS (ps), LaunchAgent
 // state (launchctl list) and a few plist facts. All read-only and cheap (~20–80 ms each).
@@ -63,7 +64,7 @@ function etimeSec(s: string): number | null {
  */
 function processName(comm: string): string {
   const head = comm.trim().split(/\s+(?=-)/)[0];
-  return redact((head.startsWith('/') ? path.basename(head) : head).split(HOME).join('~'), 80) || '?';
+  return redactSecrets((head.startsWith('/') ? path.basename(head) : head).split(HOME).join('~')).slice(0, 80) || '?';
 }
 
 /** Uptime, RSS and executable name for the given PIDs (one `ps` call; dead PIDs are simply absent). */

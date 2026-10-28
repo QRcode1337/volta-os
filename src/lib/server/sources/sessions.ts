@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { redactSecrets } from '@/lib/server/redact';
+import { redactDeep } from '@/lib/server/redact';
 import type {
   ClaudeMemObservation,
   ClaudeMemSummary,
@@ -53,51 +53,6 @@ const TOOL_INPUT_MAX = 1_500;
 const TOOL_RESULT_MAX = 2_400;
 const META_MAX = 700;
 const TRANSCRIPT_LRU = 3;
-
-// ───────────────────────── Secret masking ─────────────────────────
-// redactSecrets (shared with the Honcho proxy) handles vendor key prefixes, `name=value` secrets, Bearer tokens,
-// PEM blocks and random-looking 32+ char runs. Transcripts additionally carry shell commands and HTTP calls, so
-// Authorization headers, *_KEY / *_TOKEN env assignments, --password style flags and URL credentials are masked too.
-
-const MASK = '••••';
-function maskToken(t: string): string {
-  const keep = t.length >= 24 ? 6 : t.length >= 16 ? 3 : 0;
-  return `${t.slice(0, keep)}${MASK}(${t.length})`;
-}
-const AUTH_HEADER_RE = /(\bauthorization["']?\s*[:=]\s*["']?)(?:(basic|bearer|token|digest|apikey)\s+)?([A-Za-z0-9._~+/=:-]{8,})/gi;
-const ENV_SECRET_RE =
-  /\b([A-Z][A-Z0-9_]*(?:_KEY|_KEYS|_TOKEN|_SECRET|_PASS|_PASSWORD|_PWD|_AUTH|_CREDENTIALS?|KEY_[A-Z0-9]{1,4}))(\s*[=:]\s*["']?)([^\s"'`,;)]{8,})/g;
-const FLAG_SECRET_RE = /(--(?:password|passwd|pass|token|api[-_]?key|secret|auth[-_]token|access[-_]token|client[-_]secret)(?:=|\s+)["']?)([^\s"'`]{6,})/gi;
-const URL_CRED_RE = /(\b[a-z][a-z0-9+.-]{1,20}:\/\/[^\s:@/"'`]{1,64}:)([^\s@/"'`]{3,})(@)/gi;
-
-export function maskSecrets(text: string): string {
-  if (!text || text.length < 8) return text;
-  const out = text
-    .replace(AUTH_HEADER_RE, (m, pre: string, scheme: string | undefined, tok: string) =>
-      tok.includes(MASK) || tok.startsWith('$') ? m : `${pre}${scheme ? `${scheme} ` : ''}${maskToken(tok)}`,
-    )
-    .replace(ENV_SECRET_RE, (m, name: string, sep: string, value: string) =>
-      value.includes(MASK) || value.startsWith('$') || /^[a-z]+$/i.test(value) ? m : `${name}${sep}${maskToken(value)}`,
-    )
-    .replace(FLAG_SECRET_RE, (m, pre: string, value: string) => (value.includes(MASK) || value.startsWith('$') ? m : `${pre}${maskToken(value)}`))
-    .replace(URL_CRED_RE, (m, pre: string, pass: string, at: string) => (pass.includes(MASK) ? m : `${pre}${maskToken(pass)}${at}`));
-  return redactSecrets(out);
-}
-
-/** Keys whose values are identifiers used for navigation (never masked). */
-const ID_KEYS = new Set(['id', 'sessionId', 'projectId', 'agentId', 'workflow']);
-
-/** Mask every string in a JSON-able payload (ids excepted). */
-export function maskDeep<T>(v: T, key?: string): T {
-  if (typeof v === 'string') return (key && ID_KEYS.has(key) ? v : maskSecrets(v)) as T;
-  if (Array.isArray(v)) return v.map((x) => maskDeep(x, key)) as T;
-  if (v && typeof v === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const [k, x] of Object.entries(v as Record<string, unknown>)) out[k] = maskDeep(x, k);
-    return out as T;
-  }
-  return v;
-}
 
 // ───────────────────────── Paths ─────────────────────────
 
@@ -1051,7 +1006,7 @@ export async function listSessions(query: SessionListQuery): Promise<ClaudeSessi
   else if (query.sort === 'tools') list = [...list].sort((a, b) => b.summary.toolCalls - a.summary.toolCalls);
   const limit = Math.min(Math.max(query.limit ?? 100, 1), 200);
   const offset = Math.max(query.offset ?? 0, 0);
-  return maskDeep({
+  return redactDeep({
     progress: progressSnapshot(),
     projects: agg.projects,
     sessions: list.slice(offset, offset + limit).map((a) => a.summary),
@@ -1166,7 +1121,7 @@ export async function getSessionDetail(id: string): Promise<ClaudeSessionDetail 
     lastPrompt: g.main?.lastPrompt ?? null,
     indexed: located.indexed,
   };
-  return maskDeep(detail);
+  return redactDeep(detail);
 }
 
 // ───────────────────────── Transcript pages ─────────────────────────
@@ -1436,7 +1391,7 @@ export async function getTranscriptPage(id: string, opts: { agentId?: string | n
   let offset = opts.offset ?? 0;
   if (offset < 0) offset = Math.max(0, total - limit); // negative = last page
   offset = Math.min(offset, Math.max(0, total - 1));
-  return maskDeep({
+  return redactDeep({
     sessionId: id,
     agentId,
     offset,
@@ -1505,7 +1460,7 @@ export async function getSessionMemory(id: string): Promise<SessionMemory> {
         nextSteps: str(s.next_steps) ? truncate(String(s.next_steps), 600).text : null,
         createdAt: str(s.created_at),
       }));
-    value = maskDeep({ online: true, url: CLAUDE_MEM_URL, observations, hasMore: !!obs.hasMore, summaries });
+    value = redactDeep({ online: true, url: CLAUDE_MEM_URL, observations, hasMore: !!obs.hasMore, summaries });
   } catch (err) {
     value = { online: false, url: CLAUDE_MEM_URL, observations: [], hasMore: false, summaries: [], error: (err as Error).message };
   }

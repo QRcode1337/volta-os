@@ -1,10 +1,11 @@
 import 'server-only';
+import { redactSecrets } from '../redact';
 import { HttpError } from '../http-error';
 import fs from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ImageModelInfo, VideoModelInfo } from '@/types/media';
-import { maskSecrets, xaiKey } from './config';
+import { xaiKey } from './config';
 import { TICKS_PER_USD, VIDEO_PRICES, round6 } from './pricing';
 
 const BASE = 'https://api.x.ai/v1';
@@ -33,7 +34,7 @@ async function xaiJson<T>(path: string, init?: RequestInit, timeoutMs?: number):
     } catch {
       // keep raw text
     }
-    throw new HttpError(`xAI ${res.status}: ${maskSecrets(detail).slice(0, 400)}`, res.status === 401 || res.status === 403 ? 502 : res.status >= 500 ? 502 : 422);
+    throw new HttpError(`xAI ${res.status}: ${redactSecrets(detail).slice(0, 400)}`, res.status === 401 || res.status === 403 ? 502 : res.status >= 500 ? 502 : 422);
   }
   try {
     return JSON.parse(text) as T;
@@ -147,7 +148,7 @@ export async function pollVideo(requestId: string): Promise<VideoPoll> {
     return { status: 'done', url: j.video.url };
   }
   if (j.status === 'failed' || j.status === 'expired') {
-    return { status: 'failed', reason: maskSecrets(typeof j.error === 'string' ? j.error : j.status) };
+    return { status: 'failed', reason: redactSecrets(typeof j.error === 'string' ? j.error : j.status) };
   }
   return { status: 'pending' };
 }

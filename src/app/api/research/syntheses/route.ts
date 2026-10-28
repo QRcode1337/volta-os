@@ -8,4 +8,4 @@ export const dynamic = 'force-dynamic';
 export const GET = route(async () => {
   const items = await listSyntheses();
   return { total: items.length, vault: items.filter((i) => i.source === 'vault').length, items };
-});
+}, { redact: true });

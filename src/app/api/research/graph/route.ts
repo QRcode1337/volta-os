@@ -11,5 +11,5 @@ export const GET = route(
     const num = (k: string) => (p.get(k) !== null && p.get(k) !== '' && Number.isFinite(Number(p.get(k))) ? Number(p.get(k)) : undefined);
     return sampleGraph(p.get('source') ?? 'voltamachine', { maxNodes: num('max'), maxEdges: num('edges'), community: num('community') ?? null });
   },
-  { tag: 'research api' },
+  { tag: 'research api', redact: true },
 );

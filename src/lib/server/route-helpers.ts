@@ -2,6 +2,7 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import { HttpError } from './http-error';
 import { rejectNonLocalMutation, rejectNonLocalRead } from './local-only';
+import { redactDeep } from './redact';
 
 export { HttpError };
 
@@ -32,11 +33,13 @@ export interface RouteOptions {
   maxBytes?: number;
   /** Log tag for unexpected errors. */
   tag?: string;
+  /** Pass the JSON result through redactDeep before sending (for payloads built from captured text). */
+  redact?: boolean;
 }
 
 /**
- * The single route wrapper: localhost / tailnet guard, optional bounded JSON body, `no-store` JSON out, HttpError ->
- * its status. Return a Response (file stream, SSE, redirect) to send it untouched.
+ * The single route wrapper: localhost / tailnet guard, optional bounded JSON body, `no-store` JSON out (optionally
+ * secret-masked), HttpError -> its status. Return a Response (file stream, SSE, redirect) to send it untouched.
  */
 export function route<P extends Record<string, string> = Record<string, never>>(
   handler: (input: RouteInput<P>) => unknown,
@@ -52,7 +55,8 @@ export function route<P extends Record<string, string> = Record<string, never>>(
       if (opts.json) body = await readJsonObject(req, maxBytes);
       const params = ((await ctx?.params) ?? {}) as P;
       const out = await handler({ req, params, body, url: new URL(req.url) });
-      return out instanceof Response ? out : NextResponse.json(out, { headers: NO_STORE });
+      if (out instanceof Response) return out;
+      return NextResponse.json(opts.redact ? redactDeep(out) : out, { headers: NO_STORE });
     } catch (err) {
       return errorResponse(err, opts.tag);
     }

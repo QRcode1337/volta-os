@@ -1,11 +1,12 @@
 import 'server-only';
+import { redactSecrets } from '../redact';
 import { execFile, type ExecFileException } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { complete as omniComplete } from '../llm';
 import { LLM_CWD, loadConfig } from './config';
-import { clip, errMsg, maskSecrets } from './util';
+import { clip, errMsg } from './util';
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 // The ONE place the podcast talks to an LLM. Every stage calls `llm({ task, ... })` with a task name that matches
@@ -144,7 +145,7 @@ export function describeClaudeFailure(error: ExecFileException | null, stdout: s
     else if (error.signal) parts.push(`killed by ${error.signal}`);
   }
   if (!parts.length) parts.push(error ? 'failed with no output' : 'empty result');
-  return clip(maskSecrets(parts.join(' · ')), 600);
+  return clip(redactSecrets(parts.join(' · ')), 600);
 }
 
 const claudeCli: Backend = (req) => {
@@ -171,7 +172,7 @@ const claudeCli: Backend = (req) => {
     const child = execFile(bin, args, { cwd: LLM_CWD, env: childEnv(bin), timeout: req.timeoutMs, killSignal: 'SIGKILL', maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
       if (error) return reject(new Error(`claude -p (${req.label}): ${describeClaudeFailure(error, stdout, stderr, req.timeoutMs)}`));
       const j = parseClaudeJson(stdout);
-      if (!j) return reject(new Error(`claude -p (${req.label}): unparseable output${stdout.trim() ? ` — ${clip(maskSecrets(oneLine(stdout)), 300)}` : ' (stdout empty)'}`));
+      if (!j) return reject(new Error(`claude -p (${req.label}): unparseable output${stdout.trim() ? ` — ${clip(redactSecrets(oneLine(stdout)), 300)}` : ' (stdout empty)'}`));
       if (j.is_error || typeof j.result !== 'string' || !j.result.trim()) {
         return reject(new Error(`claude -p (${req.label}): ${describeClaudeFailure(null, stdout, stderr, req.timeoutMs)}`));
       }

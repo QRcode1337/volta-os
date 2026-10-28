@@ -11,5 +11,5 @@ export const GET = route(
     if (!s) throw new HttpError('Unknown synthesis.', 404);
     return s;
   },
-  { tag: 'research api' },
+  { tag: 'research api', redact: true },
 );

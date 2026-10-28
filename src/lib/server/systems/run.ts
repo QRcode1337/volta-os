@@ -2,6 +2,7 @@ import 'server-only';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
+import { redactSecrets } from '../redact';
 
 // Small, bounded process + HTTP helpers for the Systems probes. Every call has a short timeout; nothing here
 // ever starts, stops or writes anything.
@@ -51,21 +52,9 @@ export function run(file: string, args: string[], timeoutMs: number, maxBuffer =
           : e.killed
             ? `timed out after ${Math.round(timeoutMs / 1000)}s`
             : (stderr || e.message || 'failed').trim().split('\n')[0];
-      resolve({ stdout: stdout ?? '', stderr: stderr ?? '', code, error: redact(reason) });
+      resolve({ stdout: stdout ?? '', stderr: stderr ?? '', code, error: redactSecrets(reason).slice(0, 240) });
     });
   });
-}
-
-/**
- * Mask anything secret-shaped before text reaches the page: key/token/password assignments, bearer headers,
- * provider-style keys (sk-…, ghp_…, xox…) and long opaque strings.
- */
-export function redact(text: string, max = 240): string {
-  return text
-    .replace(/(authorization|bearer|api[_-]?key|access[_-]?token|token|secret|password|passwd|cookie)(["'\s:=]+)([^\s"',;&]+)/gi, '$1$2••••')
-    .replace(/\b(sk|pk|rk|ghp|gho|ghs|xoxa|xoxb|xoxp|or)[-_][A-Za-z0-9_-]{8,}/g, '$1-••••')
-    .replace(/[A-Za-z0-9+_-]{32,}={0,2}/g, (m) => `${m.slice(0, 4)}••••`)
-    .slice(0, max);
 }
 
 export interface HttpResult {
@@ -108,7 +97,7 @@ export async function httpGet(url: string, timeoutMs = 2_000): Promise<HttpResul
           ? 'connection refused'
           : code === 'ECONNRESET'
             ? 'connection reset'
-            : redact(code ?? e.message ?? 'request failed');
+            : redactSecrets(code ?? e.message ?? 'request failed').slice(0, 240);
     return { ok: false, reachable: false, status: null, latencyMs: null, json: null, error };
   }
 }

@@ -10,7 +10,8 @@ import { LTM_LIVE_MINUTES } from '@/types/sources';
 import { agentState, bindOf, type AgentOpts, type LaunchdEntry, type Listener, type PlistMap } from './host';
 import type { HonchoLlmDeps, HonchoLlmTarget } from './honcho-deps';
 import type { RuntimeProbe } from './models';
-import { BIN, GiB, HOME, arr, num, obj, redact, run, str, tilde, type HttpResult } from './run';
+import { redactSecrets } from '../redact';
+import { BIN, GiB, HOME, arr, num, obj, run, str, tilde, type HttpResult } from './run';
 
 // One builder per service. Inputs are gathered once per probe cycle (index.ts); builders only interpret them.
 // Probed JSON is never passed through — only the named fields below (health payloads can carry paths/auth info).
@@ -491,7 +492,7 @@ export function hermes(ctx: Ctx, st: HermesState, r: HttpResult | null, port: nu
   }
   if (st.profiles) s.facts.push({ label: 'profiles served', value: String(st.profiles) });
   if (current.length) s.facts.push({ label: 'platforms', value: `${connected.length}/${current.length} connected`, tone: connected.length === current.length ? 'ok' : 'warn' });
-  for (const p of current) if (p.state !== 'connected' || p.needsAttention) s.facts.push({ label: p.id, value: `${p.state}${p.errorCode ? ` (${redact(p.errorCode, 60)})` : ''}`, tone: 'warn' });
+  for (const p of current) if (p.state !== 'connected' || p.needsAttention) s.facts.push({ label: p.id, value: `${p.state}${p.errorCode ? ` (${redactSecrets(p.errorCode).slice(0, 60)})` : ''}`, tone: 'warn' });
   if (st.activeAgents != null) s.facts.push({ label: 'active agents', value: String(st.activeAgents) });
   if (st.sessionStore) s.facts.push({ label: 'session store', value: st.sessionStore, tone: st.sessionStore === 'ok' ? 'ok' : 'warn' });
   if (st.updatedAt) {
@@ -572,7 +573,7 @@ export function ltmDaemon(ctx: Ctx, st: LtmStatus): ServiceCheck {
   const ageText = ageMin == null ? null : ageMin < 60 ? `${ageMin}m ago` : ageMin < 48 * 60 ? `${Math.round(ageMin / 60)}h ago` : `${Math.round(ageMin / 1440)}d ago`;
   if (!st.available) {
     s.status = daemon.pid ? 'degraded' : 'down';
-    s.summary = redact(st.reason ?? 'database unavailable');
+    s.summary = redactSecrets(st.reason ?? 'database unavailable').slice(0, 240);
   } else if (!daemon.pid) {
     s.status = 'down';
     s.summary = `daemon not running${ageText ? ` · last capture ${ageText}` : ''}`;

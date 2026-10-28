@@ -1,4 +1,5 @@
 import 'server-only';
+import { redactSecrets } from '../redact';
 import { HttpError } from '../http-error';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
@@ -6,7 +7,7 @@ import path from 'node:path';
 import type { CostEstimate, PodcastConfig } from './types';
 import type { Turn } from './script';
 import { FFMPEG, FFPROBE, geminiKey } from './config';
-import { errMsg, maskSecrets, round, sleep } from './util';
+import { errMsg, round, sleep } from './util';
 
 // Stage 4: Gemini multi-speaker text-to-speech (generateContent, two prebuilt voices), then ffmpeg joins the chunks
 // into one loudness-normalised mp3. ElevenLabs is deliberately not used.
@@ -162,7 +163,7 @@ async function synthChunk(cfg: PodcastConfig, chunk: Turn[], expectedSec: number
       // non-JSON body
     }
     if (!res.ok) {
-      lastErr = `HTTP ${res.status}: ${maskSecrets(j.error?.message ?? raw.slice(0, 200))}`;
+      lastErr = `HTTP ${res.status}: ${redactSecrets(j.error?.message ?? raw.slice(0, 200))}`;
       if (res.status === 429) {
         const wait = Number(res.headers.get('retry-after')) || 20 * attempt;
         await sleep(Math.min(90, wait) * 1000);
@@ -255,7 +256,7 @@ export async function synthesize(cfg: PodcastConfig, turns: Turn[], date: string
 function run(bin: string, args: string[], timeoutMs: number): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     execFile(bin, args, { timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) reject(new Error(`${path.basename(bin)} failed: ${maskSecrets((stderr || err.message).trim().split('\n').slice(-4).join(' | '))}`));
+      if (err) reject(new Error(`${path.basename(bin)} failed: ${redactSecrets((stderr || err.message).trim().split('\n').slice(-4).join(' | '))}`));
       else resolve({ stdout, stderr });
     });
   });

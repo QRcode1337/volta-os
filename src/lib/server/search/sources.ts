@@ -8,7 +8,8 @@ import { getNotionPages } from '../sources/notion';
 import { getRoutines } from '../sources/routines';
 import { getSkills } from '../sources/skills';
 import { searchNotes } from './notes-index';
-import { SourceTimeout, allTermsIn, redact, makeSnippet, makeTitle, nameScore, withTimeout, type ParsedQuery } from './text';
+import { redactSecrets } from '../redact';
+import { SourceTimeout, allTermsIn, makeSnippet, makeTitle, nameScore, withTimeout, type ParsedQuery } from './text';
 import type { SearchHit, SearchSourceId, SearchSourceState } from './types';
 
 // One read-only search function per memory source. Each returns hits already masked and highlighted.
@@ -267,7 +268,7 @@ export async function searchNotion({ pq, limit }: SourceContext): Promise<Source
   const mapped = pages.filter((p) => p.url).length;
   return {
     hits: matches.slice(0, limit).map(({ p }) =>
-      hit('notion', redact(p.title), pq, {
+      hit('notion', redactSecrets(p.title), pq, {
         title: p.title,
         text: `${fmt(p.visits)} LTM capture${p.visits === 1 ? '' : 's'} with this window title${p.url ? '' : ' · no URL mapped yet (config/notion-pages.json)'}`,
         when: null,

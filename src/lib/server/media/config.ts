@@ -23,19 +23,12 @@ export const xaiKey = () => (process.env.XAI_API_KEY ?? '').trim();
 export const elevenKey = () => (process.env.ELEVENLABS_API_KEY ?? '').trim();
 export const geminiKey = () => (process.env.GEMINI_API_KEY ?? '').trim();
 
-/** Mask the live API keys plus anything the shared secret masker recognises. Use on ALL upstream error text. */
-export function maskSecrets(text: string): string {
-  let out = text;
-  for (const k of [xaiKey(), elevenKey(), geminiKey()]) if (k.length >= 8) out = out.split(k).join('[key]');
-  return redactSecrets(out);
-}
-
 /** Safe text for any error: HttpError text as-is (already masked), timeouts named, anything else secret-masked. */
 export function errorMessage(err: unknown): string {
   if (err instanceof HttpError) return err.message;
   const e = err as { name?: string; message?: string };
   if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return 'Upstream request timed out.';
-  return maskSecrets(e?.message || 'failed');
+  return redactSecrets(e?.message || 'failed');
 }
 
 /** The media area's one mapping to HttpError: HttpError passes through, anything else is a 500 with masked text. */

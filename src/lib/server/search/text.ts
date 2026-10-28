@@ -1,5 +1,5 @@
 import 'server-only';
-import { redact as redactText } from './redact';
+import { redactSecrets } from '../redact';
 import type { Range } from './types';
 
 // Query parsing, match highlighting and secret-safe snippet windows shared by every search source.
@@ -10,8 +10,6 @@ const MAX_RANGES = 40;
 /** Masking runs on this much text around the match, so a window edge never cuts a secret in half unmasked. */
 const MASK_MARGIN = 600;
 
-/** The shared masker (search/redact.ts; also behind redactSecrets for Honcho and the LTM viewer). */
-export const redact = redactText;
 
 export interface ParsedQuery {
   /** Whitespace-collapsed query as typed. */
@@ -104,7 +102,7 @@ export function makeSnippet(raw: string | null | undefined, pq: ParsedQuery, siz
   const at0 = firstMatch(full, pq);
   const regionStart = full.length > MASK_MARGIN * 3 ? Math.max(0, (at0 < 0 ? 0 : at0) - MASK_MARGIN) : 0;
   const regionEnd = full.length > MASK_MARGIN * 3 ? Math.min(full.length, (at0 < 0 ? 0 : at0) + MASK_MARGIN * 2) : full.length;
-  const region = redact(full.slice(regionStart, regionEnd));
+  const region = redactSecrets(full.slice(regionStart, regionEnd));
   const [s, e] = windowOf(region, firstMatch(region, pq), size);
   const text = (s > 0 || regionStart > 0 ? '…' : '') + region.slice(s, e).trim() + (e < region.length || regionEnd < full.length ? '…' : '');
   return { text, highlights: highlightRanges(text, pq.termRe) };
@@ -112,7 +110,7 @@ export function makeSnippet(raw: string | null | undefined, pq: ParsedQuery, siz
 
 /** Masked single-line title with highlight ranges. */
 export function makeTitle(raw: string, pq: ParsedQuery, max = 160): Snippet {
-  let t = redact(collapse(raw));
+  let t = redactSecrets(collapse(raw));
   if (t.length > max) t = `${t.slice(0, max - 1)}…`;
   return { text: t, highlights: highlightRanges(t, pq.termRe) };
 }

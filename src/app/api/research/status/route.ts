@@ -6,4 +6,4 @@ import { getStatus } from '@/lib/server/research/status';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export const GET = route(({ url }) => getStatus({ refresh: url.searchParams.get('refresh') === '1' }));
+export const GET = route(({ url }) => getStatus({ refresh: url.searchParams.get('refresh') === '1' }), { redact: true });

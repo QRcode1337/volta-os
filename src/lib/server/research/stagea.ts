@@ -3,7 +3,6 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { tagKey, type StageBFacts } from '@/components/research/types';
 import { cached } from '../sources/cache';
-import { redactSecrets } from '../redact';
 import { loadConfig } from './config';
 
 // Voltamachine Stage A records (stagea/*.json, with Stage B merged in) and the Stage B markdown reports.
@@ -163,14 +162,14 @@ async function load(): Promise<StageAData> {
 
 export const getStageA = (force = false) => cached<StageAData>('research:stagea', TTL_MS, load, { force });
 
-/** The Stage B markdown report for one record (secrets masked), or null when there is none or it is an empty stub. */
+/** The Stage B markdown report for one record (masked by /api/research/doc, not here), or null when there is none or it is an empty stub. */
 export async function readStageBText(sid: string): Promise<string | null> {
   if (!/^[\w.-]{1,80}$/.test(sid)) return null;
   const file = path.join(loadConfig().stageA.dir, `${sid}.stageb.md`);
   try {
     const t = await fs.readFile(file, 'utf8');
     if (!stageBHasContent(t)) return null;
-    return redactSecrets(t.slice(0, 80_000));
+    return t.slice(0, 80_000);
   } catch {
     return null;
   }

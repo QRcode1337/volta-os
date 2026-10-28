@@ -6,7 +6,7 @@ import path from 'node:path';
 import type { NleExportJob, NleExportRequest } from '@/types/nle';
 import { sequenceDuration } from '@/lib/nle/model';
 import { HttpError } from '../../http-error';
-import { redact } from '../../systems/run';
+import { redactSecrets } from '../../redact';
 import { resolveAsset, type NleAsset } from './assets';
 import { buildExportGraph } from './filtergraph';
 import { CACHE_DIR, FFMPEG, LOCAL_EXPORTS_DIR, WINDSOR_EXPORTS_DIR, ensureDir, exportsDir, requireSpace, writeAtomic } from './paths';
@@ -199,7 +199,7 @@ async function pump(): Promise<void> {
   const logLines: string[] = [];
   const pushLog = (line: string) => {
     if (!line.trim()) return;
-    logLines.push(redact(line.trimEnd(), 400));
+    logLines.push(redactSecrets(line.trimEnd()).slice(0, 400));
     if (logLines.length > LOG_LINES) logLines.splice(0, logLines.length - LOG_LINES);
     job.log = logLines.join('\n');
   };

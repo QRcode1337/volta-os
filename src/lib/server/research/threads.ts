@@ -1,7 +1,6 @@
 import 'server-only';
 import path from 'node:path';
 import { bestLabel, tagKey, type DomainLink, type DomainNode, type FolderBridge, type Highlight, type ThreadCluster, type ThreadMember, type ThreadsResponse } from '@/components/research/types';
-import { redactSecrets } from '../redact';
 import { loadConfig } from './config';
 import { getGraph } from './graphs';
 import { getLibrary, type Library } from './library';
@@ -73,7 +72,7 @@ function domainNetwork(lib: Library): ThreadsResponse['domainNetwork'] {
       examples: x.e.docs
         .sort((p, q) => q.nov - p.nov)
         .slice(0, 4)
-        .map((d) => ({ sid: d.sid, title: d.title, bridge: redactSecrets(clip(d.bridge, 260)) })),
+        .map((d) => ({ sid: d.sid, title: d.title, bridge: clip(d.bridge, 260) })),
     }));
   return { nodes, links };
 }
@@ -120,7 +119,7 @@ function highlights(lib: Library): Highlight[] {
       priority: pr ?? null,
       storage: row?.storage ?? null,
       reasons,
-      summary: redactSecrets(clip(rec.summary, 300)) || null,
+      summary: clip(rec.summary, 300) || null,
       score: Math.round(score * 100) / 100,
     });
   }
@@ -205,7 +204,7 @@ async function clustersAndBridges(lib: Library): Promise<Pick<ThreadsResponse, '
         name: g.names.get(cid) ?? `Community ${cid}`,
         size: ids.length,
         concepts,
-        members: members.map((m) => ({ ...m, label: redactSecrets(m.label) })),
+        members,
         folders: [...new Set(members.map((m) => m.folder).filter((f): f is string => !!f))],
         bridges: outDeg.get(cid) ?? 0,
       });

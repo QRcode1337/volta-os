@@ -1,10 +1,11 @@
 import 'server-only';
+import { redactSecrets } from '../redact';
 import { HttpError } from '../http-error';
 import fs from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { VideoModelInfo } from '@/types/media';
-import { geminiKey, maskSecrets } from './config';
+import { geminiKey } from './config';
 import { OMNI_ASPECTS, OMNI_MAX_SECONDS, OMNI_MODEL, OMNI_PRICES } from './pricing';
 
 // Gemini Omni Flash video via the Interactions API (ai.google.dev/gemini-api/docs/omni). One POST returns the
@@ -58,7 +59,7 @@ async function geminiJson<T>(path: string, init: RequestInit, timeoutMs: number)
     } catch {
       // keep raw text
     }
-    throw new HttpError(`Gemini ${res.status}: ${maskSecrets(detail).slice(0, 400)}`, res.status === 401 || res.status === 403 || res.status >= 500 ? 502 : 422);
+    throw new HttpError(`Gemini ${res.status}: ${redactSecrets(detail).slice(0, 400)}`, res.status === 401 || res.status === 403 || res.status >= 500 ? 502 : 422);
   }
   try {
     return JSON.parse(text) as T;
@@ -95,7 +96,7 @@ export async function generateOmniVideoTo(p: { prompt: string; aspect: string; r
     GENERATE_TIMEOUT_MS,
   );
   if (j.status && j.status !== 'completed') {
-    throw new HttpError(`Gemini Omni ${j.status}${j.error?.message ? `: ${maskSecrets(j.error.message).slice(0, 300)}` : ''}`, 502);
+    throw new HttpError(`Gemini Omni ${j.status}${j.error?.message ? `: ${redactSecrets(j.error.message).slice(0, 300)}` : ''}`, 502);
   }
   const video = (j.steps ?? []).flatMap((s) => (s.type === 'model_output' ? (s.content ?? []) : [])).find((c) => c.type === 'video');
   if (!video) throw new HttpError('Gemini Omni finished without a video (likely blocked by its safety filters; rephrase the shot).', 502);
@@ -119,7 +120,7 @@ async function downloadFileTo(uri: string, file: string): Promise<void> {
     for (;;) {
       const f = await geminiJson<{ state?: string; error?: { message?: string } }>(`/files/${id}`, { method: 'GET' }, 30_000);
       if (!f.state || f.state === 'ACTIVE') break;
-      if (f.state === 'FAILED') throw new HttpError(`Gemini file ${id} failed: ${maskSecrets(f.error?.message ?? 'no reason')}`, 502);
+      if (f.state === 'FAILED') throw new HttpError(`Gemini file ${id} failed: ${redactSecrets(f.error?.message ?? 'no reason')}`, 502);
       if (Date.now() - started > FILE_MAX_MS) throw new HttpError(`Gemini file ${id} still processing after 5 min.`, 504);
       await sleep(FILE_POLL_MS);
     }

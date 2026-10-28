@@ -1,57 +1,35 @@
 import 'server-only';
-import type { DocDetail, LibraryRow, StageBFacts } from '@/components/research/types';
-import { redactSecrets } from '../redact';
+import type { DocDetail } from '@/components/research/types';
 import { getGraph } from './graphs';
-import { getLibrary, type LibRow } from './library';
+import { getLibrary } from './library';
+import { publicRow } from './search';
 import { readStageBText, type StageARec } from './stagea';
 import { mentionsOf, toMention } from './vault';
 
 const stemOf = (name: string) => name.replace(/\.[A-Za-z0-9]{1,6}$/, '');
-const mask = (s: string) => redactSecrets(s);
-const maskAll = (a: string[]) => a.map(mask);
 
-function publicRow(r: LibRow): LibraryRow {
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  const { nameN, titleN, tagsN, pathN, summaryN, claimsN, tagKeys, matchedBy, sids, ...row } = r;
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  return row;
-}
-
-function stageBMasked(b: StageBFacts | null): StageBFacts | null {
-  if (!b) return null;
-  return {
-    ...b,
-    synthesisSummary: mask(b.synthesisSummary),
-    coreInsight: mask(b.coreInsight),
-    whyItMatters: mask(b.whyItMatters),
-    crossDomainSynthesis: maskAll(b.crossDomainSynthesis),
-    testableHypotheses: maskAll(b.testableHypotheses),
-    validationPlan: maskAll(b.validationPlan),
-  };
-}
-
-function stageAMasked(rec: StageARec, matchedBy: 'path' | 'name' | 'none'): NonNullable<DocDetail['stageA']> {
+function stageAPublic(rec: StageARec, matchedBy: 'path' | 'name' | 'none'): NonNullable<DocDetail['stageA']> {
   return {
     sid: rec.sid,
-    title: mask(rec.title),
-    summary: mask(rec.summary),
+    title: rec.title,
+    summary: rec.summary,
     domainTags: rec.domainTags,
-    keyClaims: maskAll(rec.keyClaims),
-    methods: maskAll(rec.methods),
+    keyClaims: rec.keyClaims,
+    methods: rec.methods,
     noveltyScore: rec.novelty,
     crossDomainCount: rec.crossDomainCount,
-    crossDomainLinks: maskAll(rec.crossDomainLinks),
+    crossDomainLinks: rec.crossDomainLinks,
     hasContradiction: rec.hasContradiction,
-    contradictionNotes: maskAll(rec.contradictionNotes),
+    contradictionNotes: rec.contradictionNotes,
     confidence: rec.confidence,
     recommendedAction: rec.action,
     sourcePdf: rec.sourcePdf,
     matchedBy,
-    stageB: stageBMasked(rec.stageB),
+    stageB: rec.stageB,
   };
 }
 
-/** Doc detail by library row id or Stage A id. Null when unknown; `{building}` is signalled by returning undefined. */
+/** Doc detail by library row id or Stage A id (unmasked: /api/research/doc masks the whole response). Null when unknown; `{building}` is signalled by returning undefined. */
 export async function getDoc(id: string): Promise<DocDetail | null | undefined> {
   const lib = await getLibrary();
   if (!lib) return undefined;
@@ -105,14 +83,14 @@ export async function getDoc(id: string): Promise<DocDetail | null | undefined> 
   const relatedList = [...related.values()]
     .sort((a, b) => b.score - a.score)
     .slice(0, 8)
-    .map(({ id: rid, title, reason }) => ({ id: rid, title: mask(title), reason }));
+    .map(({ id: rid, title, reason }) => ({ id: rid, title, reason }));
 
   return {
-    row: { ...publicRow(row), title: mask(row.title), summary: row.summary ? mask(row.summary) : null },
-    stageA: rec ? stageAMasked(rec, row.matchedBy) : null,
+    row: publicRow(row),
+    stageA: rec ? stageAPublic(rec, row.matchedBy) : null,
     stageBText: rec?.stageBText ? await readStageBText(rec.sid) : null,
     vaultNotes,
-    concepts: concepts.map((c) => ({ ...c, label: mask(c.label) })),
+    concepts,
     related: relatedList,
   };
 }

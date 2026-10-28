@@ -1,7 +1,8 @@
 import 'server-only';
+import { redactSecrets } from '../redact';
 import { HttpError } from '../http-error';
 import type { ElevenQuota, VoiceInfo, VoiceModelInfo } from '@/types/media';
-import { elevenKey, maskSecrets } from './config';
+import { elevenKey } from './config';
 
 const BASE = 'https://api.elevenlabs.io/v1';
 const CATALOG_TTL_MS = 10 * 60 * 1000;
@@ -27,7 +28,7 @@ async function failFrom(res: Response): Promise<never> {
   } catch {
     // raw text
   }
-  throw new HttpError(`ElevenLabs ${res.status}: ${maskSecrets(String(detail)).slice(0, 400)}`, res.status >= 500 || res.status === 401 ? 502 : 422);
+  throw new HttpError(`ElevenLabs ${res.status}: ${redactSecrets(String(detail)).slice(0, 400)}`, res.status >= 500 || res.status === 401 ? 502 : 422);
 }
 
 async function elevenJson<T>(path: string): Promise<T> {

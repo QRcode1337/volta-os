@@ -3,7 +3,6 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { SynthesisDetail, SynthesisItem, VaultMention } from '@/components/research/types';
 import { cached } from '../sources/cache';
-import { redactSecrets } from '../redact';
 import { loadConfig } from './config';
 import { isPlaceholder } from './inventory';
 
@@ -30,7 +29,7 @@ export interface Note {
   words: number;
   excerpt: string;
   strippedThinking: boolean;
-  /** Cleaned markdown (not yet masked; masked when served). */
+  /** Cleaned markdown (unmasked; the research routes mask whole responses). */
   text: string;
   /** Lower-case, punctuation-free text padded with spaces, for mention search. */
   norm: string;
@@ -250,10 +249,10 @@ export function snippetFor(note: Note, needles: { title?: string; stem?: string 
     if (i >= 0) {
       const a = Math.max(0, i - 90);
       const b = Math.min(note.text.length, i + needle.length + 160);
-      return redactSecrets(`${a > 0 ? '...' : ''}${plain(note.text.slice(a, b))}${b < note.text.length ? '...' : ''}`);
+      return `${a > 0 ? '...' : ''}${plain(note.text.slice(a, b))}${b < note.text.length ? '...' : ''}`;
     }
   }
-  return redactSecrets(note.excerpt);
+  return note.excerpt;
 }
 
 export function toMention(note: Note, needles: { title?: string; stem?: string }): VaultMention {
@@ -275,13 +274,13 @@ export async function listSyntheses(): Promise<SynthesisItem[]> {
     id: idOf(n),
     source: n.source,
     file: n.file,
-    title: redactSecrets(n.title),
+    title: n.title,
     date: n.date,
     kind: n.kind,
     tags: n.tags,
     papersReviewed: n.papers,
     words: n.words,
-    excerpt: redactSecrets(n.excerpt),
+    excerpt: n.excerpt,
     strippedThinking: n.strippedThinking,
   }));
 }
@@ -299,15 +298,15 @@ export async function getSynthesis(id: string): Promise<SynthesisDetail | null> 
     id,
     source: n.source,
     file: n.file,
-    title: redactSecrets(n.title),
+    title: n.title,
     date: n.date,
     kind: n.kind,
     tags: n.tags,
     papersReviewed: n.papers,
     words: n.words,
-    excerpt: redactSecrets(n.excerpt),
+    excerpt: n.excerpt,
     strippedThinking: n.strippedThinking,
-    markdown: redactSecrets(body.trim()),
+    markdown: body.trim(),
     path: n.abs,
     obsidian: obsidianUrl(n),
   };

@@ -7,4 +7,4 @@ import { parseParams, search } from '@/lib/server/research/search';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export const GET = route(({ url }) => search(parseParams(url)));
+export const GET = route(({ url }) => search(parseParams(url)), { redact: true });

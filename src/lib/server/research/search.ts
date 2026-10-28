@@ -78,12 +78,12 @@ function scoreRow(r: LibRow, toks: string[], phrase: string, requireAll: boolean
   return Math.round(total * 100) / 100;
 }
 
-/** Index fields stripped; title and summary masked the way /api/research/doc masks them. */
-function publicRow(r: LibRow): LibraryRow {
+/** Index fields stripped (secrets are masked for the whole response by /api/research/search). */
+export function publicRow(r: LibRow): LibraryRow {
   /* eslint-disable @typescript-eslint/no-unused-vars */
   const { nameN, titleN, tagsN, pathN, summaryN, claimsN, tagKeys, matchedBy, sids, ...row } = r;
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  return { ...row, title: redactSecrets(row.title), summary: row.summary ? redactSecrets(row.summary) : null };
+  return row;
 }
 
 /** JEV re-rank of the top 30. Any failure (not configured, circuit open, timeout, odd reply) returns null and the plain order stands. */
@@ -93,7 +93,7 @@ async function jevRerank(q: string, top: LibRow[]): Promise<LibRow[] | null> {
     if (!jev.jevConfigured() || jev.jevCircuit().open) return null;
     const res = await jev.rank(
       {
-        items: top.map((r) => ({ id: r.id, text: [r.title, r.tags.join(', '), r.summary ?? '', r.rel].filter(Boolean).join(' | ').slice(0, 600) })),
+        items: top.map((r) => ({ id: r.id, text: redactSecrets([r.title, r.tags.join(', '), r.summary ?? '', r.rel].filter(Boolean).join(' | ')).slice(0, 600) })),
         criterion: `How relevant this document is to the search query: "${q}"`,
         top: RERANK_TOP,
       },

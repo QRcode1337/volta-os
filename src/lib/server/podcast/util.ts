@@ -13,13 +13,7 @@ export function localDate(d = new Date()): string {
 }
 export const isDate = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
-/** Mask live keys plus anything the shared secret masker recognises. Use on ALL upstream error text and logged strings. */
-export function maskSecrets(text: string): string {
-  let out = text;
-  for (const k of [geminiKey(), feedToken()]) if (k.length >= 8) out = out.split(k).join('[key]');
-  return redactSecrets(out);
-}
-export const errMsg = (e: unknown): string => maskSecrets((e as Error)?.message || String(e) || 'failed');
+export const errMsg = (e: unknown): string => redactSecrets((e as Error)?.message || String(e) || 'failed');
 
 /** Run `fn` over `items` with at most `limit` in flight. Results keep input order. */
 export async function pmap<T, R>(items: T[], limit: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {

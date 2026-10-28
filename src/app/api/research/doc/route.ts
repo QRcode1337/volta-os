@@ -15,5 +15,5 @@ export const GET = route(
     if (doc === null) throw new HttpError('Unknown document (the inventory may have changed; search again).', 404);
     return doc;
   },
-  { tag: 'research api' },
+  { tag: 'research api', redact: true },
 );

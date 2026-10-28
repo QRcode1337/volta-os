@@ -3,7 +3,8 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import type { AgentHandoff, AttentionItem, FixRunResult, SystemsReport } from '@/types/systems';
 import { getSystemsReport } from './index';
-import { HOME, redact } from './run';
+import { redactSecrets } from '../redact';
+import { HOME } from './run';
 import { openClaudeInTerminal } from '../claude-terminal';
 import { HttpError } from '../http-error';
 
@@ -18,8 +19,8 @@ const OUTPUT_TAIL = 4_000;
 const SHELL = fs.existsSync('/bin/zsh') ? '/bin/zsh' : '/bin/sh';
 
 const tail = (s: string, n: number) => (s.length > n ? `…${s.slice(-n)}` : s);
-/** Redact line by line so a long log keeps its shape (redact() also caps length). */
-const clean = (s: string) => tail(s.split('\n').map((l) => redact(l, 1_000)).join('\n'), OUTPUT_TAIL);
+/** Redact line by line so a long log keeps its shape; each line is capped at 1,000 chars. */
+const clean = (s: string) => tail(s.split('\n').map((l) => redactSecrets(l).slice(0, 1_000)).join('\n'), OUTPUT_TAIL);
 
 async function pick(ids: string[]): Promise<{ report: SystemsReport; items: AttentionItem[] }> {
   const report = await getSystemsReport(true);
@@ -43,7 +44,7 @@ export async function runFixCommand(id: string): Promise<FixRunResult> {
     execFile(SHELL, ['-lc', command], { timeout: RUN_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, cwd: HOME, encoding: 'utf8' }, (err, stdout, stderr) => {
       const e = err as (NodeJS.ErrnoException & { code?: number | string; killed?: boolean }) | null;
       const code = !e ? 0 : typeof e.code === 'number' ? e.code : null;
-      const error = !e ? null : e.killed ? `timed out after ${RUN_TIMEOUT_MS / 1000}s` : code === null ? redact(e.message) : null;
+      const error = !e ? null : e.killed ? `timed out after ${RUN_TIMEOUT_MS / 1000}s` : code === null ? redactSecrets(e.message).slice(0, 240) : null;
       resolve({ id, command, code, output: clean([stdout, stderr].filter((s) => s?.trim()).join('\n')), error, durationMs: Date.now() - t0 });
     });
   });

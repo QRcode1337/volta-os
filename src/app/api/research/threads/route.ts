@@ -6,4 +6,4 @@ import { inventoryState } from '@/lib/server/research/inventory';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export const GET = route(async () => (await getThreads()) ?? { building: true, inventory: inventoryState() });
+export const GET = route(async () => (await getThreads()) ?? { building: true, inventory: inventoryState() }, { redact: true });

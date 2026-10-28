@@ -11,9 +11,7 @@ const MAX_ERR_CHARS = 280;
 const DEFAULT_IDLE_MS = 60_000;
 
 function scrub(text: string, apiKey?: string): string {
-  let t = text;
-  if (apiKey && apiKey.length >= 8) t = t.split(apiKey).join('••••');
-  return redactSecrets(t).replace(/\s+/g, ' ').trim().slice(0, MAX_ERR_CHARS);
+  return redactSecrets(text, [apiKey]).replace(/\s+/g, ' ').trim().slice(0, MAX_ERR_CHARS);
 }
 
 function kindForStatus(status: number): LlmError['kind'] {

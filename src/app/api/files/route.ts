@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'node:fs/promises';
 import type { WorkspaceFileResponse } from '@/types/os';
-import { BRAIN_NODES, SKILLS } from '@/lib/mock-data';
+import { BRAIN_NODES } from '@/lib/mock-data';
 import { resolveWorkspacePath, writeWorkspaceFile } from '@/lib/server/workspace';
 import { HttpError, NO_STORE, route } from '@/lib/server/route-helpers';
 
@@ -34,11 +34,9 @@ function validatePath(raw: unknown): { rel: string } | { error: string } {
   return { rel };
 }
 
-/** Seed fallback for files that are not on disk yet (skills, graph nodes). */
+/** Fallback for structural graph files (root files, department routers) that are not on disk yet. */
 function fallbackContent(rel: string): string | null {
   const wsPath = `workspace/${rel}`;
-  const skill = SKILLS.find((s) => s.filePath === wsPath);
-  if (skill) return skill.markdownContent;
   const node = BRAIN_NODES.find((n) => n.filePath === wsPath);
   if (node) {
     if (node.content) return node.content;

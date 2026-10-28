@@ -8,18 +8,19 @@ category: database
 
 # /tone
 
-Writing-voice database: 80% corpus-aligned phrasing, 20% wildcard. Built from the last 40 published scripts,
-120 community posts and 60 sent client emails. Apply to any prose that leaves the building.
+Writing-voice database: 80% corpus-aligned phrasing, 20% wildcard. **Needs Patrick's corpus:** rebuild the signature moves
+from his Notion scripts (VOLTA Scripts), X @American_zero1 posts (IFTTT Sheets archive) and EPSILON copy. Until then the
+rules below are starting defaults. Apply to any prose that leaves the building.
 
 ## When to use
-- Every script, carousel caption, community post, newsletter and client email.
-- Called before `/grammar` (tone first, then polish).
-- Routed through Jev; default tier **SONNET** at **MEDIUM** effort.
+- Every script, Short caption, social post, EPSILON outreach email and proposal.
+- Then polish with `humanizer` or `elements-of-style:writing-clearly-and-concisely`.
+- Tier routed by JEV (see `product/jev-router.md`); default **SONNET** at **MEDIUM** effort.
 
 ## Core voice
-- **Builder talking to builders.** First person, plain words, show the screen. "Here's what I did" beats "you should".
+- **Show the source.** First person, plain words; the document, the date, the link. "Here's what the file says" beats "they don't want you to know".
 - **Payoff first.** The first sentence says what the reader gets. Context comes second.
-- **Numbers over adjectives.** "Saves 18k tokens a chat" not "massively more efficient".
+- **Specifics over adjectives.** Real numbers and named sources; never invented ones.
 - **Short, then long.** Alternate a punchy line with one explanatory line. Never three long sentences in a row.
 - **Honest about cost.** Always mention what something costs or breaks. It's the brand's credibility.
 
@@ -27,15 +28,14 @@ Writing-voice database: 80% corpus-aligned phrasing, 20% wildcard. Built from th
 
 | Register  | Where                     | Adjustments                                                     |
 |-----------|---------------------------|-----------------------------------------------------------------|
-| YouTube   | Scripts, Shorts           | Contractions always. Rhetorical question max once per minute.   |
-| Community | Skool, Discord            | Warmer, second person, name the member, end with a question.    |
-| Business  | Proposals, client email   | No slang, no hype words, lead with outcome + timeline + price.  |
-| Carousel  | Instagram slides          | ≤ 14 words per slide, one idea per slide, verb-first headlines. |
+| Documentary | The Strangest Times scripts | Calm, precise, curious. Name the document, date and source; mark speculation as speculation. |
+| Shorts    | TikTok @Epsilonsec, YT Shorts | Hook in the first line, one claim, one source, ≤ 40 words on screen. |
+| Business  | EPSILON outreach, proposals | No slang, no hype words, lead with the specific finding + outcome + next step. |
+| Social    | X, Telegram QUANTUM_VAULT  | Short, link-first, one line of why it matters. |
 
-## Signature moves (corpus-aligned, use freely)
-- "So what you're seeing here is…" to open a screen walkthrough.
-- "Here's the bit nobody talks about:" before the counter-intuitive point.
-- "Plain text files Claude can route." when describing ARMS.
+## Signature moves (TODO: rebuild from Patrick's corpus)
+- "Make it real, make it weird, make it work." (Patrick's stated motto — Notion WhoAmI)
+- Open on the document or the finding, not on "in this video".
 - Rule of three for features, rule of one for the CTA.
 
 ## Banned words
@@ -50,6 +50,6 @@ For any batch (hooks, titles, captions, subject lines) of 5 or more:
 - See `/wildcard` for the full directive and scoring.
 
 ## Learned Preferences (RL Log)
-<!-- Appended by RUBRIC Editor / Recos. Newest last. -->
+<!-- Appended by VOLTA Editor / Recos. Newest last. Entries dated before 2026-10-28 are template-era defaults. -->
 - 2026-10-03 · Hooks: drop "In this video" entirely; open on the result.
 - 2026-10-20 · Business register: say "retainer" not "subscription" for monthly engagements.

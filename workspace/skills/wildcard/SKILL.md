@@ -13,9 +13,9 @@ Anti-overfitting directive: every batch is 80% corpus-aligned, 20% novel. Databa
 wildcard slot is how the system keeps exploring.
 
 ## When to use
-- Automatically for any generative batch of **5 or more** items (hooks, titles, thumbnails, carousel concepts, subject lines).
+- Automatically for any generative batch of **5 or more** items (hooks, titles, thumbnails, Shorts concepts, outreach subject lines).
 - Manually with `/wildcard <batch>` to re-roll the novel slice of an existing batch.
-- Routed through Jev; default tier **SONNET** at **MEDIUM** effort.
+- Tier routed by JEV (see `product/jev-router.md`); default **SONNET** at **MEDIUM** effort.
 
 ## The 80/20 directive
 1. Generate the batch with the relevant database skill. Count `n`.
@@ -33,8 +33,9 @@ wildcard slot is how the system keeps exploring.
 
 ## Guardrails
 - Wildcards never break brand safety (`/robo` don'ts, `/tone` banned words still apply).
-- Client deliverables: wildcard slot is offered as an "alternate direction" page, never mixed into the main proposal.
+- EPSILON client deliverables: the wildcard is offered as an "alternate direction" page, never mixed into the main proposal.
+- Documentary content: a wildcard may break style, never sourcing.
 
 ## Learned Preferences (RL Log)
-<!-- Appended by RUBRIC Editor / Recos. Newest last. -->
+<!-- Appended by VOLTA Editor / Recos. Newest last. Entries dated before 2026-10-28 are template-era defaults. -->
 - 2026-10-14 · Wildcard 20% slice should animate in after the 80% block, not simultaneously (explainer videos).

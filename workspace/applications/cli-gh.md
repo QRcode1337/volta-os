@@ -7,7 +7,8 @@ context_tokens: 0
 
 # gh (CLI)
 
-GitHub repos, PRs and issues. Used for the RUBRIC OS repo and community template releases.
+GitHub repos, PRs and issues for Patrick's account `QRcode1337` (Volta-OS, argus, ErisMorn, liminal_backrooms, automaker…; VOLTA Launchpad lists them).
 
 - Prefer `gh pr view --json` / `gh issue list --json` for structured output.
-- Preloaded context: **0 tokens**.
+- ARGUS issues: `gh issue list -R QRcode1337/argus --json number,title,updatedAt`.
+- Never paste tokens into commands or files; `gh auth status` only.

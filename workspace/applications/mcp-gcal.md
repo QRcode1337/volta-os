@@ -1,13 +1,12 @@
 ---
 id: mcp-gcal
 tier: mcp
-enabled: true
-context_tokens: 9800
+enabled: false
+context_tokens: 0
 ---
 
-# Google Calendar MCP (MCP)
+# Google Calendar (Claude-session connector)
 
-Events, availability and scheduling for the CALENDAR widget and `/client-onboarding` holds.
-
-- Used ~21×/wk. Preloaded context: **~9.8k tokens** every session.
-- Candidate for a CLI swap if usage drops below 5×/wk.
+Available in Claude sessions, not in VOLTA's `claude -p` runs. **TODO Patrick: in scope for agents?**
+If yes: read availability and draft events (e.g. EPSILON discovery calls, upload days); creating or changing events needs Patrick's OK.
+Times are America/New_York.

@@ -12,8 +12,8 @@ Re-tune a skill against recent feedback and RL log entries. Folds stable RL Log 
 body so the log stays short and the body stays true.
 
 ## When to use
-- Explicitly by command (`/calibrate <skill>`), or by the Friday recos routine when a skill's RL Log exceeds 12 entries.
-- Routed through Jev; default tier **SONNET** at **MEDIUM** effort.
+- Explicitly by command (`/calibrate <skill>`), or from VOLTA Recos when a skill's RL Log exceeds 12 entries.
+- Tier routed by JEV (see `product/jev-router.md`); default **SONNET** at **MEDIUM** effort.
 
 ## Steps
 1. Read the target skill and its RL Log.
@@ -23,4 +23,4 @@ body so the log stays short and the body stays true.
 5. Report: entries folded, entries kept, sections changed (as a diff).
 
 ## Learned Preferences (RL Log)
-<!-- Appended by RUBRIC Editor / Recos. Newest last. -->
+<!-- Appended by VOLTA Editor / Recos. Newest last. Entries dated before 2026-10-28 are template-era defaults. -->

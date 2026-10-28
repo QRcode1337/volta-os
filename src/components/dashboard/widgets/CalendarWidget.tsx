@@ -15,7 +15,7 @@ import { CopyHintButton, StatusDot } from './left-ui';
 const WORLD_CLOCKS = [
   { label: 'USA PT', timeZone: 'America/Los_Angeles' },
   { label: 'LONDON', timeZone: 'Europe/London' },
-  { label: 'SYDNEY', timeZone: 'Australia/Sydney' },
+  { label: 'UTC', timeZone: 'UTC' },
 ] as const;
 /** Used in place of a world clock that would duplicate the local (primary) zone. */
 const SWAP_CLOCK = { label: 'USA ET', timeZone: 'America/New_York' } as const;

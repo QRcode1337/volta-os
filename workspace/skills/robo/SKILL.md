@@ -14,8 +14,8 @@ decks, one-pagers, dashboards, reports, carousels, UI. Reference implementation:
 
 ## When to use
 - Any time an output will be looked at rather than read: decks, reports, dashboards, carousel slides, UI.
-- Called implicitly by `/proposal-writer`, `/automation-audit`, `/animate` and RUBRIC Carousels.
-- Routed through Jev; default tier **OPUS** at **HIGH** effort (taste-heavy, client-facing).
+- Called implicitly by EPSILON audit reports and one-pagers (`business/epsilon.md`), `/animate`, VOLTA Carousels and the Elements app.
+- Tier routed by JEV (see `product/jev-router.md`); default **OPUS** at **HIGH** effort (taste-heavy, client-facing).
 
 ## Principles
 1. **HTML first.** Ship a single self-contained `.html` file (inline CSS, no external JS). PDFs are printed from HTML.
@@ -44,12 +44,12 @@ decks, one-pagers, dashboards, reports, carousels, UI. Reference implementation:
 | `--accent-purple`     | `#A855F7`                 | OPUS tier                              |
 | `--accent-teal`       | `#14B8A6`                 | SONNET tier                            |
 
-Department colors (Second Brain, Today's Mix): skills `#FFFFFF` · business `#FF6B2B` · content `#EF4444` ·
-personal `#06B6D4` · product `#3B82F6` · community `#10B981` · routines `#F5A623` · apps `#8B5CF6`.
+Department colors (`src/lib/mock-data.ts` DEPARTMENT_COLORS): skills `#FFFFFF` · business `#FF6B2B` · content `#EF4444` ·
+personal `#06B6D4` · product/VOLTA `#3B82F6` · research `#10B981` · agents `#A855F7` · routines `#F5A623` · apps `#8B5CF6`.
 
 ## Typography
 - **Outfit** 300–700 — UI and body. Titles 600–700, body 400.
-- **Doto** 600–800 — hero numbers and one accent word per title ("RUBRIC **Agentic** OS"). Tracking 0.02–0.03em.
+- **Doto** 600–800 — hero numbers and one accent word per title ("VOLTA **Agentic** OS"). Tracking 0.02–0.03em.
 - **JetBrains Mono** 400–600 — numbers, labels (`.hud-label`: 11px, 600, uppercase, 0.08em tracking), code.
 - **Newsreader** italic — pull quotes and testimonials only.
 
@@ -72,6 +72,6 @@ personal `#06B6D4` · product `#3B82F6` · community `#10B981` · routines `#F5A
 - Never put orange text on an orange-tinted background.
 
 ## Learned Preferences (RL Log)
-<!-- Appended by RUBRIC Editor / Recos. Newest last. -->
+<!-- Appended by VOLTA Editor / Recos. Newest last. Entries dated before 2026-10-28 are template-era defaults. -->
 - 2026-10-09 · Title lockups: Doto tracking 0.02em, not 0.03em, when the word is longer than 6 letters.
 - 2026-10-17 · Client decks: put the price on slide 2, not the last slide.

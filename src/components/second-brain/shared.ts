@@ -79,9 +79,10 @@ export const DEPT_ORDER: Department[] = [
   'skills',
   'business',
   'content',
-  'personal',
+  'research',
+  'agents',
   'product',
-  'community',
+  'personal',
   'routines',
   'applications',
 ];

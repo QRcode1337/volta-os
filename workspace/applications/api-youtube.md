@@ -1,14 +1,14 @@
 ---
 id: api-youtube
 tier: api
-enabled: true
-context_tokens: 1200
+enabled: false
+context_tokens: 0
 ---
 
-# YouTube Data API (API)
+# YouTube Data / Analytics (API) — soon
 
-Channel stats, 48h velocity, comments. Used by the YouTube analytics routine and `/thumb` CTR feedback.
+Channel stats, CTR and retention for **The Strangest Times** once uploads start; feeds `content/thumbnails-log.md` and `/thumb`.
 
-- Auth: `YOUTUBE_API_KEY` (env var name only).
-- Quota: 10k units/day; the daily pull uses ~350.
-- Preloaded context: **~1.2k tokens** (endpoint notes).
+- Channel: TODO Patrick — channel URL/handle (needed before anything can be wired).
+- Options: YouTube Data/Analytics API (env var name only, e.g. `YOUTUBE_API_KEY`; Analytics needs OAuth), or the vidIQ connector in Claude sessions (channel analytics, keyword research, outliers).
+- Disabled until the channel id is known. No numbers are recorded anywhere until they come from this source.

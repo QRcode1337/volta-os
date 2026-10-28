@@ -1,81 +1,76 @@
-# RUBRIC Agentic OS — Root Router
+# VOLTA OS workspace — root router
 
-> Loaded on **every** session. Keep this file under ~2.5k tokens. Detail lives in the department
-> routers below; this file only points. If you are about to add a paragraph here, add a pointer instead.
+> Loaded automatically by every `claude -p` run VOLTA starts with `cwd = ./workspace` (Skills deck "Run").
+> It routes; it does not explain. Detail lives in the files it points to. Rebuilt 2026-10-28 from the workspace-fit audit
+> (`~/Volta-OS/docs/audits/2026-10-28-workspace-fit.md`) and Patrick's answers that day.
 
-Owner: Jay E · RoboNuggets · Sydney (AEST). Local OS runs at `localhost:50000`.
-Framework: **ARMS** — **A**pps, **R**outines, **M**emory, **S**kills. Everything is plain text Claude can route.
+Owner: **Patrick Galloway** · EPSILON LLC (epsilonsec.ai) · Maryland · **America/New_York**
+Dashboard: VOLTA OS at `http://localhost:50000` (repo `~/Volta-OS`, LaunchAgent `com.epsilon.volta-os`).
+Framework: **ARMS**: Apps (`applications/`), Routines (`routines/`), Memory (this file, `MEMORY.md`, `context/`), Skills (`~/.claude/skills`, mapped in §2).
+
+**Top priority (2026-10-28): land EPSILON LLC's first paying clients for AI optimization + digital marketing.**
+Second: grow The Strangest Times to YouTube ad revenue and sponsors. When a task could serve either, say how.
 
 ## 1. Router map (load only what the task needs)
 
-| If the task is about…                                   | Read first                     |
-|---------------------------------------------------------|--------------------------------|
-| Clients, sponsors, proposals, pricing, pipeline         | `departments/business.md`      |
-| YouTube, scripts, thumbnails, carousels, edits          | `departments/content.md`       |
-| RUBRIC OS itself, /robo UI, Jev, Second Brain           | `departments/product.md`       |
-| Health, macros, travel, goals                           | `departments/personal.md`      |
-| Skool, Discord, member wins, live Q&A                   | `departments/community.md`     |
-| "What happened / where is X?"                           | `MEMORY.md` (index cards only) |
-| Scheduled automations                                   | `routines/*.md`                |
-| Which connector to use                                  | `applications/*.md` → run `/search-connectors` |
+| If the task is about… | Read first |
+|---|---|
+| EPSILON LLC clients, offer, outreach, pricing, ARGUS, other ventures | `departments/business.md` → `business/epsilon.md` |
+| The Strangest Times, Shorts, TikTok/X/Telegram/Instagram, scripts, thumbnails, music, podcast | `departments/content.md` → `content/channels.md` |
+| Research corpus, UAP, quantum/neuromorphic/photonics, Voltamachine, ARGUS eval research | `departments/research.md` |
+| OpenClaw, Hermes, OmniRoute, Honcho, LTM, claude-mem, cron health, routines, IFTTT | `departments/agents.md` |
+| VOLTA OS itself, Launchpad repos, other software builds | `departments/product.md` |
+| Goals, Dreams, life wiki | `departments/personal.md` |
+| Who Patrick is, priorities, decisions, names you don't recognise | `context/profile.md`, `context/priorities.md`, `context/decisions.md`, `context/glossary.md` |
+| Disk, Windsor/Voltamachina/iCloud, secrets | `ops/storage.md` (read before any large write) |
+| "What happened / where is X?" | `MEMORY.md` (index cards only) |
+| Which connector to use | `applications/README.md` |
 
-Never load more than **two** department routers in one turn without saying why.
+Never load more than two department routers in one turn without saying why.
 
-## 2. Skills (self-triggered first)
+## 2. Skills (real ones live in `~/.claude/skills` and plugins, not here)
 
-Self-triggered — invoke without being asked when the pattern matches:
-`/lead-research` · `/proposal-writer` · `/client-onboarding` · `/automation-audit` · `/call-recap` · `/clean-up`
+- **Marketing/sales:** `agentic-council:herald-messaging-strategy` · `agentic-council:herald-growth-engineering` · `agentic-council:scout-competitive-analysis` · `agentic-council:revenue-council` · `humanizer` · `elements-of-style:writing-clearly-and-concisely`
+- **Video:** `hyperframes` (entry point) · `remotion-*` · `documentary-video-editing` · `epistemic-documentary-blueprint` · `animated-documentary-motion` · `fully-specd-screenplay` · `youtube-content` · `kanban-video-orchestrator` · `hermes-video-pipeline` · `manim-video`
+- **Music/audio:** `songwriting-and-ai-music` · `songsee` · `heartmula` · `audiocraft-audio-generation`
+- **Research:** `uap-object-dossier` · `clip-description-matcher` · `graphify` · `dialectic` · `anthropic-skills:deep-research`
+- **Ops:** `openclaw-health` · `heartbeat` · `superpowers:systematic-debugging` · `superpowers:verification-before-completion`
+- **Memory:** `claude-mem:mem-search` · Pieces vault (`pieces-vault-memory` MCP)
 
-Database skills — memory with taste, always apply when producing that output type:
-`/tone` (any prose) · `/thumb` (any thumbnail) · `/robo` (any visual artifact) · `/wildcard` (any batch ≥ 5)
+Workspace copies with an RL Log (`skills/<name>/SKILL.md`) exist where VOLTA writes lessons:
+`/cut` and `/animate` (Editor "Apply & teach"), `/thumb` (Generations "Promote"), plus `/tone`, `/robo`, `/wildcard`,
+`/clean-up`, `/calibrate`, `/note`. The `## Learned Preferences (RL Log)` section is authoritative over the body above it;
+newest entry wins. Never rename that heading, and keep it the last `##` section of the file.
 
-Artifact skills — on command: `/animate` · `/cut` · `/grammar` · `/note` · `/calibrate` · `/search-connectors` · `/chromify`
+## 3. Model and cost routing
 
-Each skill lives at `skills/<name>/SKILL.md`. The `## Learned Preferences (RL Log)` section at the bottom of
-each skill is **authoritative** and overrides the body above it when they conflict. Newest entry wins.
-
-## 3. Model routing (Jev)
-
-- Every skill call is classified by **Jev** first (~0.006 s, ~$0.00004). Jev picks HAIKU / SONNET / OPUS.
-- Jev may override the frontmatter tier only at **≥ 0.80 confidence**. FABLE is never auto-selected; it is a manual pin.
-- Default bias: if Haiku can do it, Haiku does it. Opus is for taste, motion, long-horizon planning, and client-facing decks.
+- No API billing for LLM text. Use OmniRoute combos (`config/llm-routes.json`) or local LM Studio `qwen/qwen3.5-9b` on `:1234`. `claude -p` on the Max plan is fine.
+- JEV tier-routes every dashboard skill run (HAIKU/SONNET/OPUS), and also triages feeds and ranks podcast/research items. Details: `product/jev-router.md` (the reference; don't restate it).
+- Paid media (xAI, ElevenLabs, Gemini TTS, Runway, Replicate) needs a quote and Patrick's OK before spend.
 
 ## 4. Connector policy
 
-Prefer **CLI → API → MCP**, in that order. MCPs preload context every session — an MCP used fewer than
-5×/week is a candidate for removal (see `applications/`). Never paste secrets into any workspace file; reference env var names only.
+CLI → API → MCP, lightest first. Never paste secrets into any workspace file; name the env var at most. Keys live in `~/Volta-OS/.env.local` and are server-side only.
 
 ## 5. Output rules
 
-- Visual artifacts are **HTML-first**, styled with `/robo` tokens, saved under `artifacts/<client-or-tag>/`.
-- Every artifact gets a one-line index card appended to `MEMORY.md` (date · path · 8-word summary).
-- Prose passes through `/tone`, then `/grammar`. Batches of ideas pass through `/wildcard`.
+- Bulky output (renders, datasets, audio, indexes) goes to `/Volumes/Windsor/VOLTA/**`, never the SSD. Flag anything over 500 MB first.
+- Workspace stays small text (< 2 MB). Artifacts: `artifacts/<project>/`, HTML-first, VOLTA `/robo` tokens.
+- Every artifact or decision gets a one-line card in `MEMORY.md` (date · path · 8-word summary).
+- Honest data: no invented numbers, clients, testimonials or results; label estimates as estimates.
 
 ## 6. /compact preservation rules
 
-When compacting (manual `/compact` or auto at 80% context), **preserve verbatim**:
-
-1. This router table (section 1) and the skill lists (section 2).
-2. The current task's goal, acceptance criteria, and any numbers the user gave (prices, dates, frame counts, timestamps).
-3. Every file path written or edited this session, with a 1-line note of what changed.
-4. Open decisions and the user's stated preferences from this session (they become RL Log candidates).
-5. Any `RL Log` entries added this session.
-
-**Drop** on compact: tool output bodies, file contents already saved to disk, exploratory reads, failed attempts
-(keep a one-line "tried X, failed because Y"), and greeting/acknowledgement turns.
-
-After compacting, re-read only the department router for the active task — never `MEMORY.md` in full.
+Preserve verbatim: this router table and §2; the task goal, acceptance criteria and every number Patrick gave;
+every file path written this session with a 1-line note; open decisions and stated preferences; RL Log entries added.
+Drop: tool output bodies, file contents already on disk, exploratory reads, failed attempts (keep "tried X, failed because Y").
+After compacting, re-read only the active department router.
 
 ## 7. Safety
 
+- Data sources are read-only: LTM SQLite, vaults, Notion, OpenClaw DBs, Honcho, iCloud placeholders (never read a dataless file; offer `brctl download`).
 - `/clean-up` reports first and asks before removing anything outside `/tmp` and known caches.
-- Never write outside `./workspace` from the OS bridge. Never commit `.env*`.
-- Client data stays in its client folder; never mix BetaShares and competitor material in one artifact.
-
-## Applied Recos
-
-### 2026-10-25 · rc-1 · Shrink CLAUDE.md into Department Routers
-- Applied: 2026-10-25T03:23:17.064Z
-- Source: VOLTA Recos (/apps/recos) · Memory · priority
-- Expected impact: Saves ~18.4k tok/chat
-- Change: Refactor workspace/CLAUDE.md into a slim router: move each department section into workspace/departments/<dept>.md and replace it with a one-line pointer. Preserve /compact directives verbatim.
+- Drafts, never sends: email, Discord, Telegram, X, TikTok, Instagram, client outreach. Nothing goes out without Patrick saying "send".
+- IFTTT applets and cron Run-now/Pause change live automations: propose, don't toggle, without Patrick's OK.
+- Never commit `.env*`. Never load `~/.hermes/SOUL.md` or other agent persona files into a VOLTA task.
+- Personal details (family, health, legal, finances) stay out of workspace files and out of anything public.

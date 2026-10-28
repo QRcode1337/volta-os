@@ -1,28 +1,23 @@
-# Business — Department Router
+# Business · EPSILON — Department Router
 
-> Clients, sponsors, proposals, pricing, pipeline. Load this when the task touches money or a named client.
+> EPSILON LLC (epsilonsec.ai), its client offer, ARGUS and the venture portfolio. Keeps the `business.md` filename so
+> VOLTA's Second Brain files it under the `business` department.
+> **Top priority (Patrick, 2026-10-28): first paying clients for AI optimization + digital marketing.** No clients yet.
 
 ## Files
-- `business/clients/betashares.md` — Sponsor. Q4 deck awaiting approval. Usage rights: 12 months, organic only.
-- `business/clients/northwind.md` — Retainer client. Automation audit delivered W42.
-- `business/clients/lumen-labs.md` — Prospect. AI Ops retainer proposal sent W43.
-- `business/pricing.md` — Rate card v4. Never quote below the floor without Jay's sign-off.
-- `business/pipeline.md` — Open deals, stage, next action, owner.
-- `business/artifacts/beta-shares-deck.html` — Working copy of the BetaShares deck (final lives in `artifacts/betashares/`).
+- `business/epsilon.md` — the offer, ICP, outreach plan, pipeline table and pricing TODOs. **Start here for any sales task.**
+- `business/ventures/epsilon-llc.md` — company one-pager: what it is, site, history, past offers, sources.
+- `business/ventures/argus.md` — ARGUS (argusweb.bond): what it is, stack, status, how it supports the EPSILON pitch.
+- `business/ventures/portfolio.md` — every other venture and past build, one line each (CASCADE, PRISM VECTOR, MBRSP…).
 
 ## Skills used here
-`/lead-research` → `/call-recap` → `/automation-audit` → `/proposal-writer` → `/client-onboarding`
-All client-facing artifacts use `/robo`. All client-facing prose uses `/tone` (business register).
+`agentic-council:herald-messaging-strategy` (positioning, copy) · `agentic-council:scout-competitive-analysis` ·
+`agentic-council:revenue-council` (deal/outreach review) · `agentic-council:strategist-mvp-scoping` · `/tone` (business register) ·
+`/robo` (one-pagers, decks) · `anthropic-skills:deep-research` (prospect research) · `humanizer`.
 
 ## Rules
-- One client per artifact. Never reference one client's numbers in another client's deliverable.
-- Proposals: 3 tiers max, anchor high, show ROI in hours saved per week.
-- Follow-up emails are drafted, never sent, unless Jay says "send".
-
-## Applied Recos
-
-### 2026-10-25 · rc-1 · Shrink CLAUDE.md into Department Routers
-- Applied: 2026-10-25T03:23:17.064Z
-- Source: VOLTA Recos (/apps/recos) · Memory · priority
-- Expected impact: Saves ~18.4k tok/chat
-- Change: Refactor workspace/CLAUDE.md into a slim router: move each department section into workspace/departments/<dept>.md and replace it with a one-line pointer. Preserve /compact directives verbatim.
+- Drafts only for any outreach (email, DM, form). Nothing is sent without Patrick saying "send".
+- No invented clients, testimonials, case-study numbers or revenue. Proof comes from real audits of real sites, labelled as such.
+- Prospect research uses public information only; no scraping behind logins; no personal data in workspace files beyond business name, site and public role.
+- Pricing figures in files are proposals until Patrick approves them; mark them `PROPOSED`.
+- Federal or GovCon claims cite a source document. No personalized financial or trading advice (Kalshi work is engineering only).

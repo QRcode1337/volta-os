@@ -1,13 +1,12 @@
 # Personal — Department Router
 
-> Health, macros, goals, travel. Private: never surface in client or community artifacts.
+> Goals and personal knowledge. **Private:** never surface in client, channel or public artifacts.
+> Keep family, health, legal and financial details out of workspace files entirely.
 
 ## Files
-- `personal/health.md` — Training split, sleep targets, bloodwork dates.
-- `personal/macros-log.md` — Daily macros (pulled by the MyFitnessPal Scraper API connector).
-- `personal/goals-2026.md` — Annual goals scorecard.
-- `personal/travel.md` — Upcoming trips, bookings, packing list.
+- `personal/goals-2026.md` — goals and how they tie to EPSILON and The Strangest Times.
+- Notion **Dreams** and **My Life Wiki** (pinned in Launchpad; read-only via VOLTA `/api/notion/*`). Don't copy their content here.
 
 ## Rules
-- Cut phase: 2,350 kcal, 190 g protein. Flag any day under 160 g protein.
-- Calendar focus blocks (9–12) are protected. Do not schedule calls into them.
+- Read-only for agents unless Patrick asks for an edit.
+- No personal data in prompts sent to paid or third-party APIs.

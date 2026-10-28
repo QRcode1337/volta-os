@@ -9,7 +9,8 @@ export type Department =
   | 'content'
   | 'personal'
   | 'product'
-  | 'community'
+  | 'research'
+  | 'agents'
   | 'routines'
   | 'applications'
   | 'memory';
@@ -191,7 +192,7 @@ export interface JevRouteResult {
 }
 
 export interface WorkspaceResponse {
-  totalFiles: number; // 424846
+  totalFiles: number; // files found under ./workspace (no procedural count)
   scannedFiles: number; // real files found under ./workspace
   nodes: BrainNode[];
   edges: { source: string; target: string }[];

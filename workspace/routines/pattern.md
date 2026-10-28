@@ -1,16 +1,15 @@
 ---
 id: r-pattern
 name: session pattern scanner
-time: "21:00"
-days: [F]
-runner: desktop
+runner: openclaw
 mode: passive
 ---
 
-# Session Pattern Scanner
+# Session Pattern Scanner → Curator
 
-Scan this week's sessions for repeated corrections ("no, shorter", "use the other layout"), repeated tool
-failures and repeated manual steps. Each pattern seen 3+ times becomes a RUBRIC Recos candidate.
+Closest real routine: **OpenClaw "Curator — Knowledge Synthesis"** (18:45 ET daily; output in VOLTA Feeds "Curator").
+There is no separate pattern-scanner job. If one is wanted: scan the week's Claude Code sessions (`/apps/sessions`) for
+repeated corrections, tool failures and manual steps; each pattern seen 3+ times becomes a VOLTA Recos candidate.
 
 ## Last run
-- 2026-10-17 21:00 · 38 sessions · 5 patterns · 3 recos candidates (dead-air threshold, Slack MCP, table component)
+- No dedicated runs. See Feeds "Curator".

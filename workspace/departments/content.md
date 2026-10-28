@@ -1,28 +1,41 @@
-# Content — Department Router
+# Content · The Strangest Times — Department Router
 
-> YouTube (202k subs), scripts, thumbnails, Instagram carousels, video edits.
+> Patrick's channels and production: The Strangest Times (YouTube), Shorts, TikTok @Epsilonsec, X, Telegram QUANTUM_VAULT,
+> Instagram, scripts, thumbnails, renders, music (VANTA VECTOR) and the Daily Briefing podcast. Keeps the `content.md`
+> filename so VOLTA's Second Brain files it under `content`.
+> **Goal (Patrick, 2026-10-28): The Strangest Times → YouTube ad revenue and sponsors.** Content also feeds EPSILON's pipeline.
 
 ## Files
-- `content/youtube-calendar.md` — Upload calendar, 2 long-form per week, Shorts daily.
-- `content/scripts/agentic-os-v3.md` — Current flagship script (8 clips, master cut v3).
-- `content/scripts/mods-deep-dive.md` — Next recording. Outline locked.
-- `content/thumbnails-log.md` — A/B results feeding `/thumb`.
-- `content/carousels/post-14-arms.md` — Latest approved carousel.
-- `videos/clips/` — RUBRIC Editor clip bin for the active master cut.
+- `content/channels.md` — every channel and account, what's automated, and the monetisation path. **Start here.**
+- `content/calendar.md` — upload cadence and the next uploads.
+- `content/thumbnails-log.md` — A/B results feeding `/thumb` once uploads start.
+- `videos/clips/README.md` — VOLTA Editor clip bin notes for the active project.
+- `applications/ifttt.md` — the cross-posting automations.
+
+## Sources of truth (read these, don't copy them here)
+- **Notion "Video Production"** (VOLTA Scripts / Carousels / Recos read it): The Strangest Times master project and README (12 long episodes),
+  Agent-Ready (TST-YT) script spec, OMNI_VEO 90-day channel plan (2026-10-20), Shorts Batch 1, Internet Lore series
+  (Ep 1 Discordia · Ep 2 Tyler · Ep 3 CAIMEO · Ep 4 NRO SENTIENT), EPSILON YouTube packet (THE RULERS, THE OTHER SEVEN), playbooks.
+- **Studio presets** `~/Volta-OS/config/studio-projects.json`: Hermes Video Pipeline, Hermes Remotion Promo, OpenMontage Composer,
+  Dialectics Video, Remotion Animation Workflow, TikTok Four Files, TikTok Warm Grain Grid, Universal Consciousness P1, ffmpeg Tools.
+- **Music** `~/Volta-OS/config/music.json` (VANTA VECTOR); Suno via local `suno-api` on `:3010` (waiting on Patrick's cookie).
+- **Podcast** `~/Volta-OS/config/podcast.json`: VOLTA Daily Briefing, hosts Mira & Dex, output on Windsor.
 
 ## Pipeline
-`/tone` script → `/grammar` → record → `/cut` A-roll → `/animate` B-roll → RUBRIC Editor review pins
-→ RL Log entries on `/cut` and `/animate` → `/thumb` (with `/wildcard`, 20% novel) → publish.
+Notion outline + source ledger (VOLTA Scripts) → `fully-specd-screenplay` / `epistemic-documentary-blueprint` →
+voice (Patrick's own narration, or ElevenLabs/Gemini TTS quoted first) → visuals (`hyperframes`, `remotion-*`, `animated-documentary-motion`, Generations) →
+Studio render queue → VOLTA Editor review pins → "Apply & teach" RL entries on `/cut` and `/animate` → `/thumb` → publish → IFTTT cross-posts.
+
+## Skills
+`youtube-content` · `documentary-video-editing` · `epistemic-documentary-blueprint` · `hyperframes` · `remotion-*` · `/thumb` · `/tone` · `/wildcard` ·
+vidIQ connector (keyword research, titles, outliers) when Patrick enables it.
 
 ## Rules
-- Hooks under 8 seconds. First line states the payoff.
-- Every thumbnail batch: 4 corpus-aligned + 1 WILDCARD.
-- Never reuse a thumbnail layout two uploads in a row.
-
-## Applied Recos
-
-### 2026-10-25 · rc-1 · Shrink CLAUDE.md into Department Routers
-- Applied: 2026-10-25T03:23:17.064Z
-- Source: VOLTA Recos (/apps/recos) · Memory · priority
-- Expected impact: Saves ~18.4k tok/chat
-- Change: Refactor workspace/CLAUDE.md into a slim router: move each department section into workspace/departments/<dept>.md and replace it with a one-line pointer. Preserve /compact directives verbatim.
+- Claims carry a source in the ledger; label speculation as speculation (UAP topics especially). One named document per video is the channel promise.
+- Tick YouTube's altered/synthetic-content disclosure on every video that uses AI visuals or voice. No partisan politics (OMNI_VEO rule).
+- Clear licences for every clip and track before publishing; log blockers in the ledger.
+- Renders and audio go to `/Volumes/Windsor/VOLTA/**`, never the SSD.
+- Every thumbnail/title batch: corpus-aligned + 1 wildcard (`/wildcard`).
+- Paid generation needs a quote and an OK; daily budget applies.
+- Drafts only: no post, upload or reply goes live without Patrick.
+- No invented channel numbers. Sponsor materials use real analytics only.

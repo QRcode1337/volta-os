@@ -1,16 +1,15 @@
 ---
 id: r-yt-analytics
-name: youtube analytics pull
-time: "07:00"
-days: [M, T, W, TH, F, SA, SU]
-runner: hermes
+name: the strangest times analytics pull
+runner: claude
 mode: passive
 ---
 
-# YouTube Analytics Pull
+# The Strangest Times — analytics pull (soon)
 
-Pull 48h views, CTR and retention for the last 3 uploads via the YouTube Data API connector; append CTR
-results to `content/thumbnails-log.md` for `/thumb`.
+Not running. Starts once the channel URL/handle is known and uploads are steady (`content/channels.md`).
+Plan: pull views, CTR and retention for the last 3 uploads (YouTube Analytics or the vidIQ connector), append thumbnail
+results to `content/thumbnails-log.md`, and track YPP progress in `personal/goals-2026.md`. Real numbers only.
 
 ## Last run
-- 2026-10-22 07:00 · subs 202,000 · "Claude 5.5 Agentic OS — full build" 148.2k views/48h · CTR 9.8%
+- Never.

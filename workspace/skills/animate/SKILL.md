@@ -1,6 +1,6 @@
 ---
 name: animate
-description: Generate HTML/Canvas motion graphics and B-roll animations for videos.
+description: Motion graphics and B-roll for documentaries and Shorts (HyperFrames / Remotion), synced to narration.
 model: opus
 effort: max
 category: artifact
@@ -8,42 +8,41 @@ category: artifact
 
 # /animate
 
-Generate HTML/Canvas motion graphics and B-roll animations for videos. Each animation is a single
-self-contained React/TSX or HTML scene (`videos/clips/<nn>-<slug>.tsx`) rendered at 1920×1080, 30 fps,
-using `/robo` tokens, then recorded to ProRes via the headless renderer.
+Motion graphics and B-roll for The Strangest Times and Shorts: document reveals, map/globe moves, timelines, quote cards,
+title cards. Built as HyperFrames HTML compositions or Remotion scenes, rendered through VOLTA Studio to Windsor.
 
 ## When to use
-- Any script line marked `[ANIM]`, or any clip in RUBRIC Editor of kind ANIMATION with review pins.
-- Routed through Jev; default tier **OPUS** at **MAX** effort (motion is the most taste-sensitive output).
+- Any script line marked `[ANIM]`, or any clip in VOLTA Editor of kind ANIMATION with review pins.
+- Real skills for the craft: `hyperframes` (entry point), `hyperframes-animation`, `remotion-*`, `animated-documentary-motion`, `manim-video`.
+  This file holds VOLTA's learned preferences.
 
 ## Scene library (sceneKey → purpose)
 
-| sceneKey         | Purpose                                                       |
-|------------------|---------------------------------------------------------------|
-| `title-reveal`   | Doto title lockup with pixel mascot, orange underline sweep   |
-| `ring-zoom`      | Camera push into the 36-node Artifact Ring, matched node glows |
-| `arms-stack`     | Four ARMS layers stack up with labels                         |
-| `wildcard-split` | 80% block fills, then 20% WILDCARD slice animates in          |
-| `cache-meter`    | WARM→COLD meter with dollar counter                           |
-| `brain-orb`      | Dotted sphere fly-through, department colors                  |
-| `jev-router`     | Prompts fly into Jev, fan out to HAIKU/SONNET/OPUS lanes      |
-| `outro-cta`      | Subscribe + community CTA card                                |
+| sceneKey          | Purpose                                                              |
+|-------------------|----------------------------------------------------------------------|
+| `document-reveal` | Declassified page slides in, key line highlighted, source label held |
+| `redaction-wipe`  | Redaction bars lift word by word in sync with narration             |
+| `globe-fly`       | Globe/map push to a coordinate (ARGUS-style), label + date            |
+| `timeline-strip`  | Dated events build left to right; current beat glows                 |
+| `quote-card`      | Primary-source quote with speaker, date and citation                  |
+| `title-card`      | Episode / chapter title lockup                                        |
+| `outro-cta`       | Next-episode end screen + subscribe                                   |
 
 ## Motion rules
-- Ease: `cubic-bezier(0.22, 1, 0.36, 1)` for entrances, `cubic-bezier(0.64, 0, 0.78, 0)` for exits.
+- Ease: `cubic-bezier(0.22, 1, 0.36, 1)` for entrances, `cubic-bezier(0.64, 0, 0.78, 0)` for exits (RL Log may override).
 - Default durations: entrance 18f, hold ≥ 45f, exit 12f. Never animate two hero elements at once.
-- Glow (`--accent-orange-glow`) only on the element the voiceover is naming right now.
-- Text on screen must be readable for at least 1.5× its reading time.
-- Sync every hero beat to a voiceover word timestamp (± 2 frames).
+- Text on screen must be readable for at least 1.5× its reading time; every document on screen shows its source label.
+- Sync every hero beat to a narration word timestamp (± 2 frames).
+- Label reconstructions and AI imagery as such on screen when they could be mistaken for evidence.
 
 ## Steps
-1. Read the clip's voiceover cues from the cut list; pick a sceneKey or compose a new one.
-2. Build the scene with deterministic timing (frame-based, no wall-clock).
-3. Render a 6-frame contact sheet for review before the full render.
-4. Export and register the clip in `videos/clips/README.md`.
+1. Read the clip's narration cues from the cut list; pick a sceneKey or compose a new one.
+2. Build the scene with deterministic, frame-based timing (no wall clock).
+3. Render a short contact sheet for review before the full render (Studio queue, output on Windsor).
+4. Register the clip in `videos/clips/README.md`.
 
 ## Learned Preferences (RL Log)
-<!-- Appended by RUBRIC Editor / Recos. Newest last. -->
+<!-- Appended by VOLTA Editor / Generations / Recos. Newest last. Entries dated before 2026-10-28 came from the template sample project ("Claude 5.5 Agentic OS" master cut) — treat them as generic motion/pacing defaults, not Patrick-specific taste. -->
 - 2026-10-21 · Ring zoom transitions run at 1.5x default speed; matched node glow intensity +40%.
 - 2026-10-21 · Orb rotation slows ~30% while the voiceover says "every dot".
 

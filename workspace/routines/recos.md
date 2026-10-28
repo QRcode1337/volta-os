@@ -1,21 +1,19 @@
 ---
 id: r-recos
-name: friday rubric recos generator
-time: "18:00"
-days: [F]
-runner: desktop
+name: volta recos
+runner: claude
 mode: passive
 ---
 
-# Friday RUBRIC Recos Generator
+# VOLTA Recos
 
-Review the week's sessions, routines and skill usage; generate the weekly improvement cart for RUBRIC Recos.
+On demand in `/apps/recos` (no cron): improvement cards from real signals — failing routines, Systems health, Notion playbooks.
+Proposed weekly use: Friday, together with regenerating `context/priorities.md`.
 
 ## Steps
-1. Read routine "Last run" blocks and token totals; flag routines whose cost/actionable-item ratio worsened.
+1. Read failing routines (`/api/routines`), Systems warnings and IFTTT failures (`applications/ifttt.md`).
 2. Read RL Logs added this week; flag skills ready for `/calibrate`.
-3. Check connector usage vs preloaded context (`applications/*.md`).
-4. Emit up to 12 recos with: category, benefit, files touched, effort, weekly savings, prompt payload.
+3. Emit recos with evidence links and steps. No savings estimates unless measured.
 
 ## Last run
-- 2026-10-17 18:00 · 12 recos generated · 4 priority · est. savings $148/wk
+- Not recorded here; see `/apps/recos`.

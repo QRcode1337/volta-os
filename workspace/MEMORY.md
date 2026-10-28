@@ -2,56 +2,47 @@
 
 > One line per card: `date · path · what it is`. Pointers only — never paste content here.
 > Read only the section for the department you are working in. Cards older than 60 days move to `MEMORY-archive.md`.
+> Cards below are seeded from real files that exist today; paths outside `./workspace` are absolute or `~`-relative.
 
-## Business
-- 2026-10-22 · `artifacts/betashares/q4-sponsor-deck.html` · BetaShares Q4 sponsor deck, 3 integration tiers, awaiting approval
-- 2026-10-21 · `business/clients/betashares.md` · BetaShares account: contacts, deliverables, usage-rights terms
-- 2026-10-20 · `artifacts/lumen-labs/proposal-ai-ops-retainer.pdf` · Lumen Labs AI Ops retainer proposal, $8.5k/mo tier
-- 2026-10-19 · `business/clients/lumen-labs.md` · Lumen Labs discovery notes, 4 automation candidates ranked
-- 2026-10-18 · `artifacts/northwind/automation-audit-report.pdf` · Northwind audit: 11 workflows, top 3 ROI picks
-- 2026-10-16 · `business/pricing.md` · Agency rate card v4 (retainers, sprints, audits)
-- 2026-10-14 · `business/pipeline.md` · Pipeline: 9 open deals, 3 in proposal stage
+## Context
+- 2026-10-28 · `context/profile.md` · Who Patrick is: history, skills, socials, sources (TODOs marked)
+- 2026-10-28 · `context/priorities.md` · Current priorities from OpenClaw actions.md and VOLTA HANDOFF
+- 2026-10-28 · `context/decisions.md` · Permanent decisions (billing, memory layer, storage, CASCADE archived)
+- 2026-10-28 · `context/glossary.md` · Names: ErisMorn, ARGUS, EPSILON, JEV, Windsor, GRIMIORE, VANTA VECTOR…
 
-## Content
-- 2026-10-22 · `content/scripts/agentic-os-v3.md` · Agentic OS video script v3, 8 clips, 8m40s runtime
-- 2026-10-22 · `videos/clips/README.md` · Master cut clip bin layout for RUBRIC Editor
-- 2026-10-21 · `content/thumbnails-log.md` · Thumbnail A/B log, Agentic OS A vs B (A leading 9.8% CTR)
-- 2026-10-20 · `content/youtube-calendar.md` · Upload calendar through Dec, 2 long-form/wk
-- 2026-10-17 · `content/scripts/mods-deep-dive.md` · Claude Mods Deep Dive outline, recording 14:00 today
-- 2026-10-15 · `content/carousels/post-14-arms.md` · Carousel #14 ARMS framework, 9 slides approved
+## Content (The Strangest Times)
+- 2026-10-28 · `content/channels.md` · Channels, handles, automations, ads + sponsors path
+- 2026-10-28 · `content/calendar.md` · OMNI_VEO cadence and next uploads
+- 2026-10-28 · `~/Volta-OS/config/podcast.json` · VOLTA Daily Briefing: hosts Mira & Dex, 8 topics, Gemini TTS
+- 2026-10-28 · `~/Volta-OS/config/studio-projects.json` · 9 Studio presets (HyperFrames, Remotion, ffmpeg pipelines)
+- 2026-10-28 · `~/Volta-OS/config/music.json` · VANTA VECTOR library roots; meta on Windsor
+- 2026-10-28 · Notion "Video Production" · Strangest Times master project, OMNI_VEO 90-day plan, Shorts batch 1
 
-## Product
-- 2026-10-22 · `product/rubric-os-roadmap.md` · RUBRIC OS roadmap, Q4 milestones and micro-apps
-- 2026-10-21 · `product/jev-router.md` · Jev router design, thresholds, telemetry fields
-- 2026-10-21 · `artifacts/robo/robo-brand-book.html` · /robo brand book, Ink Well Soft tokens
-- 2026-10-18 · `product/robo-ui-library.md` · /robo component inventory and usage rules
-- 2026-10-12 · `product/second-brain-spec.md` · Second Brain views: sphere, ring, bubbles, timeline
+## Research
+- 2026-10-28 · `/Volumes/Windsor/VOLTA/research/inventory.json` · Research inventory: 6,886 files across 4 roots
+- 2026-10-21 · `~/.openclaw/wiki/main/concepts/argus-evaluation-planning.md` · ARGUS eval taxonomy and benchmarks
+
+## Agent fleet
+- 2026-10-28 · `~/.openclaw/wiki/main/actions.md` · OpenClaw action board (open, blocked, done)
+- 2026-10-28 · `routines/README.md` · Map of the 30 real OpenClaw + launchd routines
+- 2026-10-28 · `applications/ifttt.md` · IFTTT applets, failures and suggested fixes
+- 2026-10-27 · `~/Volta-OS/docs/audits/micro-apps-audit-2026-10-27.md` · Per-app status and top-10 fixes
+
+## VOLTA
+- 2026-10-28 · `product/volta-roadmap.md` · VOLTA next-up list (from HANDOFF)
+- 2026-10-28 · `~/Volta-OS/docs/audits/2026-10-28-workspace-fit.md` · Why the workspace was rebuilt
+- 2026-10-28 · `~/Volta-OS/PATHFINDER-2026-10-28/00-features.md` · The 15 VOLTA features and their entry points
+- 2026-10-25 · `~/Volta-OS/docs/HANDOFF.md` · VOLTA run/rules/next-up handoff
+
+## Business · EPSILON
+- 2026-10-28 · `business/epsilon.md` · Offer, ICP, outreach plan, pipeline, pricing TODOs
+- 2026-10-28 · `business/ventures/epsilon-llc.md` · EPSILON LLC history and sources
+- 2026-10-28 · `business/ventures/argus.md` · ARGUS (argusweb.bond) venture note
+- 2026-10-28 · `business/ventures/portfolio.md` · Every other venture and past build
 
 ## Personal
-- 2026-10-22 · `personal/macros-log.md` · Cut phase macros, 2,350 kcal / 190 g protein target
-- 2026-10-19 · `personal/goals-2026.md` · 2026 goals scorecard, Q4 review pending
-- 2026-10-08 · `personal/travel.md` · SF trip for Anthropic creator summit, flights booked
+- 2026-10-28 · `personal/goals-2026.md` · Goals (TODO Patrick to fill)
+- 2026-10-28 · Notion "Dreams", "My Life Wiki" · Pinned in Launchpad; read-only via VOLTA Notion API
 
-## Community
-- 2026-10-22 · `community/skool.md` · Skool ops: 4,120 members, live Q&A Thursdays 16:30
-- 2026-10-20 · `community/member-wins.md` · Member wins roundup W43, 7 wins logged
-- 2026-10-11 · `community/discord-faq.md` · Discord FAQ, 22 canned answers
-
-## Routines
-- 2026-10-22 · `routines/brandwatch.md` · Brand watch: top token consumer, 18.2M tok/wk
-- 2026-10-22 · `routines/inbox.md` · Daily inbox digest team, 10:00 weekdays
-- 2026-10-17 · `routines/recos.md` · Friday RUBRIC Recos generator, 18:00
-
-## Skills
-- 2026-10-22 · `skills/cut/SKILL.md` · /cut RL log: dead-air threshold now 0.6 s
-- 2026-10-21 · `skills/animate/SKILL.md` · /animate RL log: 1.5x ring zoom, glow on matched nodes
-- 2026-10-20 · `skills/tone/SKILL.md` · /tone voice rules refreshed from last 40 scripts
-- 2026-10-18 · `skills/thumb/SKILL.md` · /thumb reference DB, 24 winners catalogued
-
-## Applied Recos
-
-### 2026-10-25 · rc-2 · Enable 55m Self-Ping Cache Keep-Alive
-- Applied: 2026-10-25T03:23:17.064Z
-- Source: VOLTA Recos (/apps/recos) · Memory · priority
-- Expected impact: Saves $437/mo API eq.
-- Change: Create workspace/routines/cache-keepalive.md: a passive routine that pings the session every 55 minutes during working hours. Add a pointer in MEMORY.md.
+## Drift / open
+<!-- Agents: add a card here when CLAUDE.md and AGENTS.md disagree, or when a pointer stops resolving. -->

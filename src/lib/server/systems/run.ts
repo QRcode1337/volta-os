@@ -1,58 +1,11 @@
 import 'server-only';
-import { execFile } from 'node:child_process';
-import fs from 'node:fs';
 import os from 'node:os';
 import { redactSecrets } from '../redact';
 
-// Small, bounded process + HTTP helpers for the Systems probes. Every call has a short timeout; nothing here
-// ever starts, stops or writes anything.
+// Small, bounded HTTP + JSON helpers for the Systems probes (processes go through ../proc). Every call has a short
+// timeout; nothing here ever starts, stops or writes anything.
 
 export const HOME = os.homedir();
-
-/** First existing absolute path, else the bare name (resolved through PATH). */
-function bin(name: string, candidates: string[]): string {
-  return candidates.find((c) => fs.existsSync(c)) ?? name;
-}
-
-export const BIN = {
-  lsof: bin('lsof', ['/usr/sbin/lsof']),
-  ps: bin('ps', ['/bin/ps']),
-  launchctl: bin('launchctl', ['/bin/launchctl']),
-  plutil: bin('plutil', ['/usr/bin/plutil']),
-  df: bin('df', ['/bin/df']),
-  du: bin('du', ['/usr/bin/du']),
-  nice: bin('nice', ['/usr/bin/nice']),
-  sysctl: bin('sysctl', ['/usr/sbin/sysctl']),
-  vmStat: bin('vm_stat', ['/usr/bin/vm_stat']),
-  memoryPressure: bin('memory_pressure', ['/usr/bin/memory_pressure']),
-  docker: bin('docker', ['/usr/local/bin/docker', '/opt/homebrew/bin/docker', '/Applications/Docker.app/Contents/Resources/bin/docker']),
-};
-
-export interface RunResult {
-  stdout: string;
-  stderr: string;
-  /** Exit code (0 on success); null when the process couldn't start or was killed by the timeout. */
-  code: number | null;
-  error: string | null;
-}
-
-/** execFile that never throws: non-zero exits still return their stdout (df/du print partial results). */
-export function run(file: string, args: string[], timeoutMs: number, maxBuffer = 4 * 1024 * 1024): Promise<RunResult> {
-  return new Promise((resolve) => {
-    execFile(file, args, { timeout: timeoutMs, maxBuffer, encoding: 'utf8', env: { ...process.env, LC_ALL: 'C' } }, (err, stdout, stderr) => {
-      if (!err) return resolve({ stdout, stderr, code: 0, error: null });
-      const e = err as NodeJS.ErrnoException & { code?: number | string; killed?: boolean };
-      const code = typeof e.code === 'number' ? e.code : null;
-      const reason =
-        e.code === 'ENOENT'
-          ? `${file.split('/').pop()} not found`
-          : e.killed
-            ? `timed out after ${Math.round(timeoutMs / 1000)}s`
-            : (stderr || e.message || 'failed').trim().split('\n')[0];
-      resolve({ stdout: stdout ?? '', stderr: stderr ?? '', code, error: redactSecrets(reason).slice(0, 240) });
-    });
-  });
-}
 
 export interface HttpResult {
   /** HTTP 2xx. */

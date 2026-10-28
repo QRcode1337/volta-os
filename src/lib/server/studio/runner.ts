@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { JobStatus, JobsResponse, LogEvent, StudioJob } from '@/types/studio';
 import { HttpError } from '../http-error';
+import { BIN } from '../proc';
 import { redactSecrets } from '../redact';
 import { buildJob } from './args';
 import { JOB_PATH, datalessReason, getPreset, isDataless, getProject, resolveExecutable, type Project, type ProgressKind } from './config';
@@ -17,7 +18,6 @@ import { JOBS_FILE, LOGS_DIR, STUDIO_ROOT, checkStudioStorage, ensureStudioDirs,
 // One job at a time (renders are heavy on a 24 GB Mac), niced to 10, run without a shell, in their own process group so
 // cancel can SIGTERM (then SIGKILL) the whole tree (npx -> node -> chrome / ffmpeg).
 
-const NICE = '/usr/bin/nice';
 const MAX_QUEUE = 20;
 const LOG_RING = 5000;
 const LINE_MAX = 2000;
@@ -428,8 +428,9 @@ async function start(rt: Runtime): Promise<void> {
     npm_config_update_notifier: 'false',
     npm_config_fund: 'false',
   } as unknown as NodeJS.ProcessEnv;
-  // Tool = nice(1); never a shell. argv elements are passed through untouched.
-  const child = spawn(NICE, ['-n', '10', rt.exe, ...rt.argv], { cwd: rt.cwd, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+  // Tool = nice(1); never a shell. argv elements are passed through untouched. Raw spawn, not spawnLogged: the job runs
+  // in its own process group (detached) so cancel can signal the whole tree, and env is replaced, not merged.
+  const child = spawn(BIN.nice, ['-n', '10', rt.exe, ...rt.argv], { cwd: rt.cwd, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
   rt.child = child;
   if (rt.canceling) killJob(rt);
   pump_stream(rt, child.stdout, 'stdout');

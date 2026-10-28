@@ -1,16 +1,16 @@
 import 'server-only';
-import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { HttpError } from '../../http-error';
+import { BIN, run } from '../../proc';
 import { resolveAsset } from './assets';
-import { CACHE_DIR, FFMPEG, ensureDir, limiter, onDisk, pruneCache, sha1 } from './paths';
+import { CACHE_DIR, ensureDir, limiter, onDisk, pruneCache, sha1 } from './paths';
 
 // Filmstrip sprites for timeline clips: `count` frames tiled horizontally (count x 1), each 90 px tall, frame i sampled
 // at (i + 0.5) * duration / count. One ffmpeg call: one fast-seeked input per frame, hstacked. Cached in cache/.
 
 export const FRAME_H = 90;
-const run = limiter(2);
+const limit = limiter(2);
 const inflight = new Map<string, Promise<ThumbsMeta>>();
 
 export interface ThumbsMeta {
@@ -37,7 +37,7 @@ export async function getThumbs(id: string, rawCount: number): Promise<{ meta: T
   if (await onDisk(file)) return { meta, file, etag };
   let p = inflight.get(key);
   if (!p) {
-    p = run(() => buildSprite(a.path, a.media === 'image', count, duration, frameW, file)).then(() => meta);
+    p = limit(() => buildSprite(a.path, a.media === 'image', count, duration, frameW, file)).then(() => meta);
     inflight.set(key, p);
     p.finally(() => inflight.delete(key)).catch(() => undefined);
   }
@@ -65,17 +65,11 @@ async function buildSprite(src: string, still: boolean, count: number, duration:
   const graph = count === 1 ? `${parts[0].replace(/\[v0\]$/, '[out]')}` : `${parts.join(';')};${Array.from({ length: count }, (_, i) => `[v${i}]`).join('')}hstack=inputs=${count}[out]`;
   const tmp = `${out}.${Date.now().toString(36)}.tmp`;
   args.push('-filter_complex', graph, '-map', '[out]', '-frames:v', '1', '-q:v', '5', '-f', 'mjpeg', tmp);
-  await new Promise<void>((resolve, reject) => {
-    execFile(FFMPEG, args, { timeout: 60_000, maxBuffer: 1024 * 1024 }, (err, _so, stderr) => {
-      if (err) {
-        const msg = String(stderr || err.message).trim().split('\n').pop() ?? 'failed';
-        reject(new HttpError(`Thumbnail render failed: ${msg.slice(0, 200)}`, 500));
-      } else resolve();
-    });
-  }).catch(async (e) => {
+  const r = await run(BIN.ffmpeg, args, { timeoutMs: 60_000, maxBuffer: 1024 * 1024 });
+  if (r.code !== 0) {
     await fs.rm(tmp, { force: true });
-    throw e;
-  });
+    throw new HttpError(`Thumbnail render failed: ${r.error ?? `exit ${r.code}`}`, 500);
+  }
   await fs.rename(tmp, out);
   void pruneCache();
 }

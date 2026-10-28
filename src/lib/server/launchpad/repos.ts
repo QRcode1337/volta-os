@@ -1,15 +1,12 @@
 import 'server-only';
-import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
+import { BIN, mapLimit, run } from '../proc';
 import { cached } from '../sources/cache';
 import { redactSecrets } from '../redact';
 import type { RepoInfo, ReposData } from './types';
 import { isEvictedFile } from '@/lib/server/icloud';
-
-const run = promisify(execFile);
 
 const HOME = os.homedir();
 const ROOTS = [path.join(HOME, 'Documents/PROJECTS'), path.join(HOME, 'ErisMorn'), path.join(HOME, 'Volta-OS')];
@@ -64,9 +61,11 @@ async function findRepos(root: string, deadline: number): Promise<{ found: Found
   return { found, truncated };
 }
 
+/** stdout of a read-only git command; throws on failure (`timedOut` set when the timeout killed it). */
 async function git(dir: string, args: string[]): Promise<string> {
-  const { stdout } = await run('git', ['-C', dir, ...args], { timeout: GIT_TIMEOUT_MS, maxBuffer: 1 << 20, env: GIT_ENV });
-  return stdout.trim();
+  const r = await run(BIN.git, ['-C', dir, ...args], { timeoutMs: GIT_TIMEOUT_MS, maxBuffer: 1 << 20, env: GIT_ENV });
+  if (r.code !== 0) throw Object.assign(new Error(r.error ?? `exit ${r.code}`), { timedOut: r.code === null && !!r.error?.startsWith('timed out') });
+  return r.stdout.trim();
 }
 
 /** Strip userinfo/query/fragment from a remote and normalise to host/path (+ a GitHub web URL when applicable). */
@@ -99,7 +98,7 @@ export function sanitizeRemote(raw: string): { display: string | null; github: s
   return { display, github };
 }
 
-const timedOut = (r: PromiseSettledResult<string>) => r.status === 'rejected' && !!((r.reason as { killed?: boolean })?.killed || (r.reason as { signal?: string })?.signal);
+const timedOut = (r: PromiseSettledResult<string>) => r.status === 'rejected' && !!(r.reason as { timedOut?: boolean })?.timedOut;
 
 /** Gather the facts for one repo, or a reason to leave it out (no readable history, git timed out). */
 async function inspect(f: Found): Promise<{ info: RepoInfo } | { skip: string }> {
@@ -130,20 +129,6 @@ async function inspect(f: Found): Promise<{ info: RepoInfo } | { skip: string }>
   return { info: base };
 }
 
-async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let i = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(n, items.length) }, async () => {
-      while (i < items.length) {
-        const idx = i++;
-        out[idx] = await fn(items[idx]);
-      }
-    }),
-  );
-  return out;
-}
-
 function groupSkipped(skipped: { name: string; reason: string }[]): ReposData['skipped'] {
   const by = new Map<string, string[]>();
   for (const s of skipped) by.set(s.reason, [...(by.get(s.reason) ?? []), s.name]);
@@ -165,7 +150,7 @@ async function scan(): Promise<ReposData> {
     }
   const skipped = found.filter((f) => f.skip).map((f) => ({ name: path.basename(f.dir), reason: f.skip as string }));
   if (walked.some((w) => w.truncated)) skipped.push({ name: '(scan)', reason: 'directory walk hit its time/size budget; some folders were not visited' });
-  const results = await pool(
+  const results = await mapLimit(
     found.filter((f) => !f.skip),
     CONCURRENCY,
     async (f) => ({ f, r: await inspect(f) }),

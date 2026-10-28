@@ -1,5 +1,6 @@
 import 'server-only';
 import { HttpError } from '../http-error';
+import { BIN } from '../proc';
 import { randomBytes } from 'node:crypto';
 import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
@@ -66,7 +67,7 @@ export async function startGeneration(opts: StartOptions): Promise<JobState> {
 
   await requireStorage(); // 507 if Windsor is missing or below the shared free-space floor
   if (!geminiKey()) throw new HttpError('GEMINI_API_KEY is missing from .env.local (then restart the dev server).', 503);
-  if (!(await ffmpegAvailable())) throw new HttpError('ffmpeg not found at /opt/homebrew/bin/ffmpeg.', 503);
+  if (!(await ffmpegAvailable())) throw new HttpError(`ffmpeg not found at ${BIN.ffmpeg} (install it with Homebrew or set VOLTA_FFMPEG).`, 503);
   if (!opts.force && (await getEpisode(date))) throw new HttpError(`An episode for ${date} already exists. Use regenerate to replace it.`, 409);
 
   const est = estimate(cfg, date);

@@ -1,9 +1,8 @@
 import 'server-only';
-import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import type { AgentStatus, RootCoverage, StatusResponse } from '@/components/research/types';
+import { BIN, run } from '../proc';
 import { cached } from '../sources/cache';
 import { loadConfig } from './config';
 import { getGraph } from './graphs';
@@ -12,7 +11,6 @@ import { inventoryState, isPlaceholder } from './inventory';
 import { getLibrary } from './library';
 import { getVault } from './vault';
 
-const run = promisify(execFile);
 const AGENT_TTL_MS = 20_000;
 
 const readJson = async <T,>(file: string): Promise<T | null> => {
@@ -29,8 +27,8 @@ async function agentStatus(label: string): Promise<AgentStatus> {
   const out: AgentStatus = { label, plist: await exists(plistPath), loaded: false, state: null, runs: null, lastExit: null, schedule: 'unknown' };
   let plist: Record<string, unknown> = {};
   try {
-    const { stdout } = await run('plutil', ['-convert', 'json', '-o', '-', plistPath], { timeout: 4000 });
-    plist = JSON.parse(stdout) as Record<string, unknown>;
+    const r = await run(BIN.plutil, ['-convert', 'json', '-o', '-', plistPath], { timeoutMs: 4000 });
+    if (r.code === 0) plist = JSON.parse(r.stdout) as Record<string, unknown>;
   } catch {
     // unreadable plist: schedule stays unknown
   }
@@ -46,16 +44,14 @@ async function agentStatus(label: string): Promise<AgentStatus> {
           : plist.RunAtLoad
             ? 'at load only'
             : 'on demand (no schedule in the plist)';
-  try {
-    const uid = process.getuid?.() ?? 501;
-    const { stdout } = await run('launchctl', ['print', `gui/${uid}/${label}`], { timeout: 4000 });
+  const uid = process.getuid?.() ?? 501;
+  const { stdout, code } = await run(BIN.launchctl, ['print', `gui/${uid}/${label}`], { timeoutMs: 4000 });
+  if (code === 0) {
     out.loaded = true;
     out.state = /^\s*state = (.+)$/m.exec(stdout)?.[1]?.trim() ?? null;
     const runs = /^\s*runs = (\d+)/m.exec(stdout)?.[1];
     out.runs = runs !== undefined ? Number(runs) : null;
     out.lastExit = /^\s*last exit code = (.+)$/m.exec(stdout)?.[1]?.trim() ?? null;
-  } catch {
-    out.loaded = false;
   }
   return out;
 }
@@ -65,8 +61,8 @@ async function holdStatus(): Promise<StatusResponse['indexer']['hold']> {
   const { envVar, plist, latestLog } = cfg.batchIndexHold;
   let enabled = false;
   try {
-    const { stdout } = await run('plutil', ['-convert', 'json', '-o', '-', plist], { timeout: 4000 });
-    const env = (JSON.parse(stdout) as { EnvironmentVariables?: Record<string, string> }).EnvironmentVariables ?? {};
+    const r = await run(BIN.plutil, ['-convert', 'json', '-o', '-', plist], { timeoutMs: 4000 });
+    const env = r.code === 0 ? ((JSON.parse(r.stdout) as { EnvironmentVariables?: Record<string, string> }).EnvironmentVariables ?? {}) : {};
     enabled = env[envVar] === '1';
   } catch {
     enabled = false;

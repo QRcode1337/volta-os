@@ -1,10 +1,11 @@
 import 'server-only';
-import { execFile, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { NleTextStyle } from '@/types/nle';
 import { FONT_STACK } from '@/lib/nle/model';
 import { HttpError } from '../../http-error';
+import { bin, run, stderrTail } from '../../proc';
 import { CACHE_DIR, ensureDir, sha1 } from './paths';
 
 // Text clips → transparent PNGs. The Homebrew ffmpeg on this host is built without libfreetype (no drawtext), so text
@@ -122,6 +123,7 @@ print("{\"w\":\(W),\"h\":\(H),\"bx\":\(Double(x0)),\"bw\":\(Double(blockW))}")
 const BIN_DIR = path.join(CACHE_DIR, 'bin');
 const SRC_HASH = sha1(SWIFT_SRC, 12);
 const BIN = path.join(BIN_DIR, `nle-text-${SRC_HASH}`);
+const SWIFTC = bin('swiftc', ['/usr/bin/swiftc']);
 const g = globalThis as unknown as { __voltaNleTextBin?: Promise<string> };
 
 function compileHelper(): Promise<string> {
@@ -131,11 +133,12 @@ function compileHelper(): Promise<string> {
     const src = path.join(BIN_DIR, `nle-text-${SRC_HASH}.swift`);
     await fs.writeFile(src, SWIFT_SRC);
     const tmp = `${BIN}.${process.pid}.tmp`;
-    await new Promise<void>((resolve, reject) =>
-      execFile('/usr/bin/swiftc', ['-O', '-o', tmp, src], { timeout: 180_000, maxBuffer: 4 * 1024 * 1024 }, (err, _o, stderr) =>
-        err ? reject(new HttpError(`Cannot build the text renderer (needs Xcode Command Line Tools / swiftc): ${String(stderr || err.message).trim().split('\n')[0].slice(0, 200)}`, 500)) : resolve(),
-      ),
-    );
+    const r = await run(SWIFTC, ['-O', '-o', tmp, src], { timeoutMs: 180_000, maxBuffer: 4 * 1024 * 1024 });
+    if (r.code !== 0) {
+      // swiftc's first stderr line is the real error; the rest is notes and context
+      const why = stderrTail(r.stderr.trim().split('\n')[0] ?? '', 1) || r.error;
+      throw new HttpError(`Cannot build the text renderer (needs Xcode Command Line Tools / swiftc): ${why}`, 500);
+    }
     await fs.rename(tmp, BIN);
     return BIN;
   })().catch((err) => {
@@ -229,10 +232,11 @@ export async function renderText(style: NleTextStyle, px: number): Promise<TextR
   } catch {
     // render
   }
-  const bin = await compileHelper();
+  const helper = await compileHelper();
   await ensureDir(CACHE_DIR);
   const stdout = await new Promise<string>((resolve, reject) => {
-    const p = spawn(bin, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+    // raw spawn: the spec goes in on stdin and the metrics JSON comes back on stdout (spawnLogged has neither)
+    const p = spawn(helper, [], { stdio: ['pipe', 'pipe', 'pipe'] });
     let so = '';
     let se = '';
     const timer = setTimeout(() => p.kill('SIGKILL'), 30_000);
@@ -245,7 +249,7 @@ export async function renderText(style: NleTextStyle, px: number): Promise<TextR
     p.on('close', (code) => {
       clearTimeout(timer);
       if (code === 0) resolve(so);
-      else reject(new HttpError(`Text renderer failed: ${se.trim().slice(0, 200) || `exit ${code}`}`, 500));
+      else reject(new HttpError(`Text renderer failed: ${stderrTail(se) || `exit ${code}`}`, 500));
     });
     p.stdin.end(JSON.stringify({ ...spec, out }));
   });

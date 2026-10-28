@@ -1,6 +1,7 @@
 import 'server-only';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { mapLimit } from '../proc';
 import { bestLabel, brctlCommand, tagKey, type Facets, type FileKind, type LibraryRow } from '@/components/research/types';
 import { loadConfig } from './config';
 import { getInventory, inventoryGen, kindOf, type InvEntry, type Inventory } from './inventory';
@@ -48,19 +49,14 @@ const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 3).trim
 
 async function mirrorExists(files: string[]): Promise<void> {
   const todo = files.filter((f) => !M.mirror.has(f));
-  const queue = [...todo];
-  await Promise.all(
-    Array.from({ length: 16 }, async () => {
-      for (let f = queue.shift(); f !== undefined; f = queue.shift()) {
-        try {
-          await fs.stat(f);
-          M.mirror.set(f, true);
-        } catch {
-          M.mirror.set(f, false);
-        }
-      }
-    }),
-  );
+  await mapLimit(todo, 16, async (f) => {
+    try {
+      await fs.stat(f);
+      M.mirror.set(f, true);
+    } catch {
+      M.mirror.set(f, false);
+    }
+  });
 }
 
 function searchFields(r: Omit<LibRow, 'nameN' | 'titleN' | 'tagsN' | 'pathN' | 'summaryN' | 'claimsN'>, rec: StageARec | null) {

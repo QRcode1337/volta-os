@@ -11,8 +11,6 @@ import type { PodcastConfig, TopicConfig } from './types';
 
 export const CONFIG_PATH = path.join(process.cwd(), 'config', 'podcast.json');
 export const PODCAST_ROOT = path.join(WINDSOR_VOLTA, 'podcast');
-export const FFMPEG = process.env.VOLTA_FFMPEG || '/opt/homebrew/bin/ffmpeg';
-export const FFPROBE = process.env.VOLTA_FFPROBE || '/opt/homebrew/bin/ffprobe';
 export const LLM_CWD = path.join(os.tmpdir(), 'volta-podcast-llm');
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));

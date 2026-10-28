@@ -1,12 +1,12 @@
 import 'server-only';
 import { redactSecrets } from '../redact';
 import { HttpError } from '../http-error';
-import { execFile } from 'node:child_process';
+import { BIN, runOrThrow } from '../proc';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { CostEstimate, PodcastConfig } from './types';
 import type { Turn } from './script';
-import { FFMPEG, FFPROBE, geminiKey } from './config';
+import { geminiKey } from './config';
 import { errMsg, round, sleep } from './util';
 
 // Stage 4: Gemini multi-speaker text-to-speech (generateContent, two prebuilt voices), then ffmpeg joins the chunks
@@ -253,18 +253,9 @@ export async function synthesize(cfg: PodcastConfig, turns: Turn[], date: string
 
 // ───────────── ffmpeg ─────────────
 
-function run(bin: string, args: string[], timeoutMs: number): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    execFile(bin, args, { timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) reject(new Error(`${path.basename(bin)} failed: ${redactSecrets((stderr || err.message).trim().split('\n').slice(-4).join(' | '))}`));
-      else resolve({ stdout, stderr });
-    });
-  });
-}
-
 export async function ffmpegAvailable(): Promise<boolean> {
   try {
-    await fs.access(FFMPEG);
+    await fs.access(BIN.ffmpeg);
     return true;
   } catch {
     return false;
@@ -279,15 +270,15 @@ export async function assemble(cfg: PodcastConfig, synth: SynthResult, meta: { t
   const target = `I=${cfg.audio.lufs}:TP=-1.5:LRA=11`;
   const base = ['-hide_banner', '-nostats', '-y', '-f', 'concat', '-safe', '0', '-i', list];
   // pass 1: measure
-  const p1 = await run(FFMPEG, [...base, '-af', `loudnorm=${target}:print_format=json`, '-f', 'null', '-'], 300_000);
+  const p1 = await runOrThrow(BIN.ffmpeg, [...base, '-af', `loudnorm=${target}:print_format=json`, '-f', 'null', '-'], { timeoutMs: 300_000, maxBuffer: 16 * 1024 * 1024 });
   const mj = p1.stderr.match(/\{[^{}]*"input_i"[^{}]*\}/)?.[0];
   if (!mj) throw new Error('ffmpeg loudnorm measurement produced no stats');
   const m = JSON.parse(mj) as Record<string, string>;
   // pass 2: linear normalisation with the measured values, then mp3
   const out = path.join(synth.workDir, 'episode.mp3');
   const norm = `loudnorm=${target}:measured_I=${m.input_i}:measured_TP=${m.input_tp}:measured_LRA=${m.input_lra}:measured_thresh=${m.input_thresh}:offset=${m.target_offset}:linear=true`;
-  await run(
-    FFMPEG,
+  await runOrThrow(
+    BIN.ffmpeg,
     [
       ...base,
       '-af',
@@ -304,9 +295,9 @@ export async function assemble(cfg: PodcastConfig, synth: SynthResult, meta: { t
       '-f', 'mp3',
       out,
     ],
-    300_000,
+    { timeoutMs: 300_000, maxBuffer: 16 * 1024 * 1024 },
   );
-  const probe = await run(FFPROBE, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', out], 30_000);
+  const probe = await runOrThrow(BIN.ffprobe, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', out], { timeoutMs: 30_000, maxBuffer: 16 * 1024 * 1024 });
   const durationSec = parseFloat(probe.stdout.trim());
   if (!Number.isFinite(durationSec) || durationSec < 60) throw new Error(`Assembled audio is only ${probe.stdout.trim()}s: refusing to publish it`);
   return { file: out, durationSec: Math.round(durationSec) };

@@ -6,7 +6,8 @@ import type { PathSize, Severity, StorageSizes, VolumeUsage } from '@/types/syst
 import { cached } from '@/lib/server/sources/cache';
 import { LTM_DB_PATH, LTM_FRAMES_DIR } from '@/lib/server/ltm';
 import { GiB, WINDSOR_ROOT, tilde, volumeMounted } from '@/lib/server/storage';
-import { BIN, HOME, run } from './run';
+import { BIN, run } from '../proc';
+import { HOME } from './run';
 
 // Volumes (df -k, every probe cycle — ~8 ms) and the sizes of the big directories (du -sk, nice'd, sequential,
 // cached 10 min and refreshed in the background — never on the request path).
@@ -42,7 +43,7 @@ async function volume(def: VolumeDef): Promise<VolumeUsage> {
   const base = { id: def.id, label: def.label, mount: def.mount, thresholds: thresholdText(def.rule), note: def.note ?? null };
   const empty = { ...base, mounted: false, totalBytes: null, freeBytes: null, usedBytes: null, usedPct: null };
   if (def.mount !== '/' && !(await volumeMounted(def.mount))) return { ...empty, severity: def.id === 'boot' ? 'critical' : 'warn', note: 'not mounted' };
-  const r = await run(BIN.df, ['-k', def.mount], 3_000);
+  const r = await run(BIN.df, ['-k', def.mount], { timeoutMs: 3_000 });
   const line = r.stdout.trim().split('\n')[1] ?? '';
   // Filesystem 1024-blocks Used Available Capacity iused ifree %iused Mounted on (mount may contain spaces)
   const m = line.match(/^\S+\s+(\d+)\s+(\d+)\s+(\d+)\s+\d+%\s+(?:\d+\s+\d+\s+\d+%\s+)?(.+)$/);
@@ -144,7 +145,7 @@ async function measure(def: SizeDef): Promise<PathSize> {
     const st = await fsp.stat(def.path);
     return { ...base, bytes: st.blocks * 512, apparentBytes: st.size };
   }
-  const r = await run(BIN.nice, ['-n', '15', BIN.du, '-sk', def.path], DU_TIMEOUT_MS, 1024 * 1024);
+  const r = await run(BIN.nice, ['-n', '15', BIN.du, '-sk', def.path], { timeoutMs: DU_TIMEOUT_MS, maxBuffer: 1024 * 1024 });
   const kb = Number(r.stdout.trim().split(/\s+/)[0]);
   if (!Number.isFinite(kb) || !r.stdout.trim()) return { ...base, error: r.error ?? 'du failed' };
   return { ...base, bytes: kb * 1024, partial: r.code !== 0, error: r.code !== 0 ? 'some entries unreadable — lower bound' : null };

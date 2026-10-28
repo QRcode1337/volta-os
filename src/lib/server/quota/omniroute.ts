@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { loadRoutes } from '../llm/config';
+import { bin, run } from '../proc';
 import type { OmniProvider, OmniSection, OmniState, QuotaWindow, TokenCounts } from './types';
 
 // OmniRoute usage + health, read-only, from the gateway's own SQLite store and CLI:
@@ -16,7 +17,7 @@ import type { OmniProvider, OmniSection, OmniState, QuotaWindow, TokenCounts } f
 // No credential column is ever selected.
 
 const DB_PATH = process.env.VOLTA_OMNIROUTE_DB || path.join(os.homedir(), '.omniroute', 'storage.sqlite');
-const SQLITE = '/usr/bin/sqlite3';
+const SQLITE = bin('sqlite3', ['/usr/bin/sqlite3']);
 const VOLTA_KEY_NAME = 'volta-os';
 const SNAPSHOT_LOOKBACK_MS = 2 * 86_400_000;
 
@@ -42,19 +43,16 @@ const LABELS: Record<string, string> = {
 const LOCAL = new Set(['ollama-local', 'lm-studio', 'llama-cpp']);
 const label = (id: string) => LABELS[id] ?? id;
 
-function sqlite<T>(sql: string): Promise<T[]> {
-  return new Promise((resolve, reject) => {
-    execFile(SQLITE, ['-readonly', '-cmd', '.timeout 3000', '-json', DB_PATH, sql], { timeout: 10_000, maxBuffer: 8 << 20 }, (err, stdout, stderr) => {
-      if (err) return reject(new Error(`sqlite3: ${(stderr.trim().split('\n')[0] || err.message.split('\n')[0] || 'failed').slice(0, 160)}`));
-      const t = stdout.trim();
-      if (!t) return resolve([]); // sqlite3 -json prints nothing for zero rows
-      try {
-        resolve(JSON.parse(t) as T[]);
-      } catch {
-        reject(new Error('sqlite3 returned unparseable output'));
-      }
-    });
-  });
+async function sqlite<T>(sql: string): Promise<T[]> {
+  const r = await run(SQLITE, ['-readonly', '-cmd', '.timeout 3000', '-json', DB_PATH, sql], { timeoutMs: 10_000, maxBuffer: 8 << 20 });
+  if (r.code !== 0) throw new Error(`sqlite3: ${(r.error ?? 'failed').slice(0, 160)}`);
+  const t = r.stdout.trim();
+  if (!t) return []; // sqlite3 -json prints nothing for zero rows
+  try {
+    return JSON.parse(t) as T[];
+  } catch {
+    throw new Error('sqlite3 returned unparseable output');
+  }
 }
 
 /** ISO strings are interpolated into SQL, so build them here from Dates only. */
@@ -72,7 +70,10 @@ function omnirouteBin(): string | null {
   return cands.find((c) => c && fs.existsSync(c)) ?? null;
 }
 
-/** `omniroute --output json …` as parsed JSON, or null. The CLI authenticates itself locally, so OMNIROUTE_API_KEY must NOT be in its env (the volta-os key would be refused). */
+/**
+ * `omniroute --output json …` as parsed JSON, or null. The CLI authenticates itself locally, so OMNIROUTE_API_KEY must NOT be in its env (the volta-os key would be refused).
+ * Raw execFile on purpose: it needs a clean env, and proc.run() merges over process.env.
+ */
 function cliJson(bin: string, args: string[]): Promise<unknown> {
   return new Promise((resolve) => {
     const binDir = path.dirname(fs.realpathSync(bin));

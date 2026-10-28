@@ -1,10 +1,10 @@
 import 'server-only';
-import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { CompositionInfo, GenerationInput, MediaClass, MusicInput, StudioOutput, StudioProject } from '@/types/studio';
 import { HttpError } from '../http-error';
+import { BIN, mapLimit, run } from '../proc';
 import { readManifest, resolveFile } from '../media/storage';
 import { assertLocal, getLibrary, musicInputs, resolveTrack } from '../music';
 import { brctlCommand } from '@/components/music/format';
@@ -38,7 +38,6 @@ const OUTPUT_TTL_MS = 20_000;
 export const OUTPUT_SCAN_LIMIT = 100;
 const WALK_BUDGET = 25_000;
 const PROBE_CONCURRENCY = 4;
-const FFPROBE = '/opt/homebrew/bin/ffprobe';
 
 export interface Probe {
   durationSec: number | null;
@@ -78,55 +77,36 @@ export const fileId = (p: string) => `o_${createHash('sha1').update(p).digest('h
 
 // ───────────────────────── ffprobe ─────────────────────────
 
-export function probeFile(file: string, size: number, mtimeMs: number): Promise<Probe> {
+export async function probeFile(file: string, size: number, mtimeMs: number): Promise<Probe> {
   const key = `v2|${file}|${size}|${mtimeMs}`;
   const hit = R.probes.get(key);
-  if (hit) return Promise.resolve(hit);
-  return new Promise((resolve) => {
-    execFile(
-      FFPROBE,
-      ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width,height,avg_frame_rate,r_frame_rate', '-of', 'json', '-i', file],
-      { timeout: 15_000, maxBuffer: 1024 * 1024 },
-      (err, stdout, stderr) => {
-        const empty: Probe = NO_PROBE;
-        if (err) {
-          console.warn('[studio] ffprobe failed:', path.basename(file), String(stderr || err.message).split('\n')[0].slice(0, 200));
-          return resolve(empty);
-        }
-        try {
-          const j = JSON.parse(stdout) as { format?: { duration?: string }; streams?: { codec_type?: string; width?: number; height?: number; avg_frame_rate?: string; r_frame_rate?: string }[] };
-          const v = j.streams?.find((s) => s.codec_type === 'video' && s.width);
-          const dur = Number(j.format?.duration);
-          const p: Probe = {
-            durationSec: Number.isFinite(dur) ? Math.round(dur * 100) / 100 : null,
-            width: v?.width ?? null,
-            height: v?.height ?? null,
-            fps: parseRate(v?.avg_frame_rate) ?? parseRate(v?.r_frame_rate),
-            hasAudio: !!j.streams?.some((s) => s.codec_type === 'audio'),
-          };
-          if (R.probes.size > 3000) R.probes.clear();
-          R.probes.set(key, p);
-          resolve(p);
-        } catch {
-          resolve(empty);
-        }
-      },
-    );
-  });
-}
-
-async function mapLimit<T, U>(items: T[], limit: number, fn: (t: T) => Promise<U>): Promise<U[]> {
-  const out: U[] = new Array(items.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (next < items.length) {
-        const i = next++;
-        out[i] = await fn(items[i]);
-      }
-    }),
+  if (hit) return hit;
+  const r = await run(
+    BIN.ffprobe,
+    ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width,height,avg_frame_rate,r_frame_rate', '-of', 'json', '-i', file],
+    { timeoutMs: 15_000, maxBuffer: 1024 * 1024 },
   );
-  return out;
+  if (r.code !== 0) {
+    console.warn('[studio] ffprobe failed:', path.basename(file), r.error);
+    return NO_PROBE;
+  }
+  try {
+    const j = JSON.parse(r.stdout) as { format?: { duration?: string }; streams?: { codec_type?: string; width?: number; height?: number; avg_frame_rate?: string; r_frame_rate?: string }[] };
+    const v = j.streams?.find((s) => s.codec_type === 'video' && s.width);
+    const dur = Number(j.format?.duration);
+    const p: Probe = {
+      durationSec: Number.isFinite(dur) ? Math.round(dur * 100) / 100 : null,
+      width: v?.width ?? null,
+      height: v?.height ?? null,
+      fps: parseRate(v?.avg_frame_rate) ?? parseRate(v?.r_frame_rate),
+      hasAudio: !!j.streams?.some((s) => s.codec_type === 'audio'),
+    };
+    if (R.probes.size > 3000) R.probes.clear();
+    R.probes.set(key, p);
+    return p;
+  } catch {
+    return NO_PROBE;
+  }
 }
 
 // ───────────────────────── outputs ─────────────────────────

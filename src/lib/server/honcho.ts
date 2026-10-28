@@ -16,6 +16,7 @@ import type {
   HonchoWorkspace,
 } from '@/types/honcho';
 import { HttpError } from './http-error';
+import { mapLimit } from './proc';
 import { redactSecrets } from './redact';
 
 // Server-only client for the self-hosted Honcho memory server (Plastic Labs, Docker).
@@ -423,19 +424,6 @@ const MAX_SESSIONS = 300;
 const MAX_PEER_SESSION_PAIRS = 400;
 const g = globalThis as unknown as { __honchoStats?: Map<string, { at: number; done?: boolean; value: Promise<HonchoStats> }> };
 
-async function pool<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let i = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (i < items.length) {
-      const idx = i++;
-      out[idx] = await fn(items[idx]);
-    }
-  });
-  await Promise.all(workers);
-  return out;
-}
-
 async function allPages<T>(fetchPage: (page: number) => Promise<HonchoPage<T>>, cap: number): Promise<{ items: T[]; total: number }> {
   const first = await fetchPage(1);
   const items = [...first.items];
@@ -449,7 +437,7 @@ async function computeStats(w: string): Promise<HonchoStats> {
   const sessions = await allPages((p) => listSessions(w, p, 100), MAX_SESSIONS);
   if (sessions.total > sessions.items.length || peers.total > peers.items.length) partial = true;
 
-  const sessionTotals = await pool(sessions.items, 8, async (s) => {
+  const sessionTotals = await mapLimit(sessions.items, 8, async (s) => {
     try {
       return [s.id, (await sessionMessages(w, s.id, { order: 'asc', size: 1 })).total] as const;
     } catch (err) {
@@ -459,7 +447,7 @@ async function computeStats(w: string): Promise<HonchoStats> {
     }
   });
 
-  const peerSessionLists = await pool(peers.items, 6, async (peer) => {
+  const peerSessionLists = await mapLimit(peers.items, 6, async (peer) => {
     const page = await peerSessions(w, peer.id, 1, 100);
     if (page.total > page.items.length) partial = true;
     return { peer: peer.id, total: page.total, ids: page.items.map((s) => s.id) };
@@ -470,7 +458,7 @@ async function computeStats(w: string): Promise<HonchoStats> {
     partial = true;
     pairs = pairs.slice(0, MAX_PEER_SESSION_PAIRS);
   }
-  const pairCounts = await pool(pairs, 8, async ({ peer, session }) => {
+  const pairCounts = await mapLimit(pairs, 8, async ({ peer, session }) => {
     try {
       return { peer, n: (await sessionMessages(w, session, { order: 'asc', size: 1, peer })).total };
     } catch (err) {

@@ -3,7 +3,8 @@ import type { Confidence, PodcastConfig, ResearchSummary, SourceRef, TopicConfig
 import { classifyTopic, type Candidate } from './candidates';
 import { llm } from './llm';
 import { readCacheJson, writeCacheJson } from './storage';
-import { clip, errMsg, extractJson, isHttpUrl, pmap } from './util';
+import { mapLimit } from '../proc';
+import { clip, errMsg, extractJson, isHttpUrl } from './util';
 
 // Stage 1b: deep research. One `claude -p` call per topic with live WebSearch + WebFetch (Max plan). Each call is told to
 // find the most significant developments of the last 24-48 h, OPEN and read the primary sources, and answer in strict JSON.
@@ -180,7 +181,7 @@ export async function runResearch(cfg: PodcastConfig, date: string, opts: { fres
   const results: ResearchTopicResult[] = [];
   const all: Candidate[] = [];
   let listCost = 0;
-  await pmap(topics, cfg.research.parallel, async (t) => {
+  await mapLimit(topics, cfg.research.parallel, async (t) => {
     const s = Date.now();
     const file = `research-${t.id}.json`;
     let hit = opts.fresh ? null : await readCacheJson<CachedTopic>(date, file);

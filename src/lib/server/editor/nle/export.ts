@@ -1,16 +1,16 @@
 import 'server-only';
-import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { NleExportJob, NleExportRequest } from '@/types/nle';
 import { sequenceDuration } from '@/lib/nle/model';
 import { HttpError } from '../../http-error';
+import { BIN, spawnLogged } from '../../proc';
 import { redactSecrets } from '../../redact';
 import { resolveAsset, type NleAsset } from './assets';
 import { buildExportGraph } from './filtergraph';
 import { assertFreeSpace, writeAtomic } from '../../storage';
-import { CACHE_DIR, FFMPEG, LOCAL_EXPORTS_DIR, WINDSOR_EXPORTS_DIR, ensureDir, exportsDir } from './paths';
+import { CACHE_DIR, LOCAL_EXPORTS_DIR, WINDSOR_EXPORTS_DIR, ensureDir, exportsDir } from './paths';
 import { validateSequence } from './projects';
 
 // Export jobs: one ffmpeg at a time, the rest queued. The registry lives on globalThis (survives HMR) and finished
@@ -30,12 +30,13 @@ interface Registry {
   pending: Map<string, Pending>;
   queue: string[];
   running: string | null;
-  proc: ChildProcess | null;
+  /** Aborts the running ffmpeg (SIGTERM, SIGKILL after 5 s). */
+  abort: AbortController | null;
   partial: string | null;
   loaded: boolean;
 }
 const g = globalThis as unknown as { __voltaNleExports?: Registry };
-const R: Registry = (g.__voltaNleExports ??= { jobs: new Map(), pending: new Map(), queue: [], running: null, proc: null, partial: null, loaded: false });
+const R: Registry = (g.__voltaNleExports ??= { jobs: new Map(), pending: new Map(), queue: [], running: null, abort: null, partial: null, loaded: false });
 
 async function load(): Promise<void> {
   if (R.loaded) return;
@@ -160,11 +161,7 @@ export async function cancelExport(id: string): Promise<NleExportJob> {
   } else if (j.status === 'running') {
     j.status = 'cancelled';
     j.finishedAt = new Date().toISOString();
-    R.proc?.kill('SIGTERM');
-    const p = R.proc;
-    setTimeout(() => {
-      if (p && p.exitCode === null) p.kill('SIGKILL');
-    }, 5000);
+    R.abort?.abort();
   }
   return clone(j);
 }
@@ -264,36 +261,19 @@ async function pump(): Promise<void> {
     ];
     pushLog(`export ${plan.W}x${plan.H} @ ${plan.fps} fps, ${plan.duration.toFixed(2)} s, ${req.quality} → ${path.basename(out)}`);
     const tRun = Date.now();
-    const code = await new Promise<number | null>((resolve) => {
-      const p = spawn(FFMPEG, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-      R.proc = p;
-      let so = '';
-      p.stdout.on('data', (d: Buffer) => {
-        so += d.toString();
-        const lines = so.split('\n');
-        so = lines.pop() ?? '';
-        for (const line of lines) {
-          const m = /^out_time_us=(\d+)/.exec(line);
-          if (m && job.status === 'running') job.progress = Math.max(job.progress, Math.min(0.999, Number(m[1]) / 1e6 / plan.duration));
-        }
-      });
-      let se = '';
-      p.stderr.on('data', (d: Buffer) => {
-        se += d.toString();
-        const lines = se.split('\n');
-        se = lines.pop() ?? '';
-        lines.forEach(pushLog);
-      });
-      p.on('error', (e) => {
-        pushLog(`ffmpeg failed to start: ${e.message}`);
-        resolve(null);
-      });
-      p.on('close', (c) => {
-        if (se) pushLog(se);
-        resolve(c);
-      });
+    R.abort = new AbortController();
+    const res = await spawnLogged(BIN.ffmpeg, args, {
+      signal: R.abort.signal,
+      killAfterMs: 5000,
+      onLine: (line, stream) => {
+        if (stream === 'stderr') return pushLog(line);
+        const m = /^out_time_us=(\d+)/.exec(line);
+        if (m && job.status === 'running') job.progress = Math.max(job.progress, Math.min(0.999, Number(m[1]) / 1e6 / plan.duration));
+      },
     });
-    R.proc = null;
+    const code = res.code;
+    if (code === null && !res.signal) pushLog(`ffmpeg failed to start: ${res.stderrTail}`);
+    R.abort = null;
     pushLog(`graph ${((tRun - tBuild) / 1000).toFixed(1)} s, ffmpeg ${((Date.now() - tRun) / 1000).toFixed(1)} s (exit ${code})`);
     if (cancelled()) throw new HttpError('cancelled', 499);
     if (code !== 0) {
@@ -313,7 +293,7 @@ async function pump(): Promise<void> {
       pushLog(`error: ${job.error}`);
     }
   } finally {
-    R.proc = null;
+    R.abort = null;
     R.partial = null;
     if (partial) await fs.rm(partial, { force: true }).catch(() => undefined);
     await fs.rm(work, { recursive: true, force: true }).catch(() => undefined);

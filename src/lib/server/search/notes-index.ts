@@ -1,6 +1,7 @@
 import 'server-only';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
+import { mapLimit } from '../proc';
 import { obsidianUrl, vaultSnapshot } from '../vaults';
 import { makeSnippet, makeTitle, type ParsedQuery } from './text';
 import type { SearchHit } from './types';
@@ -54,19 +55,6 @@ interface State {
 
 const g = globalThis as unknown as { __voltaSearchNotes?: State };
 const state: State = (g.__voltaSearchNotes ??= { progress: { done: 0, total: 0 }, lastUsed: 0 });
-
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const out = new Array<R>(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const i = next++;
-      out[i] = await fn(items[i]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return out;
-}
 
 const normalize = (src: string) => src.replace(/\s+/g, ' ').toLowerCase().slice(0, MAX_INDEX_CHARS);
 

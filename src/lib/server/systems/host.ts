@@ -6,7 +6,8 @@ import type { LaunchAgentHealth, LaunchAgentState, ServiceProcess } from '@/type
 import { cached } from '@/lib/server/sources/cache';
 import { redactSecrets } from '../redact';
 import { tilde } from '@/lib/server/storage';
-import { BIN, HOME, run } from './run';
+import { BIN, run } from '../proc';
+import { HOME } from './run';
 
 // Host-level facts shared by every probe: who listens on which port (lsof), process uptime/RSS (ps), LaunchAgent
 // state (launchctl list) and a few plist facts. All read-only and cheap (~20–80 ms each).
@@ -22,7 +23,7 @@ export interface Listener {
 /** port → owning process + bound addresses, from one `lsof` call. */
 export async function listeners(): Promise<Map<number, Listener>> {
   const out = new Map<number, Listener>();
-  const r = await run(BIN.lsof, ['-nP', '-iTCP', '-sTCP:LISTEN', '-F', 'pcn'], 4_000);
+  const r = await run(BIN.lsof, ['-nP', '-iTCP', '-sTCP:LISTEN', '-F', 'pcn'], { timeoutMs: 4_000 });
   let pid = 0;
   let name = '';
   for (const line of r.stdout.split('\n')) {
@@ -73,7 +74,7 @@ export async function processes(pids: number[]): Promise<Map<number, ServiceProc
   const out = new Map<number, ServiceProcess>();
   const list = [...new Set(pids.filter((p) => Number.isInteger(p) && p > 0))];
   if (!list.length) return out;
-  const r = await run(BIN.ps, ['-o', 'pid=,etime=,rss=,comm=', '-p', list.join(',')], 3_000);
+  const r = await run(BIN.ps, ['-o', 'pid=,etime=,rss=,comm=', '-p', list.join(',')], { timeoutMs: 3_000 });
   for (const line of r.stdout.split('\n')) {
     const m = line.trim().match(/^(\d+)\s+(\S+)\s+(\d+)\s+(.+)$/);
     if (!m) continue;
@@ -94,7 +95,7 @@ export interface LaunchdEntry {
 
 /** Every loaded job in the user's launchd domain: label → { pid, last exit status }. */
 export async function launchdList(): Promise<Map<string, LaunchdEntry> | null> {
-  const r = await run(BIN.launchctl, ['list'], 4_000);
+  const r = await run(BIN.launchctl, ['list'], { timeoutMs: 4_000 });
   if (r.code !== 0 && !r.stdout) return null;
   const out = new Map<string, LaunchdEntry>();
   for (const line of r.stdout.split('\n').slice(1)) {
@@ -116,7 +117,7 @@ const PLIST_TTL_MS = 5 * 60_000;
 async function readPlist(label: string): Promise<PlistFacts | null> {
   const file = path.join(AGENTS_DIR, `${label}.plist`);
   if (!fs.existsSync(file)) return null;
-  const r = await run(BIN.plutil, ['-convert', 'json', '-o', '-', file], 3_000);
+  const r = await run(BIN.plutil, ['-convert', 'json', '-o', '-', file], { timeoutMs: 3_000 });
   if (r.code !== 0) return { schedule: null, logPath: null, packages: {} };
   let p: {
     KeepAlive?: unknown;

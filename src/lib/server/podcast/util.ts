@@ -15,22 +15,6 @@ export const isDate = (s: unknown): s is string => typeof s === 'string' && /^\d
 
 export const errMsg = (e: unknown): string => redactSecrets((e as Error)?.message || String(e) || 'failed');
 
-/** Run `fn` over `items` with at most `limit` in flight. Results keep input order. */
-export async function pmap<T, R>(items: T[], limit: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
-  const out = new Array<R>(items.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(Math.max(1, limit), items.length) }, async () => {
-      for (;;) {
-        const i = next++;
-        if (i >= items.length) return;
-        out[i] = await fn(items[i], i);
-      }
-    }),
-  );
-  return out;
-}
-
 /**
  * Pull the JSON value out of an LLM reply that may wrap it in prose or a code fence.
  * Tries the whole text, then fenced blocks, then the last balanced top-level array/object.

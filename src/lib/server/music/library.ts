@@ -1,6 +1,7 @@
 import 'server-only';
 import { HttpError } from '../http-error';
 import { execFile } from 'node:child_process';
+import { BIN, mapLimit, run } from '../proc';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -18,8 +19,6 @@ import { readMeta } from './meta';
 //   * A placeholder (size > 0 && blocks === 0) is never opened, probed or streamed.
 //   * Nothing here runs `brctl`; the UI only shows the command for the user to copy.
 
-const FFPROBE = '/opt/homebrew/bin/ffprobe';
-const FFMPEG = '/opt/homebrew/bin/ffmpeg';
 const PROBE_TIMEOUT_MS = 15_000;
 const PROBE_CONCURRENCY = 3;
 const WALK_BUDGET = 5000;
@@ -70,20 +69,6 @@ export const trackIdFor = (rootId: string, rel: string) => `m_${createHash('sha1
 export const metaKeyFor = (t: { rootId: string; rel: string }) => `${t.rootId}/${t.rel}`;
 export { isPlaceholder };
 
-async function mapLimit<T, U>(items: T[], limit: number, fn: (t: T) => Promise<U>): Promise<U[]> {
-  const out: U[] = new Array(items.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (next < items.length) {
-        const i = next++;
-        out[i] = await fn(items[i]);
-      }
-    }),
-  );
-  return out;
-}
-
 // ───────────────────────── ffprobe (local files only) ─────────────────────────
 
 const num = (v: unknown): number | null => {
@@ -97,61 +82,57 @@ function lowerKeys(o: unknown): Record<string, string> {
   return out;
 }
 
-function probeLocal(file: string, size: number, mtimeMs: number): Promise<Probe> {
+async function probeLocal(file: string, size: number, mtimeMs: number): Promise<Probe> {
   const key = `${file}|${size}|${mtimeMs}`;
   const hit = S.probes.get(key);
-  if (hit) return Promise.resolve(hit);
-  return new Promise((resolve) => {
-    execFile(
-      FFPROBE,
-      [
-        '-v', 'error',
-        '-show_entries', 'format=duration,bit_rate:format_tags:stream=index,codec_type,codec_name,sample_rate,channels,bit_rate:stream_disposition=attached_pic',
-        '-of', 'json',
-        '-i', file,
-      ],
-      { timeout: PROBE_TIMEOUT_MS, maxBuffer: 2 * 1024 * 1024 },
-      (err, stdout, stderr) => {
-        if (err) {
-          console.warn('[music] ffprobe failed:', path.basename(file), String(stderr || err.message).split('\n')[0].slice(0, 200));
-          return resolve(NO_PROBE); // not cached: a later refresh retries
-        }
-        try {
-          const j = JSON.parse(stdout) as {
-            format?: { duration?: string; bit_rate?: string; tags?: unknown };
-            streams?: { codec_type?: string; codec_name?: string; sample_rate?: string; channels?: number; bit_rate?: string; disposition?: { attached_pic?: number } }[];
-          };
-          const streams = j.streams ?? [];
-          const a = streams.find((s) => s.codec_type === 'audio');
-          const t = lowerKeys(j.format?.tags);
-          const br = num(j.format?.bit_rate) ?? num(a?.bit_rate);
-          const dur = num(j.format?.duration);
-          const p: Probe = {
-            durationSec: dur !== null ? Math.round(dur * 100) / 100 : null,
-            bitrateKbps: br !== null ? Math.round(br / 1000) : null,
-            sampleRate: num(a?.sample_rate),
-            channels: a?.channels ?? null,
-            codec: a?.codec_name ?? null,
-            tags: {
-              title: t.title || undefined,
-              artist: t.artist || t.album_artist || undefined,
-              album: t.album || undefined,
-              track: t.track || undefined,
-              date: t.date || t.year || undefined,
-              genre: t.genre || undefined,
-              comment: t.comment || t.description || undefined,
-            },
-            hasCover: streams.some((s) => s.codec_type === 'video' && s.disposition?.attached_pic === 1),
-          };
-          if (S.probes.size > 2000) S.probes.clear();
-          S.probes.set(key, p);
-          resolve(p);
-        } catch {
-          resolve(NO_PROBE);
-        }
+  if (hit) return hit;
+  const r = await run(
+    BIN.ffprobe,
+    [
+      '-v', 'error',
+      '-show_entries', 'format=duration,bit_rate:format_tags:stream=index,codec_type,codec_name,sample_rate,channels,bit_rate:stream_disposition=attached_pic',
+      '-of', 'json',
+      '-i', file,
+    ],
+    { timeoutMs: PROBE_TIMEOUT_MS, maxBuffer: 2 * 1024 * 1024 },
+  );
+  if (r.code !== 0) {
+    console.warn('[music] ffprobe failed:', path.basename(file), r.error);
+    return NO_PROBE; // not cached: a later refresh retries
+  }
+  try {
+    const j = JSON.parse(r.stdout) as {
+      format?: { duration?: string; bit_rate?: string; tags?: unknown };
+      streams?: { codec_type?: string; codec_name?: string; sample_rate?: string; channels?: number; bit_rate?: string; disposition?: { attached_pic?: number } }[];
+    };
+    const streams = j.streams ?? [];
+    const a = streams.find((s) => s.codec_type === 'audio');
+    const t = lowerKeys(j.format?.tags);
+    const br = num(j.format?.bit_rate) ?? num(a?.bit_rate);
+    const dur = num(j.format?.duration);
+    const p: Probe = {
+      durationSec: dur !== null ? Math.round(dur * 100) / 100 : null,
+      bitrateKbps: br !== null ? Math.round(br / 1000) : null,
+      sampleRate: num(a?.sample_rate),
+      channels: a?.channels ?? null,
+      codec: a?.codec_name ?? null,
+      tags: {
+        title: t.title || undefined,
+        artist: t.artist || t.album_artist || undefined,
+        album: t.album || undefined,
+        track: t.track || undefined,
+        date: t.date || t.year || undefined,
+        genre: t.genre || undefined,
+        comment: t.comment || t.description || undefined,
       },
-    );
-  });
+      hasCover: streams.some((s) => s.codec_type === 'video' && s.disposition?.attached_pic === 1),
+    };
+    if (S.probes.size > 2000) S.probes.clear();
+    S.probes.set(key, p);
+    return p;
+  } catch {
+    return NO_PROBE;
+  }
 }
 
 // ───────────────────────── scanning ─────────────────────────
@@ -407,9 +388,10 @@ export async function trackCover(id: string): Promise<{ mime: string; data: Buff
   if (hit) return hit;
   const pr = await probeLocal(r.path, r.size, r.mtimeMs);
   if (!pr.hasCover) throw new HttpError('No embedded cover art.', 404);
+  // execFile, not run(): the cover comes back as binary on stdout
   const data = await new Promise<Buffer>((resolve, reject) => {
     execFile(
-      FFMPEG,
+      BIN.ffmpeg,
       ['-v', 'error', '-nostdin', '-i', r.path, '-an', '-map', '0:v:0', '-frames:v', '1', '-c:v', 'copy', '-f', 'image2pipe', 'pipe:1'],
       { timeout: PROBE_TIMEOUT_MS, maxBuffer: 12 * 1024 * 1024, encoding: 'buffer' },
       (err, stdout) => (err || !stdout.length ? reject(new HttpError('Could not extract the cover art.', 404)) : resolve(stdout)),

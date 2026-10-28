@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { tagKey, type StageBFacts } from '@/components/research/types';
 import { cached } from '../sources/cache';
+import { mapLimit } from '../proc';
 import { loadConfig } from './config';
 
 // Voltamachine Stage A records (stagea/*.json, with Stage B merged in) and the Stage B markdown reports.
@@ -106,56 +107,51 @@ async function load(): Promise<StageAData> {
   const recs: StageARec[] = [];
   let full = 0;
   let stubs = 0;
-  const queue = [...jsonNames];
-  await Promise.all(
-    Array.from({ length: 16 }, async () => {
-      for (let f = queue.shift(); f !== undefined; f = queue.shift()) {
-        const sid = f.replace(/\.json$/, '');
+  await mapLimit(jsonNames, 16, async (f) => {
+    const sid = f.replace(/\.json$/, '');
+    try {
+      const file = path.join(dir, f);
+      const [text, st] = await Promise.all([fs.readFile(file, 'utf8'), fs.stat(file)]);
+      const j = JSON.parse(text) as Record<string, unknown>;
+      const tags = sArr(j.domainTags, 24);
+      const sourcePdf = s(j.sourcePdf, 1024);
+      const mapped = mapSource(sourcePdf);
+      let hasText = false;
+      if (stageBNames.has(`${sid}.stageb.md`)) {
         try {
-          const file = path.join(dir, f);
-          const [text, st] = await Promise.all([fs.readFile(file, 'utf8'), fs.stat(file)]);
-          const j = JSON.parse(text) as Record<string, unknown>;
-          const tags = sArr(j.domainTags, 24);
-          const sourcePdf = s(j.sourcePdf, 1024);
-          const mapped = mapSource(sourcePdf);
-          let hasText = false;
-          if (stageBNames.has(`${sid}.stageb.md`)) {
-            try {
-              hasText = stageBHasContent(await fs.readFile(path.join(dir, `${sid}.stageb.md`), 'utf8'));
-            } catch {
-              hasText = false;
-            }
-            if (hasText) full++;
-            else stubs++;
-          }
-          recs.push({
-            sid,
-            title: s(j.title, 300) || sid,
-            summary: s(j.summary),
-            domainTags: tags,
-            tagKeys: [...new Set(tags.map(tagKey).filter(Boolean))],
-            keyClaims: sArr(j.keyClaims),
-            methods: sArr(j.methods),
-            novelty: n(j.noveltyScore),
-            crossDomainCount: n(j.crossDomainCount),
-            crossDomainLinks: sArr(j.crossDomainLinks),
-            hasContradiction: j.hasContradiction === true,
-            contradictionNotes: sArr(j.contradictionNotes),
-            confidence: n(j.confidence),
-            action: s(j.recommendedAction, 40) || null,
-            sourcePdf,
-            root: mapped?.root ?? null,
-            rel: mapped?.rel ?? null,
-            stageB: stageBFrom(j.stageB),
-            stageBText: hasText,
-            mtimeMs: st.mtimeMs,
-          });
-        } catch (err) {
-          errors.push(`${f}: ${(err as Error).message}`);
+          hasText = stageBHasContent(await fs.readFile(path.join(dir, `${sid}.stageb.md`), 'utf8'));
+        } catch {
+          hasText = false;
         }
+        if (hasText) full++;
+        else stubs++;
       }
-    }),
-  );
+      recs.push({
+        sid,
+        title: s(j.title, 300) || sid,
+        summary: s(j.summary),
+        domainTags: tags,
+        tagKeys: [...new Set(tags.map(tagKey).filter(Boolean))],
+        keyClaims: sArr(j.keyClaims),
+        methods: sArr(j.methods),
+        novelty: n(j.noveltyScore),
+        crossDomainCount: n(j.crossDomainCount),
+        crossDomainLinks: sArr(j.crossDomainLinks),
+        hasContradiction: j.hasContradiction === true,
+        contradictionNotes: sArr(j.contradictionNotes),
+        confidence: n(j.confidence),
+        action: s(j.recommendedAction, 40) || null,
+        sourcePdf,
+        root: mapped?.root ?? null,
+        rel: mapped?.rel ?? null,
+        stageB: stageBFrom(j.stageB),
+        stageBText: hasText,
+        mtimeMs: st.mtimeMs,
+      });
+    } catch (err) {
+      errors.push(`${f}: ${(err as Error).message}`);
+    }
+  });
   recs.sort((a, b) => a.sid.localeCompare(b.sid));
   return { recs, bySid: new Map(recs.map((r) => [r.sid, r])), errors, stageBFull: full, stageBStubs: stubs, loadedAt: Date.now() };
 }

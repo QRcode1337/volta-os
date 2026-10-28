@@ -4,17 +4,19 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { NlePeaks } from '@/types/nle';
 import { HttpError } from '../../http-error';
+import { BIN, stderrTail } from '../../proc';
 import { resolveAsset } from './assets';
 import { writeAtomic } from '../../storage';
-import { CACHE_DIR, FFMPEG, ensureDir, limiter, pruneCache, sha1 } from './paths';
+import { CACHE_DIR, ensureDir, limiter, pruneCache, sha1 } from './paths';
 
 // Waveform peaks: decode to mono 4 kHz s16 and keep max |sample| per 1/50 s bucket (0..1, absolute, not normalised to
-// the file's loudest peak). Cached as JSON keyed by asset id + size + mtime.
+// the file's loudest peak). Cached as JSON keyed by asset id + size + mtime. Raw spawn (not spawnLogged): stdout is
+// binary PCM streamed straight into the bucketer.
 
 const RATE = 50;
 const SR = 4000;
 const PER_BUCKET = SR / RATE;
-const run = limiter(2);
+const limit = limiter(2);
 const inflight = new Map<string, Promise<NlePeaks>>();
 
 export async function getPeaks(id: string): Promise<NlePeaks> {
@@ -29,7 +31,7 @@ export async function getPeaks(id: string): Promise<NlePeaks> {
   }
   let p = inflight.get(key);
   if (!p) {
-    p = run(() => computePeaks(a.path)).then(async (res) => {
+    p = limit(() => computePeaks(a.path)).then(async (res) => {
       await ensureDir(CACHE_DIR);
       await writeAtomic(file, JSON.stringify(res));
       void pruneCache();
@@ -43,7 +45,7 @@ export async function getPeaks(id: string): Promise<NlePeaks> {
 
 function computePeaks(file: string): Promise<NlePeaks> {
   return new Promise((resolve, reject) => {
-    const ff = spawn(FFMPEG, ['-v', 'error', '-nostdin', '-i', file, '-map', '0:a:0', '-vn', '-ac', '1', '-ar', String(SR), '-f', 's16le', 'pipe:1'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const ff = spawn(BIN.ffmpeg, ['-v', 'error', '-nostdin', '-i', file, '-map', '0:a:0', '-vn', '-ac', '1', '-ar', String(SR), '-f', 's16le', 'pipe:1'], { stdio: ['ignore', 'pipe', 'pipe'] });
     const peaks: number[] = [];
     let cur = 0;
     let n = 0;
@@ -78,8 +80,7 @@ function computePeaks(file: string): Promise<NlePeaks> {
       clearTimeout(timer);
       if (n > 0) peaks.push(Math.round((cur / 32768) * 1000) / 1000);
       if (code !== 0 && total === 0) {
-        const msg = err.trim().split('\n').pop() ?? 'unknown error';
-        return reject(new HttpError(/matches no streams|does not contain any stream/i.test(err) ? 'This asset has no audio stream.' : `Waveform decode failed: ${msg.slice(0, 200)}`, /matches no streams/i.test(err) ? 404 : 500));
+        return reject(new HttpError(/matches no streams|does not contain any stream/i.test(err) ? 'This asset has no audio stream.' : `Waveform decode failed: ${stderrTail(err, 1) || `exit ${code}`}`, /matches no streams/i.test(err) ? 404 : 500));
       }
       resolve({ rate: RATE, peaks, duration: Math.round((total / SR) * 1000) / 1000 });
     });

@@ -1,6 +1,6 @@
 import 'server-only';
 import type { MemoryReport, Severity } from '@/types/systems';
-import { BIN, run } from './run';
+import { BIN, run } from '../proc';
 
 // RAM pressure: `memory_pressure -Q` (free %), the kernel's pressure level and swap (sysctl), and a vm_stat
 // breakdown. Three tiny commands (~10 ms each).
@@ -19,9 +19,9 @@ function sizeMb(s: string | undefined): number | null {
 
 export async function getMemory(): Promise<MemoryReport> {
   const [mp, sc, vm] = await Promise.all([
-    run(BIN.memoryPressure, ['-Q'], 3_000),
-    run(BIN.sysctl, ['kern.memorystatus_vm_pressure_level', 'vm.swapusage', 'hw.memsize'], 3_000),
-    run(BIN.vmStat, [], 3_000),
+    run(BIN.memoryPressure, ['-Q'], { timeoutMs: 3_000 }),
+    run(BIN.sysctl, ['kern.memorystatus_vm_pressure_level', 'vm.swapusage', 'hw.memsize'], { timeoutMs: 3_000 }),
+    run(BIN.vmStat, [], { timeoutMs: 3_000 }),
   ]);
 
   const freePctMatch = mp.stdout.match(/free percentage:\s*(\d+)%/i);

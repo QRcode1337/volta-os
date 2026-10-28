@@ -12,7 +12,8 @@ import type { HonchoLlmDeps, HonchoLlmTarget } from './honcho-deps';
 import type { RuntimeProbe } from './models';
 import { redactSecrets } from '../redact';
 import { GiB, tilde } from '@/lib/server/storage';
-import { BIN, HOME, arr, num, obj, run, str, type HttpResult } from './run';
+import { BIN, run } from '../proc';
+import { HOME, arr, num, obj, str, type HttpResult } from './run';
 
 // One builder per service. Inputs are gathered once per probe cycle (index.ts); builders only interpret them.
 // Probed JSON is never passed through — only the named fields below (health payloads can carry paths/auth info).
@@ -112,7 +113,7 @@ export async function dockerHoncho(): Promise<DockerResult> {
     return { daemon: 'no-cli', containers: [], error: 'docker CLI not found' };
   }
   const fmt = '{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Image}}\t{{.Label "com.docker.compose.service"}}';
-  const r = await run(BIN.docker, ['ps', '-a', '--filter', 'label=com.docker.compose.project=honcho', '--format', fmt], 5_000);
+  const r = await run(BIN.docker, ['ps', '-a', '--filter', 'label=com.docker.compose.project=honcho', '--format', fmt], { timeoutMs: 5_000 });
   if (r.code !== 0) {
     // A timeout (code null) or any other CLI failure says nothing about the engine — report it, never assume "up".
     const daemonDown = r.code !== null && /cannot connect|docker daemon|docker\.sock|is the docker daemon running/i.test(r.stderr + (r.error ?? ''));

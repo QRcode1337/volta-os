@@ -3,7 +3,8 @@ import type { PodcastConfig, SourceRef } from './types';
 import { notionConfigured, notionQuery, NotionError, pageTitle, pageUrl, type ListResp, type RawPage } from '../notion/client';
 import { getPage } from '../notion/pages';
 import { classifyTopic, type Candidate } from './candidates';
-import { clip, errMsg, pmap, sleep, stripHtml } from './util';
+import { mapLimit } from '../proc';
+import { clip, errMsg, sleep, stripHtml } from './util';
 
 // Stage 1a: the fixed sources (Notion reports, arXiv, RSS, VOLTA Feeds). Each reader is independent: a failure
 // becomes a warning/notice and the rest of the episode still gets built.
@@ -45,7 +46,7 @@ async function readNotion(cfg: PodcastConfig, sinceMs: number): Promise<{ items:
     }
     return { items: [], notice: `Notion: ${errMsg(e)}` };
   }
-  const items = await pmap(rows.slice(0, cfg.notion.maxItems), 2, async (p): Promise<Candidate | null> => {
+  const items = await mapLimit(rows.slice(0, cfg.notion.maxItems), 2, async (p): Promise<Candidate | null> => {
     try {
       const doc = await getPage(p.id);
       const title = doc.title || pageTitle(p) || 'Untitled report';
@@ -169,7 +170,7 @@ function parseFeed(xml: string): FeedEntry[] {
 
 async function readRss(cfg: PodcastConfig, sinceMs: number): Promise<{ items: Candidate[]; warnings: string[] }> {
   const warnings: string[] = [];
-  const lists = await pmap(cfg.rss, 3, async (src) => {
+  const lists = await mapLimit(cfg.rss, 3, async (src) => {
     try {
       const entries = parseFeed(await fetchText(src.url));
       const out: Candidate[] = [];

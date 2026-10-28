@@ -1,13 +1,11 @@
 import 'server-only';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { bin, run } from '../proc';
 import { cached } from '../sources/cache';
 import { probe } from './probe';
 import { safeMessage } from './safe';
 import type { ProbeResult, TailnetEntry } from './types';
 
-const run = promisify(execFile);
-const BINS = ['tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale', '/opt/homebrew/bin/tailscale', '/usr/local/bin/tailscale'];
+const TAILSCALE = bin('tailscale', ['/usr/local/bin/tailscale', '/opt/homebrew/bin/tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale']);
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
 /** Local services we can name with confidence (from the user's own setup); everything else gets a neutral label. */
 const KNOWN_TARGET_PORTS: Record<number, string> = { 18790: 'OpenClaw control panel', 50000: 'VOLTA OS' };
@@ -24,16 +22,9 @@ interface ServeConfig {
 }
 
 async function serveStatusJson(): Promise<ServeConfig> {
-  let lastErr: unknown = new Error('tailscale CLI not found');
-  for (const bin of BINS) {
-    try {
-      const { stdout } = await run(bin, ['serve', 'status', '--json'], { timeout: 4000, maxBuffer: 1 << 20 });
-      return JSON.parse(stdout || '{}') as ServeConfig;
-    } catch (err) {
-      lastErr = err;
-    }
-  }
-  throw lastErr;
+  const r = await run(TAILSCALE, ['serve', 'status', '--json'], { timeoutMs: 4000, maxBuffer: 1 << 20 });
+  if (r.code !== 0) throw new Error(r.error ?? `exit ${r.code}`);
+  return JSON.parse(r.stdout || '{}') as ServeConfig;
 }
 
 interface RawEntry extends Omit<TailnetEntry, 'probe'> {

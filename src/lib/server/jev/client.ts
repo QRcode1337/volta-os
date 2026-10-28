@@ -1,4 +1,5 @@
 import 'server-only';
+import { mapLimit } from '../proc';
 import { cacheGet, cacheKey, cacheSet, dedupe } from './cache';
 import { recordCacheHit, recordError, recordRequest } from './telemetry';
 import {
@@ -157,21 +158,6 @@ const sumMeta = (metas: JevCallMeta[]): JevCallMeta => ({
   requests: metas.reduce((a, m) => a + m.requests, 0),
 });
 
-async function pmap<T, R>(items: T[], limit: number, fn: (x: T) => Promise<R>): Promise<R[]> {
-  const out = new Array<R>(items.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      for (;;) {
-        const i = next++;
-        if (i >= items.length) return;
-        out[i] = await fn(items[i]);
-      }
-    }),
-  );
-  return out;
-}
-
 const chunk = <T>(a: T[], n: number): T[][] => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
 
 // ── route: pick the best candidate for a task ──
@@ -203,7 +189,7 @@ export async function rank(input: RankInput, opts: { timeoutMs?: number } = {}):
   const items = input.items.filter((i) => i.text.trim());
   if (!items.length) throw new JevError('bad_request', 'rank needs at least one non-empty item');
   const levels = input.levels ?? DEFAULT_LEVELS;
-  const parts = await pmap(chunk(items, ITEM_BATCH), PARALLEL, async (part) => {
+  const parts = await mapLimit(chunk(items, ITEM_BATCH), PARALLEL, async (part) => {
     const qs: Record<string, JevQuestion> = {};
     part.forEach((_, i) => {
       qs[`s${i}`] = { type: 'score', instructions: `Rate \`items[${i}]\` on: ${input.criterion}`, criteria: levels };
@@ -230,7 +216,7 @@ export async function triage(input: TriageInput, opts: { timeoutMs?: number } = 
   if (!items.length) throw new JevError('bad_request', 'triage needs at least one non-empty item');
   if (Object.keys(input.labels).length < 2) throw new JevError('bad_request', 'triage needs at least two labels');
   const min = input.minConfidence ?? 0.5;
-  const parts = await pmap(chunk(items, ITEM_BATCH), PARALLEL, async (part) => {
+  const parts = await mapLimit(chunk(items, ITEM_BATCH), PARALLEL, async (part) => {
     const qs: Record<string, JevQuestion> = {};
     part.forEach((_, i) => {
       qs[`i${i}`] = { type: 'choice', instructions: `Which label best fits \`items[${i}]\`?`, criteria: input.labels };

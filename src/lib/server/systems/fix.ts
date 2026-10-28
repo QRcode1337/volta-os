@@ -1,10 +1,9 @@
 import 'server-only';
-import { execFile } from 'node:child_process';
-import fs from 'node:fs';
 import type { AgentHandoff, AttentionItem, FixRunResult, SystemsReport } from '@/types/systems';
 import { getSystemsReport } from './index';
 import { redactSecrets } from '../redact';
 import { HOME } from './run';
+import { bin, run } from '../proc';
 import { openClaudeInTerminal } from '../claude-terminal';
 import { HttpError } from '../http-error';
 
@@ -16,7 +15,7 @@ import { HttpError } from '../http-error';
 
 const RUN_TIMEOUT_MS = 90_000;
 const OUTPUT_TAIL = 4_000;
-const SHELL = fs.existsSync('/bin/zsh') ? '/bin/zsh' : '/bin/sh';
+const SHELL = bin('zsh', ['/bin/zsh', '/bin/sh']);
 
 const tail = (s: string, n: number) => (s.length > n ? `…${s.slice(-n)}` : s);
 /** Redact line by line so a long log keeps its shape; each line is capped at 1,000 chars. */
@@ -39,15 +38,9 @@ export async function runFixCommand(id: string): Promise<FixRunResult> {
   if (!item.command) throw new HttpError('This item has no command to run — hand it to an agent instead.', 400);
   const command = item.command.command;
   const t0 = Date.now();
-  return new Promise((resolve) => {
-    // Login shell so PATH matches a terminal (openclaw, launchctl, docker …).
-    execFile(SHELL, ['-lc', command], { timeout: RUN_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, cwd: HOME, encoding: 'utf8' }, (err, stdout, stderr) => {
-      const e = err as (NodeJS.ErrnoException & { code?: number | string; killed?: boolean }) | null;
-      const code = !e ? 0 : typeof e.code === 'number' ? e.code : null;
-      const error = !e ? null : e.killed ? `timed out after ${RUN_TIMEOUT_MS / 1000}s` : code === null ? redactSecrets(e.message).slice(0, 240) : null;
-      resolve({ id, command, code, output: clean([stdout, stderr].filter((s) => s?.trim()).join('\n')), error, durationMs: Date.now() - t0 });
-    });
-  });
+  // Login shell so PATH matches a terminal (openclaw, launchctl, docker …).
+  const r = await run(SHELL, ['-lc', command], { timeoutMs: RUN_TIMEOUT_MS, cwd: HOME });
+  return { id, command, code: r.code, output: clean([r.stdout, r.stderr].filter((s) => s?.trim()).join('\n')), error: r.error, durationMs: Date.now() - t0 };
 }
 
 // ── Hand items to an agent ───────────────────────────────────────────────────────────────────────────────────────

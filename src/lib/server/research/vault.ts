@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { SynthesisDetail, SynthesisItem, VaultMention } from '@/components/research/types';
 import { cached } from '../sources/cache';
+import { mapLimit } from '../proc';
 import { loadConfig } from './config';
 import { isPlaceholder } from './inventory';
 
@@ -195,29 +196,24 @@ async function load(): Promise<VaultData> {
   let local = 0;
   let icloud = 0;
   let stripped = 0;
-  const queue = [...files];
-  await Promise.all(
-    Array.from({ length: 12 }, async () => {
-      for (let f = queue.shift(); f; f = queue.shift()) {
-        try {
-          const st = await fs.stat(f.abs);
-          if (!st.isFile()) continue;
-          if (isPlaceholder(st)) {
-            icloud++;
-            continue; // never opened
-          }
-          if (st.size > MAX_NOTE_BYTES) continue;
-          const raw = await fs.readFile(f.abs, 'utf8');
-          const note = parseNote(f.source, f.rel, f.abs, raw, st.mtimeMs);
-          local++;
-          if (note.strippedThinking) stripped++;
-          notes.push(note);
-        } catch {
-          // unreadable note: skipped
-        }
+  await mapLimit(files, 12, async (f) => {
+    try {
+      const st = await fs.stat(f.abs);
+      if (!st.isFile()) return;
+      if (isPlaceholder(st)) {
+        icloud++;
+        return; // never opened
       }
-    }),
-  );
+      if (st.size > MAX_NOTE_BYTES) return;
+      const raw = await fs.readFile(f.abs, 'utf8');
+      const note = parseNote(f.source, f.rel, f.abs, raw, st.mtimeMs);
+      local++;
+      if (note.strippedThinking) stripped++;
+      notes.push(note);
+    } catch {
+      // unreadable note: skipped
+    }
+  });
   notes.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || a.rel.localeCompare(b.rel));
   return { notes, byKey: new Map(notes.map((n) => [n.key, n])), local, icloud, stripped, exists, loadedAt: Date.now() };
 }

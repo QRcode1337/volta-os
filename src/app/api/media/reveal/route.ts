@@ -1,5 +1,5 @@
 // POST /api/media/reveal {id} — show a generated file in Finder. The path comes from the manifest, never the client.
-import { execFile } from 'node:child_process';
+import { BIN, runOrThrow } from '@/lib/server/proc';
 import { route } from '@/lib/server/route-helpers';
 import { toHttpError } from '@/lib/server/media/config';
 import { resolveFile } from '@/lib/server/media/storage';
@@ -11,7 +11,7 @@ export const POST = route(
   async ({ body }) => {
     try {
       const { file } = await resolveFile(typeof body.id === 'string' ? body.id : '');
-      await new Promise<void>((resolve, reject) => execFile('/usr/bin/open', ['-R', file], (e) => (e ? reject(e) : resolve())));
+      await runOrThrow(BIN.open, ['-R', file], { timeoutMs: 10_000 });
       return { ok: true, file };
     } catch (err) {
       throw toHttpError(err);

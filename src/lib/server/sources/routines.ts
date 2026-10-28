@@ -1,16 +1,13 @@
 import 'server-only';
-import { execFile } from 'node:child_process';
-import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import type { RealRoutine, RoutineCadence, RoutineHealth } from '@/types/sources';
+import { BIN, bin, run } from '../proc';
 import { cached } from './cache';
 
 // Real scheduled jobs: OpenClaw cron jobs + the user's LaunchAgents. Read-only (never loads/unloads anything).
 
-const run = promisify(execFile);
 const AGENTS_DIR = path.join(os.homedir(), 'Library', 'LaunchAgents');
 // LaunchAgents worth showing (the user's own automation, not vendor updaters).
 const LABEL_PREFIXES = ['com.unvolta.', 'ai.openclaw.', 'ai.hermes.', 'ai.omniroute.', 'com.omniroute.', 'com.local.', 'com.patrick.'];
@@ -25,9 +22,7 @@ const OPENCLAW_MAX_STALE_MS = 30 * 60_000;
 const LAUNCHD_TTL_MS = 60_000; // launchctl + plutil is ~80 ms; keeps running/exit status fresh
 // The dev server's LaunchAgent PATH has no ~/bin, where the OpenClaw wrapper lives, so resolve the binary explicitly.
 const OPENCLAW_BIN =
-  process.env.OPENCLAW_BIN ??
-  [path.join(os.homedir(), 'bin/openclaw'), path.join(os.homedir(), '.local/bin/openclaw'), '/opt/homebrew/bin/openclaw'].find((p) => fs.existsSync(p)) ??
-  'openclaw';
+  process.env.OPENCLAW_BIN ?? bin('openclaw', [path.join(os.homedir(), 'bin/openclaw'), path.join(os.homedir(), '.local/bin/openclaw'), '/opt/homebrew/bin/openclaw']);
 
 interface OpenClawJob {
   id: string;
@@ -104,8 +99,9 @@ function healthOf(r: Pick<RealRoutine, 'enabled' | 'source' | 'running' | 'sched
 }
 
 async function loadOpenclawJobs(): Promise<Routine[]> {
-  const { stdout } = await run('nice', ['-n', '10', OPENCLAW_BIN, 'cron', 'list', '--json'], { timeout: 20_000, maxBuffer: 8 * 1024 * 1024 });
-  const jobs = (JSON.parse(stdout) as { jobs?: OpenClawJob[] }).jobs ?? [];
+  const r = await run(BIN.nice, ['-n', '10', OPENCLAW_BIN, 'cron', 'list', '--json'], { timeoutMs: 20_000, maxBuffer: 8 * 1024 * 1024 });
+  if (r.code !== 0) throw new Error(`openclaw cron list: ${r.error ?? `exit ${r.code}`}`);
+  const jobs = (JSON.parse(r.stdout) as { jobs?: OpenClawJob[] }).jobs ?? [];
   return jobs.map((j) => {
     const isCron = j.schedule.kind === 'cron' && j.schedule.expr;
     const shape = isCron ? cronShape(j.schedule.expr!) : { hour: null, days: [] as RealRoutine['days'] };
@@ -248,14 +244,13 @@ async function loadLaunchdJobs(): Promise<LaunchdRoutine[]> {
     return [];
   }
   const loaded = new Map<string, { pid: number | null; status: number }>();
-  try {
-    const { stdout } = await run('launchctl', ['list'], { timeout: 5_000 });
-    for (const line of stdout.split('\n').slice(1)) {
+  const list = await run(BIN.launchctl, ['list'], { timeoutMs: 5_000 });
+  // launchctl unavailable → nothing loaded; still list the plists
+  if (list.code === 0) {
+    for (const line of list.stdout.split('\n').slice(1)) {
       const [pid, status, label] = line.split('\t');
       if (label) loaded.set(label.trim(), { pid: pid === '-' ? null : Number(pid), status: Number(status) || 0 });
     }
-  } catch {
-    // launchctl unavailable — still list the plists
   }
   // `launchctl list` prints status 0 for a job that has never exited; `launchctl print` says whether it ever ran.
   const uid = process.getuid?.() ?? 501;
@@ -265,14 +260,11 @@ async function loadLaunchdJobs(): Promise<LaunchdRoutine[]> {
       .map((f) => f.replace(/\.plist$/, ''))
       .filter((label) => loaded.has(label))
       .map(async (label) => {
-        try {
-          const { stdout } = await run('launchctl', ['print', `gui/${uid}/${label}`], { timeout: 3_000 });
-          const runs = /^\s*runs = (\d+)/m.exec(stdout);
-          const never = /^\s*last exit code = \(never exited\)/m.test(stdout);
-          if (runs) ran.set(label, Number(runs[1]) > 0 && !never);
-        } catch {
-          // unknown → fall back to the `launchctl list` status
-        }
+        const { stdout, code } = await run(BIN.launchctl, ['print', `gui/${uid}/${label}`], { timeoutMs: 3_000 });
+        if (code !== 0) return; // unknown → fall back to the `launchctl list` status
+        const runs = /^\s*runs = (\d+)/m.exec(stdout);
+        const never = /^\s*last exit code = \(never exited\)/m.test(stdout);
+        if (runs) ran.set(label, Number(runs[1]) > 0 && !never);
       }),
   );
   const out: LaunchdRoutine[] = [];
@@ -287,8 +279,8 @@ async function loadLaunchdJobs(): Promise<LaunchdRoutine[]> {
       StandardErrorPath?: unknown;
     } = {};
     try {
-      const { stdout } = await run('plutil', ['-convert', 'json', '-o', '-', path.join(AGENTS_DIR, f)], { timeout: 5_000 });
-      plist = JSON.parse(stdout);
+      const r = await run(BIN.plutil, ['-convert', 'json', '-o', '-', path.join(AGENTS_DIR, f)], { timeoutMs: 5_000 });
+      if (r.code === 0) plist = JSON.parse(r.stdout);
     } catch {
       // unreadable plist — show it with an unknown schedule
     }

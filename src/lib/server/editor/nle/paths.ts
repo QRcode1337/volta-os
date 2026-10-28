@@ -18,9 +18,6 @@ export const TRASH_DIR = path.join(PROJECTS_DIR, '.trash');
 export const LOCAL_EXPORTS_DIR = path.join(NLE_ROOT, 'exports');
 export const WINDSOR_EXPORTS_DIR = path.join(WINDSOR_VOLTA, 'editor', 'exports');
 
-export const FFMPEG = '/opt/homebrew/bin/ffmpeg';
-export const FFPROBE = '/opt/homebrew/bin/ffprobe';
-
 export async function ensureDir(dir: string): Promise<string> {
   await fs.mkdir(dir, { recursive: true });
   return dir;

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { isEvicted as isPlaceholder } from '@/lib/server/icloud';
+import { mapLimit } from '@/lib/server/proc';
 import { WINDSOR_ROOT, isWindsorMounted, onWindsor, writeAtomic } from '@/lib/server/storage';
 import type { FileKind, InventoryState } from '@/components/research/types';
 import { loadConfig, type ResearchConfig, type RootCfg } from './config';
@@ -87,20 +88,6 @@ const PACKAGE_DOCS = new Set(['.pages', '.numbers', '.key', '.rtfd']);
 export const kindOf = (ext: string): FileKind => EXT_KIND[ext] ?? 'other';
 export const entryId = (root: string, rel: string) => createHash('sha1').update(`${root}/${rel}`).digest('hex').slice(0, 12);
 export { isPlaceholder };
-
-async function mapLimit<T, U>(items: T[], limit: number, fn: (t: T) => Promise<U>): Promise<U[]> {
-  const out: U[] = new Array(items.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (next < items.length) {
-        const i = next++;
-        out[i] = await fn(items[i]);
-      }
-    }),
-  );
-  return out;
-}
 
 function dirExcluded(name: string, cfg: ResearchConfig, root: RootCfg): boolean {
   const n = name.toLowerCase();

@@ -45,6 +45,7 @@ function childEnv(): NodeJS.ProcessEnv {
   return { NODE_ENV: 'production', HOME: os.homedir(), USER: process.env.USER ?? '', LANG: process.env.LANG ?? 'en_US.UTF-8', PATH: '/usr/bin:/bin:/usr/sbin:/sbin', TMPDIR: process.env.TMPDIR ?? '/tmp' };
 }
 
+/** Raw execFile on purpose: a clean env (proc.run() merges over process.env) and SIGKILL on timeout. */
 function run(cli: string, args: string[], timeoutMs: number): Promise<{ stdout: string; code: number | null; timedOut: boolean }> {
   return new Promise((resolve) => {
     execFile(cli, args, { timeout: timeoutMs, maxBuffer: 4 << 20, env: childEnv(), killSignal: 'SIGKILL' }, (err, stdout) => {

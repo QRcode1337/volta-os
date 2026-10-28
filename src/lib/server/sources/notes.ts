@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { BrainGraph, BrainGraphNode, RecentNote } from '@/types/sources';
 import { obsidianUrl, registeredVaults, vaultSnapshot, type NoteFileEntry, type VaultSnapshot } from '../vaults';
 import { isEvicted } from '@/lib/server/icloud';
+import { mapLimit } from '@/lib/server/proc';
 
 // Notes across the user's registered Obsidian vaults: recent edits + a wikilink graph. Read-only.
 
@@ -78,20 +79,6 @@ function linksOf(n: NoteFile): Promise<string[] | null> {
     linkReads.set(key, p);
   }
   return p;
-}
-
-/** `fn` over `items` with at most `limit` in flight; results keep input order. */
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const out = new Array<R>(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const i = next++;
-      out[i] = await fn(items[i]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return out;
 }
 
 type GraphEntry = { sig: string; graph?: BrainGraph; inflight?: Promise<BrainGraph> };

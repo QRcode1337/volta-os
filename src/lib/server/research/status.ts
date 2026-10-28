@@ -7,7 +7,7 @@ import type { AgentStatus, RootCoverage, StatusResponse } from '@/components/res
 import { cached } from '../sources/cache';
 import { loadConfig } from './config';
 import { getGraph } from './graphs';
-import { inventoryState, isPlaceholder } from './inventory';
+import { inventoryState, isPlaceholder, volumeMounted } from './inventory';
 import { getLibrary } from './library';
 import { getVault } from './vault';
 
@@ -151,8 +151,8 @@ export async function getStatus(opts: { refresh?: boolean } = {}): Promise<Statu
     agents(),
     holdStatus(),
     lastBatch(cfg.stageA.batchInsightsFile),
-    exists('/Volumes/Voltamachina'),
-    exists('/Volumes/Windsor'),
+    volumeMounted('/Volumes/Voltamachina'),
+    volumeMounted('/Volumes/Windsor'),
   ]);
   if (!voltamachina) warnings.push('/Volumes/Voltamachina is not mounted: Stage A source paths and mirror copies cannot be checked.');
   if (!windsor) warnings.push('/Volumes/Windsor is not mounted: the inventory is held in memory only.');

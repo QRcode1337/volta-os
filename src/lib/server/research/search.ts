@@ -1,5 +1,6 @@
 import 'server-only';
 import type { LibraryRow, SearchResponse } from '@/components/research/types';
+import { redactSecrets } from '../redact';
 import { inventoryState } from './inventory';
 import { getLibrary, type LibRow } from './library';
 
@@ -77,11 +78,12 @@ function scoreRow(r: LibRow, toks: string[], phrase: string, requireAll: boolean
   return Math.round(total * 100) / 100;
 }
 
+/** Index fields stripped; title and summary masked the way /api/research/doc masks them. */
 function publicRow(r: LibRow): LibraryRow {
   /* eslint-disable @typescript-eslint/no-unused-vars */
   const { nameN, titleN, tagsN, pathN, summaryN, claimsN, tagKeys, matchedBy, sids, ...row } = r;
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  return row;
+  return { ...row, title: redactSecrets(row.title), summary: row.summary ? redactSecrets(row.summary) : null };
 }
 
 /** JEV re-rank of the top 30. Any failure (not configured, circuit open, timeout, odd reply) returns null and the plain order stands. */

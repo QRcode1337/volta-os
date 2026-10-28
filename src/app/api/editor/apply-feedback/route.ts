@@ -52,6 +52,20 @@ function validate(raw: unknown): ApplyBody | string {
   return { project: project.replace(/[\r\n]+/g, ' '), teach: { cut: teach.cut, animate: teach.animate }, pins };
 }
 
+// Per-file promise chain: concurrent submits read-modify-write the same SKILL.md one after another,
+// so neither lesson is lost. The entry is dropped once its tail settles, so the map stays small.
+const fileQueues = new Map<string, Promise<unknown>>();
+
+function serialised<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const run = (fileQueues.get(key) ?? Promise.resolve()).then(fn, fn);
+  const tail = run.catch(() => undefined);
+  fileQueues.set(key, tail);
+  void tail.then(() => {
+    if (fileQueues.get(key) === tail) fileQueues.delete(key);
+  });
+  return run;
+}
+
 function titleFor(skill: TeachSkill): string {
   return `# ${skill} — SKILL\n\nSkill file managed by VOLTA Agentic OS. VOLTA Editor appends learned preferences below.\n\n${RL_HEADING}\n`;
 }
@@ -80,11 +94,12 @@ export async function POST(req: Request) {
         skipped.push(skill);
         continue;
       }
-      const existing = await readWorkspaceFile(lesson.file);
-      const before = existing ?? '';
-      const base = existing ?? titleFor(skill);
-      const after = insertUnderHeading(base, lessonMarkdown(lesson, date, body.project));
-      await writeWorkspaceFile(lesson.file, after);
+      const { before, after } = await serialised(lesson.file, async () => {
+        const existing = await readWorkspaceFile(lesson.file);
+        const after = insertUnderHeading(existing ?? titleFor(skill), lessonMarkdown(lesson, date, body.project));
+        await writeWorkspaceFile(lesson.file, after);
+        return { before: existing ?? '', after };
+      });
       files.push({ path: `workspace/${lesson.file}`, before, after });
     }
   } catch (err) {

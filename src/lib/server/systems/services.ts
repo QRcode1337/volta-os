@@ -19,6 +19,7 @@ const KICK = (label: string, restart = true) => `launchctl kickstart${restart ? 
 
 /** Every LaunchAgent label a card shows (plist facts are read for these, cached 5 min). */
 export const AGENT_LABELS = {
+  volta: [['com.epsilon.volta-os', 'service']],
   openclaw: [
     ['ai.openclaw.gateway', 'service'],
     ['com.local.openclaw-health', 'health check'],
@@ -236,6 +237,7 @@ function deadOrStuck(s: ServiceCheck, r: HttpResult, alivePid: number | null) {
 
 export function volta(ctx: Ctx, r: HttpResult, port: number): ServiceCheck {
   const s = base('volta', 'VOLTA OS', 'dashboard', true);
+  s.launchAgents = agents(ctx, 'volta');
   http(s, ctx, port, '/api/systems/ping', r);
   s.status = r.ok ? 'up' : 'degraded';
   s.summary = r.ok ? 'serving' : `self-probe failed (${r.error}) — this page is being served, so the server is up`;
@@ -243,8 +245,11 @@ export function volta(ctx: Ctx, r: HttpResult, port: number): ServiceCheck {
   s.versionSource = 'package.json';
   if (ctx.meta.nextVersion) s.facts.push({ label: 'Next.js', value: ctx.meta.nextVersion });
   s.facts.push({ label: 'mode', value: process.env.NODE_ENV === 'production' ? 'production (next start)' : 'dev server (next dev --turbopack)', tone: process.env.NODE_ENV === 'production' ? undefined : 'muted' });
-  s.command = { label: 'Start command', command: 'cd ~/Documents/PROJECTS/rubric-agentic-os && npm run dev' };
-  s.notes.push('Not a LaunchAgent — started by hand from the project.');
+  s.command = {
+    label: 'Restart command',
+    command: KICK('com.epsilon.volta-os'),
+    note: `Runs \`next dev\` from ${tilde(process.cwd())} on 127.0.0.1:${port} (KeepAlive). To run it by hand instead, stop the agent first, then: cd ${tilde(process.cwd())} && npm run dev`,
+  };
   return s;
 }
 

@@ -88,14 +88,19 @@ export const kindOf = (ext: string): FileKind => EXT_KIND[ext] ?? 'other';
 export const entryId = (root: string, rel: string) => createHash('sha1').update(`${root}/${rel}`).digest('hex').slice(0, 12);
 export { isPlaceholder };
 
-async function windsorMounted(): Promise<boolean> {
+/**
+ * True only when a real volume is mounted at `mountPoint`: a leftover empty folder under /Volumes (left behind after
+ * an unclean eject) shares /Volumes' device id, so a plain exists() check would wrongly report it as mounted.
+ */
+export async function volumeMounted(mountPoint: string): Promise<boolean> {
   try {
-    const [m, v] = await Promise.all([fs.stat(WINDSOR), fs.stat('/Volumes')]);
+    const [m, v] = await Promise.all([fs.stat(mountPoint), fs.stat('/Volumes')]);
     return m.isDirectory() && m.dev !== v.dev;
   } catch {
     return false;
   }
 }
+const windsorMounted = () => volumeMounted(WINDSOR);
 const needsWindsor = (file: string) => file === WINDSOR || file.startsWith(`${WINDSOR}/`);
 
 async function mapLimit<T, U>(items: T[], limit: number, fn: (t: T) => Promise<U>): Promise<U[]> {

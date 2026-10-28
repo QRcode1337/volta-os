@@ -4,6 +4,8 @@ import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { CostBreakdown, EpisodeRecord, JobState, PodcastConfig, Stage, StageTiming, Story } from './types';
+import { assertWithinDailyCap } from '../media/budget';
+import { MediaError } from '../media/config';
 import { PODCAST_ROOT, geminiKey, loadConfig } from './config';
 import { gatherFixedSources } from './gather';
 import { claudeBin } from './llm';
@@ -57,6 +59,16 @@ export interface StartOptions {
   trigger: 'manual' | 'scheduled';
 }
 
+/** The shared VOLTA daily spend cap (VOLTA_GEN_DAILY_USD) counts podcast TTS, so it gates scheduled runs too. */
+async function withinDailyCap(usd: number): Promise<void> {
+  try {
+    await assertWithinDailyCap(usd);
+  } catch (e) {
+    if (e instanceof MediaError) throw new PodcastError(e.message, e.status);
+    throw e;
+  }
+}
+
 export async function startGeneration(opts: StartOptions): Promise<JobState> {
   const cfg = loadConfig();
   const date = opts.date ?? localDate();
@@ -73,6 +85,7 @@ export async function startGeneration(opts: StartOptions): Promise<JobState> {
   if (opts.trigger === 'manual' && est.needsConfirm && !(typeof opts.confirmUsd === 'number' && opts.confirmUsd + 1e-9 >= est.maxUsd)) {
     throw new PodcastError(`Estimated cost up to $${est.maxUsd.toFixed(2)} is above $${cfg.cost.confirmAboveUsd.toFixed(2)}: confirm it first.`, 402);
   }
+  await withinDailyCap(est.maxUsd);
 
   const job: JobState = {
     id: `${Date.now().toString(36)}-${randomBytes(3).toString('hex')}`,
@@ -168,6 +181,7 @@ async function run(job: JobState, cfg: PodcastConfig, opts: StartOptions): Promi
       throw new PodcastError(`The script came out longer than estimated (cost $${scriptCost.toFixed(2)}, above the confirmed amount). Nothing was spent on audio; run again and confirm.`, 402);
     }
     if (scriptCost > cfg.cost.hardCapUsd) throw new PodcastError(`Audio would cost about $${scriptCost.toFixed(2)}, above the hard cap $${cfg.cost.hardCapUsd.toFixed(2)}.`, 422);
+    await withinDailyCap(scriptCost);
     end(`${script.words} words via ${script.backend}`);
 
     // 5. text to speech

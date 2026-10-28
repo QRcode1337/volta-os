@@ -233,7 +233,7 @@ export function PodcastApp() {
         </main>
 
         <aside className="hud-scroll space-y-4 border-t border-subtle p-4 lg:overflow-y-auto lg:border-l lg:border-t-0">
-          {job && <JobCard job={job} />}
+          {job && !external && <JobCard job={job} />}
           {config && !external && <TopicWeights config={config} onSaved={(c) => { setStatus((s) => (s ? { ...s, config: c } : s)); push('Weights saved. They apply from the next run.', { tone: 'success' }); }} onError={(m) => push(m, { tone: 'error' })} />}
           {status && <SubscribeCard baseUrl={status.publicBaseUrl} tokenOk={status.keys.feedToken} externalUrl={status.externalFeed} onError={(m) => push(m, { tone: 'error' })} />}
           {status && !external && !status.keys.notion && <p className="text-[11.5px] text-muted">NOTION_TOKEN is not set, so Frontier Signal reports are skipped.</p>}

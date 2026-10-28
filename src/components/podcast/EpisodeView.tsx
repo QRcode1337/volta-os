@@ -51,7 +51,7 @@ export function EpisodeView({ episode, config, busy, external, onRegenerate }: {
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
-      <Player src={episode.audioUrl ?? fileUrl(episode.date)} title={episode.title} durationHint={episode.durationSec} />
+      <Player src={fileUrl(episode.date)} title={episode.title} durationHint={episode.durationSec} />
       {research?.degraded && <ResearchNotice health={research} labelOf={labelOf} />}
       <div className="flex flex-wrap items-center gap-2">
         <nav className="flex flex-wrap gap-1" aria-label="Episode sections">

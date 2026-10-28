@@ -11,6 +11,28 @@ import { isDate } from '@/lib/server/podcast/util';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+/**
+ * Stream the muse.ai mp3 through this origin: its CDN replies Cross-Origin-Resource-Policy: same-origin (and a download-only
+ * Content-Disposition), so a browser refuses to play it from our page. Range is forwarded for seeking; ?download=1 saves it.
+ */
+async function proxyRemote(req: Request, url: string, name: string): Promise<Response> {
+  const range = req.headers.get('range');
+  const up = await fetch(url, { method: req.method, headers: range ? { Range: range } : {}, redirect: 'follow', signal: AbortSignal.timeout(20_000) }).catch(() => null);
+  if (!up || !(up.status === 200 || up.status === 206)) {
+    return NextResponse.json({ error: `muse.ai audio unavailable (${up?.status ?? 'network error'})` }, { status: 502 });
+  }
+  const h = new Headers(PRIVATE_HEADERS);
+  for (const k of ['content-length', 'content-range', 'accept-ranges']) {
+    const v = up.headers.get(k);
+    if (v) h.set(k, v);
+  }
+  h.set('Content-Type', 'audio/mpeg');
+  h.set('Cache-Control', 'private, max-age=3600');
+  const dl = new URL(req.url).searchParams.get('download') === '1';
+  h.set('Content-Disposition', `${dl ? 'attachment' : 'inline'}; filename="${name}"`);
+  return new Response(req.method === 'HEAD' ? null : up.body, { status: up.status, headers: h });
+}
+
 async function serve(req: Request) {
   const denied = authorizeFeedRequest(req);
   if (denied) return denied;
@@ -18,7 +40,7 @@ async function serve(req: Request) {
   if (!isDate(date)) return NextResponse.json({ error: 'Bad date' }, { status: 400 });
   const ep = await getEpisode(date).catch(() => null);
   if (!ep) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (ep.audioUrl) return NextResponse.redirect(ep.audioUrl, 302);
+  if (ep.audioUrl) return proxyRemote(req, ep.audioUrl, `${date}.mp3`);
   if (!(await fs.promises.stat(ep.file).catch(() => null))) {
     return NextResponse.json({ error: 'Audio file is not available (is the Windsor drive mounted?)' }, { status: 503 });
   }

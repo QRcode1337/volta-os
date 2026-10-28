@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FastForward, Pause, Play, Rewind } from 'lucide-react';
+import { Download, FastForward, Pause, Play, Rewind } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { fmtDuration } from './podcast-client';
 
@@ -59,7 +59,7 @@ export function Player({ src, title, durationHint }: { src: string; title: strin
         onEnded={() => setPlaying(false)}
         onTimeUpdate={(e) => setT(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => Number.isFinite(e.currentTarget.duration) && setDur(e.currentTarget.duration)}
-        onError={() => setErr('Could not load the audio. Is the Windsor drive mounted?')}
+        onError={() => setErr('Could not load the audio. Check the episode source is reachable.')}
       />
       <p className="truncate text-[15px] font-semibold text-paper">{title}</p>
       <div className="mt-3 flex items-center gap-3">
@@ -104,6 +104,9 @@ export function Player({ src, title, durationHint }: { src: string; title: strin
             </option>
           ))}
         </select>
+        <a href={`${src}${src.includes('?') ? '&' : '?'}download=1`} download aria-label="Download episode" title="Download mp3" className={btn}>
+          <Download className="h-4 w-4" />
+        </a>
       </div>
       {err && <p className={cn('mt-2 font-mono text-[11px] text-[#EF4444]')}>{err}</p>}
     </div>

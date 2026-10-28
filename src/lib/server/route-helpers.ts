@@ -1,4 +1,6 @@
 import 'server-only';
+import fs from 'node:fs';
+import { Readable } from 'node:stream';
 import { NextResponse } from 'next/server';
 import { HttpError } from './http-error';
 import { rejectNonLocalMutation, rejectNonLocalRead } from './local-only';
@@ -84,4 +86,61 @@ export function intParam(url: URL, name: string, { min = 0, max = Number.MAX_SAF
   const n = Number(v);
   if (!Number.isInteger(n) || n < min || n > max) throw new HttpError(`invalid ${name}`, 400);
   return n;
+}
+
+function parseRange(header: string, size: number): { start: number; end: number } | 'invalid' | null {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!m) return null; // multi-range or another unit: serve the whole file
+  if (m[1] === '' && m[2] === '') return 'invalid';
+  let start: number;
+  let end: number;
+  if (m[1] === '') {
+    start = Math.max(0, size - Number(m[2]));
+    end = size - 1;
+  } else {
+    start = Number(m[1]);
+    end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1);
+  }
+  if (!(start <= end) || start >= size) return 'invalid';
+  return { start, end };
+}
+
+export interface StreamFileOptions {
+  mime: string;
+  /** Download name for Content-Disposition (sanitised); omitted → plain `inline`. */
+  name?: string;
+  /** Default 'private, no-cache' (revalidate via ETag); content-addressed files can pass an immutable max-age. */
+  cache?: string;
+  /** Extra response headers (e.g. the podcast feed's privacy headers). */
+  headers?: Record<string, string>;
+}
+
+/**
+ * Stream a file with single-range support (video/audio seeking, resume), ETag + If-None-Match revalidation and HEAD.
+ * Path resolution and access checks stay in the route; a missing file is a 404 HttpError.
+ */
+export async function streamFile(req: Request, file: string, opts: StreamFileOptions): Promise<Response> {
+  const st = await fs.promises.stat(file).catch(() => null);
+  if (!st?.isFile()) throw new HttpError('File not found.', 404);
+  const etag = `"${st.size}-${Math.round(st.mtimeMs)}"`;
+  const base: Record<string, string> = {
+    'Content-Type': opts.mime,
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': opts.cache ?? 'private, no-cache',
+    ETag: etag,
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Disposition': opts.name ? `inline; filename="${opts.name.replace(/[^\w.-]+/g, '_')}"` : 'inline',
+    ...opts.headers,
+  };
+  const rangeHeader = req.headers.get('range');
+  if (!rangeHeader && req.headers.get('if-none-match') === etag) return new NextResponse(null, { status: 304, headers: base });
+  const range = rangeHeader ? parseRange(rangeHeader, st.size) : null;
+  if (range === 'invalid') return new NextResponse(null, { status: 416, headers: { ...base, 'Content-Range': `bytes */${st.size}` } });
+  const [start, end] = range ? [range.start, range.end] : [0, st.size - 1];
+  const status = range ? 206 : 200;
+  const headers = { ...base, 'Content-Length': String(st.size === 0 ? 0 : end - start + 1), ...(range ? { 'Content-Range': `bytes ${start}-${end}/${st.size}` } : {}) };
+  if (req.method === 'HEAD' || st.size === 0) return new NextResponse(null, { status, headers });
+  const nodeStream = fs.createReadStream(file, { start, end });
+  req.signal.addEventListener('abort', () => nodeStream.destroy(), { once: true });
+  return new NextResponse(Readable.toWeb(nodeStream) as ReadableStream, { status, headers });
 }

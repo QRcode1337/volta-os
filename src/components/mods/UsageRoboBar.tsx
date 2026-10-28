@@ -11,6 +11,7 @@ import { formatInt, formatTokens } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { dayLabel } from '@/components/ltm/ltm-client';
 import { PixelMascotLogo } from '@/components/robo-ui';
+import { JevStatusPill } from '@/components/jev/JevStatusPill';
 import { MOBILE_TABBAR_HEIGHT_PX } from '@/components/mobile/constants';
 
 // Claude Code usage from local transcripts (/api/usage): raw token windows and a "today vs busiest day" meter.
@@ -701,6 +702,7 @@ export function UsageRoboBar() {
                   {sourceChip}
                 </span>
                 {usage && now !== null && <span className="hidden font-mono text-[9px] text-muted sm:inline">updated {stamp(usage.generatedAt, now)}</span>}
+                {open && <JevStatusPill className="hidden sm:inline-flex" />}
                 <button
                   type="button"
                   onClick={reloadAll}

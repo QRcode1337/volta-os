@@ -5,7 +5,7 @@ import { JevError, type JevCallMeta, type ModelTierName } from './types';
 
 /**
  * Prompt → Claude tier. One Choice question over the three tiers; the answer's own confidence is
- * what the caller gates rerouting on (see resolveRoutedModel in api/jev-router/jev.ts).
+ * what the caller gates rerouting on (see resolveRoutedModel in ./heuristic.ts).
  */
 const TIERS: Record<ModelTierName, string> = {
   HAIKU:

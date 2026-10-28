@@ -6,7 +6,7 @@ import { WORKSPACE_DIR } from '@/lib/server/workspace';
 import { HttpError, route } from '@/lib/server/route-helpers';
 import { getSkills } from '@/lib/server/sources/skills';
 import { skillCommand } from '@/components/dashboard/widgets/right-skills';
-import { hashString, resolveRoutedModel, routeAndRecord } from '../../jev-router/jev';
+import { JEV_OVERRIDE_THRESHOLD, hashString, resolveRoutedModel, routeAndRecord } from '@/lib/server/jev';
 import { buildMockReport } from './reports';
 import { tilde } from '@/lib/server/storage';
 import { ClaudeCliError, runClaudeCli } from '@/lib/server/claude';
@@ -148,8 +148,9 @@ export const POST = route(async ({ req, body: raw }) => {
   if (typeof parsed === 'string') throw new HttpError(parsed, 400);
   const body = parsed;
 
-  // 1. Jev classifies the job (recorded in telemetry) and may reroute the requested tier.
-  const jev = await routeAndRecord(body.customPrompt ?? body.command, body.command);
+  // 1. Jev classifies the job (recorded in telemetry) and may reroute the requested tier. The requested tier is the
+  //    skill's prior: the fallback heuristic weighs it, and real JEV must clear the 0.80 gate to override it.
+  const jev = await routeAndRecord(body.customPrompt ?? body.command, body.command, body.model);
   const { routed, overridden } = resolveRoutedModel(body.model, jev);
   const seed = hashString(`${body.command}|${routed}|${body.effort}|${body.customPrompt ?? ''}`);
   const { skill, peers } = await resolveSkill(body.command);
@@ -158,7 +159,7 @@ export const POST = route(async ({ req, body: raw }) => {
     ? `Jev rerouted **${body.model} → ${routed}** (${jev.confidence.toFixed(2)} confidence · ${jev.reason})`
     : body.model === 'FABLE'
       ? `FABLE is a manual pin — Jev suggested ${jev.model} (${jev.confidence.toFixed(2)}) but did not override`
-      : `Jev kept **${routed}** (suggested ${jev.model} at ${jev.confidence.toFixed(2)}; override threshold 0.80)`;
+      : `Jev kept **${routed}** (suggested ${jev.model} at ${jev.confidence.toFixed(2)}; override threshold ${JEV_OVERRIDE_THRESHOLD.toFixed(2)})`;
   const header = (mode: 'live' | 'mock') =>
     `## ${body.command} — run report\n\n` +
     `**Mode:** ${mode === 'live' ? 'live (`claude -p`, plan mode)' : 'simulated'} · **Tier:** ${routed} · ${body.effort}\n\n` +

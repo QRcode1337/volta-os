@@ -1,11 +1,14 @@
 import 'server-only';
 import type { JevRouteResult, ModelTier } from '@/types/os';
-import { JevError, routeTier, telemetrySummary, recordTier } from '@/lib/server/jev';
+import { routeTier } from './tier';
+import { recordTier, telemetrySummary } from './telemetry';
+import { JevError } from './types';
 
 /**
- * Jev router. Real routing is TypeSafe Jev via src/lib/server/jev (one Choice question over HAIKU/SONNET/OPUS).
- * The keyword heuristic below is the FALLBACK ONLY: it runs when JEV is unreachable (no key, timeout, 5xx, circuit open)
- * and every result it produces is labelled `source: 'fallback'` with a "fallback" reason prefix.
+ * Jev skill router (workspace/product/jev-router.md). Real routing is TypeSafe Jev via ./tier (one Choice question over
+ * HAIKU/SONNET/OPUS). The keyword heuristic below is the FALLBACK ONLY: it runs when JEV is unreachable (no key, timeout,
+ * 5xx, circuit open) and every result it produces is labelled `source: 'fallback'` with a "fallback" reason prefix.
+ * Used by /api/jev-router, /api/skills/run and /api/cache-status.
  */
 
 export type JevTier = Exclude<ModelTier, 'FABLE'>;
@@ -144,8 +147,12 @@ export interface JevRouteOutput extends JevRouteResult {
   fallbackReason?: string;
 }
 
-/** Route via real JEV; on any JEV failure fall back to the heuristic and say so. Always records telemetry. */
-export async function routeAndRecord(prompt: string, command?: string): Promise<JevRouteOutput> {
+/**
+ * Route via real JEV; on any JEV failure fall back to the heuristic and say so. Always records telemetry.
+ * `prior` is the skill's configured tier (frontmatter / the deck's matrix cell): the heuristic weighs it (spec step 3).
+ * Real JEV is asked unbiased; the prior still wins there unless JEV clears JEV_OVERRIDE_THRESHOLD (resolveRoutedModel).
+ */
+export async function routeAndRecord(prompt: string, command?: string, prior?: ModelTier): Promise<JevRouteOutput> {
   const t0 = performance.now();
   try {
     const d = await routeTier(prompt, command);
@@ -162,7 +169,7 @@ export async function routeAndRecord(prompt: string, command?: string): Promise<
     };
   } catch (e) {
     const code = e instanceof JevError ? e.code : 'unknown';
-    const c = classify(prompt, command);
+    const c = classify(prompt, command, prior);
     recordTier(c.model, true);
     return {
       model: c.model,

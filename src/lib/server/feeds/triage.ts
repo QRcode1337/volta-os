@@ -12,6 +12,11 @@ const LABELS: Record<FeedTriage, string> = {
   fyi: 'A completed result, status update, finding, news or market signal that is worth reading but leaves nothing for the owner to do.',
   noise: 'Routine, empty or repetitive output: nothing new, a passing health check, a run with nothing to report, or a failure that is only a transient retry.',
 };
+/**
+ * A needs-action label interrupts the owner, so it must clear a higher bar than fyi/noise. Below this, a needs-action guess
+ * is stored as the likeliest other label (2026-10-28: 17 of 81 needs-action labels sat under 0.5, lowest 0.16).
+ */
+const NEEDS_ACTION_MIN = 0.5;
 const BATCH = 32;
 const MAX_BATCHES = 8; // per trigger (8 x 32 items); the next list request continues if more are waiting
 const g = globalThis as unknown as { __feedsTriageRun?: { running: boolean; tried: Set<string>; warned: boolean; v: number } };
@@ -20,6 +25,17 @@ const run = () => {
   if (st.v !== TRIAGE_VERSION) Object.assign(st, { tried: new Set<string>(), v: TRIAGE_VERSION });
   return st;
 };
+
+const isLabel = (l: unknown): l is FeedTriage => l === 'needs-action' || l === 'fyi' || l === 'noise';
+
+/** JEV's pick, with an unsure needs-action demoted to the likeliest of fyi / noise. */
+function settle(choice: string | null, confidence: number, probabilities: Record<string, number>): { l: FeedTriage; c: number } | null {
+  if (!isLabel(choice)) return null;
+  if (choice !== 'needs-action' || confidence >= NEEDS_ACTION_MIN) return { l: choice, c: confidence };
+  const fyi = probabilities.fyi ?? 0;
+  const noise = probabilities.noise ?? 0;
+  return fyi >= noise ? { l: 'fyi', c: fyi } : { l: 'noise', c: noise };
+}
 
 type JevModule = typeof import('@/lib/server/jev');
 async function jev(): Promise<JevModule | null> {
@@ -68,8 +84,8 @@ export function scheduleTriage(items: FeedItem[]): void {
         const at = new Date().toISOString();
         await triageState().update((d) => {
           for (const r of res.results) {
-            const l = (r.label ?? r.guess) as FeedTriage | null;
-            if (l && (l === 'needs-action' || l === 'fyi' || l === 'noise')) d.labels[String(r.id)] = { l, c: r.confidence, at, v: TRIAGE_VERSION };
+            const picked = settle(r.label ?? r.guess, r.confidence, r.probabilities);
+            if (picked) d.labels[String(r.id)] = { ...picked, at, v: TRIAGE_VERSION };
           }
           pruneTriage(d.labels);
         });

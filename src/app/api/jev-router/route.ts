@@ -1,7 +1,6 @@
 import type { JevRouteRequest, JevRouteResult } from '@/types/os';
 import { HttpError, route } from '@/lib/server/route-helpers';
-import { jevCircuit, jevConfigured, readTelemetry } from '@/lib/server/jev';
-import { jevTelemetry, routeAndRecord, type JevRouteOutput } from './jev';
+import { jevCircuit, jevConfigured, jevTelemetry, readTelemetry, routeAndRecord, type JevRouteOutput } from '@/lib/server/jev';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

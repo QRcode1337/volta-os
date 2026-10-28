@@ -9,6 +9,7 @@ import { getHonchoLlmDeps } from './honcho-deps';
 import { launchdList, listeners, plistFacts, processes } from './host';
 import { getMemory } from './memory';
 import { probeLmStudio, probeOllama } from './models';
+import { GiB } from '@/lib/server/storage';
 import { HOME, httpGet, type HttpResult } from './run';
 import { ALL_AGENT_LABELS, claudeMem, dockerHoncho, getMeta, hermes, hermesState, honcho, lmStudioService, ltmDaemon, ollama, omniroute, openclaw, volta, type Ctx } from './services';
 import { getVolumes, peekSizes } from './storage';
@@ -86,7 +87,7 @@ async function loadCore(): Promise<Core> {
   };
 }
 
-const GiBf = (b: number | null) => (b == null ? '?' : `${(b / 1024 ** 3).toFixed(1)} GiB`);
+const GiBf = (b: number | null) => (b == null ? '?' : `${(b / GiB).toFixed(1)} GiB`);
 
 function attentionFor(services: ServiceCheck[], volumes: StorageReport['volumes'], memory: SystemsReport['memory']): AttentionItem[] {
   const out: AttentionItem[] = [];

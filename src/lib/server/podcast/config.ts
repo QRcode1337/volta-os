@@ -3,15 +3,14 @@ import { HttpError } from '../http-error';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { WINDSOR_VOLTA, writeAtomicSync } from '../storage';
 import type { PodcastConfig, TopicConfig } from './types';
 
 // config/podcast.json is the single source of truth (topic weights are edited from the app and written back).
 // Everything bulky lives on the Windsor drive: nothing is ever written to the boot disk except the small config.
 
 export const CONFIG_PATH = path.join(process.cwd(), 'config', 'podcast.json');
-export const MOUNT_POINT = '/Volumes/Windsor';
-export const PODCAST_ROOT = '/Volumes/Windsor/VOLTA/podcast';
-export const MIN_FREE_BYTES = 2 * 1024 ** 3;
+export const PODCAST_ROOT = path.join(WINDSOR_VOLTA, 'podcast');
 export const FFMPEG = process.env.VOLTA_FFMPEG || '/opt/homebrew/bin/ffmpeg';
 export const FFPROBE = process.env.VOLTA_FFPROBE || '/opt/homebrew/bin/ffprobe';
 export const LLM_CWD = path.join(os.tmpdir(), 'volta-podcast-llm');
@@ -64,9 +63,7 @@ export function patchConfig(patch: ConfigPatch): PodcastConfig {
     if (!Number.isInteger(patch.storyCount) || patch.storyCount < 6 || patch.storyCount > 10) throw new HttpError('storyCount must be an integer 6-10.', 400);
     raw.storyCount = patch.storyCount;
   }
-  const tmp = `${CONFIG_PATH}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
-  fs.renameSync(tmp, CONFIG_PATH);
+  writeAtomicSync(CONFIG_PATH, `${JSON.stringify(raw, null, 2)}\n`);
   memo = null;
   return loadConfig();
 }

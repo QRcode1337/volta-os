@@ -11,7 +11,8 @@ import { agentState, bindOf, type AgentOpts, type LaunchdEntry, type Listener, t
 import type { HonchoLlmDeps, HonchoLlmTarget } from './honcho-deps';
 import type { RuntimeProbe } from './models';
 import { redactSecrets } from '../redact';
-import { BIN, GiB, HOME, arr, num, obj, run, str, tilde, type HttpResult } from './run';
+import { GiB, tilde } from '@/lib/server/storage';
+import { BIN, HOME, arr, num, obj, run, str, type HttpResult } from './run';
 
 // One builder per service. Inputs are gathered once per probe cycle (index.ts); builders only interpret them.
 // Probed JSON is never passed through — only the named fields below (health payloads can carry paths/auth info).

@@ -11,17 +11,8 @@ import { redactSecrets } from '../redact';
 import { buildJob } from './args';
 import { JOB_PATH, datalessReason, getPreset, isDataless, getProject, resolveExecutable, type Project, type ProgressKind } from './config';
 import { newestOutputSince, parseRemotionCompositions, registerOutput, saveCliCompositions } from './index-projects';
-import {
-  JOBS_FILE,
-  LOGS_DIR,
-  STUDIO_ROOT,
-  checkStudioStorage,
-  ensureStudioDirs,
-  isInside,
-  projectRendersDir,
-  requireStudioStorage,
-  windsorMounted,
-} from './storage';
+import { isInside, isWindsorMounted } from '../storage';
+import { JOBS_FILE, LOGS_DIR, STUDIO_ROOT, checkStudioStorage, ensureStudioDirs, projectRendersDir, requireStudioStorage } from './storage';
 
 // One job at a time (renders are heavy on a 24 GB Mac), niced to 10, run without a shell, in their own process group so
 // cancel can SIGTERM (then SIGKILL) the whole tree (npx -> node -> chrome / ffmpeg).
@@ -85,7 +76,7 @@ export const JOB_ID_RE = /^j_[a-z0-9]{6,24}$/;
 
 async function appendHistory(job: StudioJob): Promise<void> {
   try {
-    if (!(await windsorMounted())) return;
+    if (!(await isWindsorMounted())) return;
     await fsp.mkdir(STUDIO_ROOT, { recursive: true });
     await fsp.appendFile(JOBS_FILE, `${JSON.stringify(job)}\n`, 'utf8');
   } catch (err) {
@@ -97,7 +88,7 @@ async function loadHistory(): Promise<Map<string, StudioJob>> {
   if (S.history) return S.history;
   const map = new Map<string, StudioJob>();
   try {
-    if (await windsorMounted()) {
+    if (await isWindsorMounted()) {
       const st = await fsp.stat(JOBS_FILE);
       const fh = await fsp.open(JOBS_FILE, 'r');
       try {
@@ -414,7 +405,7 @@ async function start(rt: Runtime): Promise<void> {
   setProgress(rt, rt.progress === 'generic' ? null : 0, 'starting');
   emit(rt, { type: 'status', job: rt.job });
   void appendHistory(rt.job);
-  if (await windsorMounted()) {
+  if (await isWindsorMounted()) {
     try {
       await fsp.mkdir(LOGS_DIR, { recursive: true });
       rt.logStream = fs.createWriteStream(path.join(LOGS_DIR, `${rt.job.id}.log`), { flags: 'a' });

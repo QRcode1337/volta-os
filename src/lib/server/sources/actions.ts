@@ -18,12 +18,15 @@ import { cached } from './cache';
 import { HttpError } from '../http-error';
 import { redactSecrets } from '../redact';
 import { isEvicted } from '../icloud';
+import { isInside } from '../storage';
 import type { ActionCounts, ActionItem, ActionLink, ActionsResponse, ActionsSource, ActionStatus } from '@/components/tasks/types';
 import { ACTION_STATUSES } from '@/components/tasks/types';
 
 const DISPLAY_PATH = '~/.openclaw/wiki/main/actions.md';
 const FILE = path.join(os.homedir(), '.openclaw', 'wiki', 'main', 'actions.md');
 export { FILE as ACTIONS_FILE, DISPLAY_PATH as ACTIONS_DISPLAY_PATH };
+/** Reading an iCloud-evicted file fails (EDEADLK) or starts a download, so actions.md is never opened in that state. */
+export const ACTIONS_EVICTED = `${DISPLAY_PATH} is an iCloud placeholder (not downloaded to the Mac), so it was not opened. Download it in Finder, then refresh.`;
 const OPENCLAW_ROOT = path.join(os.homedir(), '.openclaw');
 const MAX_BYTES = 2 * 1024 * 1024;
 /** Parse results are memoised per mtime; this only dedupes bursts of requests and re-stats the file. */
@@ -183,6 +186,7 @@ async function loadParsed(): Promise<Parsed> {
     return { available: false, reason: code === 'ENOENT' ? `${DISPLAY_PATH} does not exist.` : `Cannot read ${DISPLAY_PATH}: ${(err as Error).message}`, source: emptySource(null, null), items: [] };
   }
   if (memo && memo.mtimeMs === st.mtimeMs && memo.size === st.size) return memo.parsed;
+  if (isEvicted(st)) return { available: false, reason: ACTIONS_EVICTED, source: emptySource(st.mtime, st.size), items: [] };
   if (st.size > MAX_BYTES) {
     return { available: false, reason: `${DISPLAY_PATH} is larger than ${MAX_BYTES / 1024 / 1024} MB; refusing to parse it.`, source: emptySource(st.mtime, st.size), items: [] };
   }
@@ -253,7 +257,7 @@ export async function readWikiNote(rel: string): Promise<WikiNote> {
   } catch {
     throw new HttpError(`~/.openclaw/${rel} does not exist`, 404);
   }
-  if (!real.startsWith((await fs.realpath(WIKI_ROOT)) + path.sep)) throw new HttpError('path is outside ~/.openclaw/wiki', 400);
+  if (!(await isInside(real, WIKI_ROOT))) throw new HttpError('path is outside ~/.openclaw/wiki', 400);
   const st = await fs.stat(real);
   if (!st.isFile()) throw new HttpError(`~/.openclaw/${rel} is not a file`, 404);
   if (isEvicted(st)) throw new HttpError(`~/.openclaw/${rel} is in iCloud only (not downloaded to the Mac)`, 409);

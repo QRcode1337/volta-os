@@ -13,7 +13,8 @@ import { buildNotes } from './notes';
 import { rankAndSelect } from './rank';
 import { researchTopics, researchWarnings, runResearch, summarizeResearch, type ResearchOutcome } from './research';
 import { writeScript, writeTitle } from './script';
-import { getEpisode, paths, pruneOld, requireStorage, upsertEpisode, writeFileAtomic } from './storage';
+import { writeAtomic } from '../storage';
+import { getEpisode, paths, pruneOld, requireStorage, upsertEpisode } from './storage';
 import { assemble, estimate, estimateForWords, ffmpegAvailable, synthesize } from './tts';
 import { errMsg, isDate, localDate, round } from './util';
 
@@ -26,9 +27,7 @@ const JOB_FILE = path.join(PODCAST_ROOT, '.job.json');
 
 /** Best-effort snapshot so a dev-server restart mid-run shows up as "interrupted" instead of silently vanishing. */
 function persist(job: JobState): void {
-  fs.mkdir(PODCAST_ROOT, { recursive: true })
-    .then(() => writeFileAtomic(JOB_FILE, JSON.stringify(job)))
-    .catch(() => {});
+  writeAtomic(JOB_FILE, JSON.stringify(job)).catch(() => {});
 }
 
 export function currentJob(): JobState | null {
@@ -65,7 +64,7 @@ export async function startGeneration(opts: StartOptions): Promise<JobState> {
   if (!isDate(date)) throw new HttpError('`date` must be YYYY-MM-DD.', 400);
   if (currentJob()?.status === 'running') throw new HttpError('An episode is already being generated.', 409);
 
-  await requireStorage(); // 507 if Windsor is missing or has < 2 GiB free
+  await requireStorage(); // 507 if Windsor is missing or below the shared free-space floor
   if (!geminiKey()) throw new HttpError('GEMINI_API_KEY is missing from .env.local (then restart the dev server).', 503);
   if (!(await ffmpegAvailable())) throw new HttpError('ffmpeg not found at /opt/homebrew/bin/ffmpeg.', 503);
   if (!opts.force && (await getEpisode(date))) throw new HttpError(`An episode for ${date} already exists. Use regenerate to replace it.`, 409);
@@ -202,8 +201,8 @@ async function run(job: JobState, cfg: PodcastConfig, opts: StartOptions): Promi
     ];
     const notes = buildNotes({ cfg, date, title: meta.title, description: meta.description, durationSec: audio.durationSec, stories, runnersUp: ranked.runnersUp, notices: job.warnings, info, research: researchSummary });
     await fs.mkdir(PODCAST_ROOT, { recursive: true });
-    await writeFileAtomic(p.notes, notes);
-    await writeFileAtomic(p.script, `${script.raw}\n`);
+    await writeAtomic(p.notes, notes);
+    await writeAtomic(p.script, `${script.raw}\n`);
     await fs.rename(audio.file, p.mp3);
     const st = await fs.stat(p.mp3);
     end('mp3 + notes + script + manifest');

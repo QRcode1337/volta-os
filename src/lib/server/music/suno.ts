@@ -1,12 +1,11 @@
 import 'server-only';
 import { HttpError } from '../http-error';
 import fs from 'node:fs/promises';
-import { createWriteStream } from 'node:fs';
 import path from 'node:path';
-import { Readable, Transform } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
+import { Readable } from 'node:stream';
 import { SUNO_CREDIT_CHOICES } from '@/components/music/suno-types';
 import type { SunoClip, SunoCredit, SunoMissing, SunoSaveContext, SunoSaveResult, SunoStatus } from '@/components/music/suno-types';
+import { WINDSOR_ROOT, WINDSOR_VOLTA, isWindsorMounted, writeAtomic } from '../storage';
 import { bustIndex } from './library';
 import { loadConfig, saveRoots } from './config';
 import { readMeta, sanitizeMeta, writeTrackMeta } from './meta';
@@ -19,10 +18,9 @@ import { readMeta, sanitizeMeta, writeTrackMeta } from './meta';
 // The service holds the Suno cookie and the 2Captcha key in its own .env. This code only ever sees whether they are
 // set (never their values), and never returns them.
 
-const MOUNT = '/Volumes/Windsor';
-export const SUNO_DIR = `${MOUNT}/VOLTA/services/suno-api`;
+export const SUNO_DIR = path.join(WINDSOR_VOLTA, 'services', 'suno-api');
 export const SUNO_ENV_PATH = `${SUNO_DIR}/.env`;
-export const SUNO_OUT_DIR = `${MOUNT}/VOLTA/music/suno`;
+export const SUNO_OUT_DIR = path.join(WINDSOR_VOLTA, 'music', 'suno');
 const SUNO_LOG = '~/Library/Logs/suno-api.log';
 const RESTART_CMD = 'launchctl kickstart -k gui/$(id -u)/com.epsilon.suno-api';
 const DEFAULT_URL = 'http://127.0.0.1:3010';
@@ -45,15 +43,6 @@ function baseUrl(): string {
   }
   if (!LOOPBACK.has(u.hostname)) throw new HttpError('SUNO_API_URL must point at this machine (127.0.0.1 or localhost).', 500);
   return raw;
-}
-
-async function windsorMounted(): Promise<boolean> {
-  try {
-    const [m, v] = await Promise.all([fs.stat(MOUNT), fs.stat('/Volumes')]);
-    return m.isDirectory() && m.dev !== v.dev;
-  } catch {
-    return false;
-  }
 }
 
 class ServiceDown extends Error {}
@@ -112,7 +101,7 @@ async function envFlags(): Promise<{ readable: boolean; cookie: boolean; captcha
 // ───────────────────────── status ─────────────────────────
 
 export async function sunoStatus(): Promise<SunoStatus> {
-  const [mounted, flags] = await Promise.all([windsorMounted(), envFlags()]);
+  const [mounted, flags] = await Promise.all([isWindsorMounted(), envFlags()]);
   const serviceUrl = baseUrl();
   const base: Omit<SunoStatus, 'state' | 'ready' | 'credits' | 'missing' | 'message'> = {
     serviceUrl,
@@ -306,24 +295,16 @@ async function download(url: URL, dest: string): Promise<number> {
   if (!type.startsWith('audio/') && !type.includes('octet-stream')) throw new Error(`unexpected content type: ${type || 'none'}`);
   const declared = Number(res.headers.get('content-length') ?? 0);
   if (declared > LIMITS.maxBytes) throw new Error('file is larger than the 80 MB safety limit');
+  const chunks: Buffer[] = [];
   let bytes = 0;
-  const guard = new Transform({
-    transform(chunk: Buffer, _enc, cb) {
-      bytes += chunk.length;
-      if (bytes > LIMITS.maxBytes) cb(new Error('file is larger than the 80 MB safety limit'));
-      else cb(null, chunk);
-    },
-  });
-  const tmp = `${dest}.${process.pid}.part`;
-  try {
-    await pipeline(Readable.fromWeb(res.body as import('node:stream/web').ReadableStream), guard, createWriteStream(tmp));
-    if (bytes < LIMITS.minBytes) throw new Error('downloaded file is too small to be a song');
-    await fs.rename(tmp, dest);
-    return bytes;
-  } catch (err) {
-    await fs.rm(tmp, { force: true });
-    throw err;
+  for await (const chunk of Readable.fromWeb(res.body as import('node:stream/web').ReadableStream) as AsyncIterable<Buffer>) {
+    bytes += chunk.length;
+    if (bytes > LIMITS.maxBytes) throw new Error('file is larger than the 80 MB safety limit');
+    chunks.push(chunk);
   }
+  if (bytes < LIMITS.minBytes) throw new Error('downloaded file is too small to be a song');
+  await writeAtomic(dest, Buffer.concat(chunks, bytes));
+  return bytes;
 }
 
 function tagList(tags: string): string[] {
@@ -353,7 +334,7 @@ function cleanContext(raw: unknown): SunoSaveContext {
 export async function saveClips(body: Record<string, unknown>): Promise<{ results: SunoSaveResult[]; rootEnabled: boolean; dir: string }> {
   const ids = cleanIds(body.ids);
   const ctx = cleanContext(body);
-  if (!(await windsorMounted())) throw new HttpError(`${MOUNT} is not mounted, so the songs cannot be saved. Plug in the Windsor drive; Suno keeps the clips, so nothing is lost.`, 507);
+  if (!(await isWindsorMounted())) throw new HttpError(`${WINDSOR_ROOT} is not mounted, so the songs cannot be saved. Plug in the Windsor drive; Suno keeps the clips, so nothing is lost.`, 507);
   const clips = await fetchClips(ids);
   const root = ensureSunoRoot();
   await fs.mkdir(SUNO_OUT_DIR, { recursive: true });

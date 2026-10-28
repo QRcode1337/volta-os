@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { McpServerInfo } from '@/types/sources';
 import { cached } from './cache';
 import { getPluginState } from './plugins';
+import { tilde } from '../storage';
 
 // MCP servers configured for Claude Code: user scope (~/.claude.json mcpServers), project scope
 // (~/.claude.json projects[dir].mcpServers) and enabled plugins (<plugin>/.mcp.json or plugin.json mcpServers).
@@ -24,7 +25,6 @@ interface RawServer {
 }
 type RawMap = Record<string, RawServer>;
 
-const tilde = (p: string) => (p === HOME ? '~' : p.startsWith(HOME + path.sep) ? `~${p.slice(HOME.length)}` : p);
 
 function originOf(url: string | undefined): string | null {
   if (!url) return null;

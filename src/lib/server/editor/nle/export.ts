@@ -9,7 +9,8 @@ import { HttpError } from '../../http-error';
 import { redactSecrets } from '../../redact';
 import { resolveAsset, type NleAsset } from './assets';
 import { buildExportGraph } from './filtergraph';
-import { CACHE_DIR, FFMPEG, LOCAL_EXPORTS_DIR, WINDSOR_EXPORTS_DIR, ensureDir, exportsDir, requireSpace, writeAtomic } from './paths';
+import { assertFreeSpace, writeAtomic } from '../../storage';
+import { CACHE_DIR, FFMPEG, LOCAL_EXPORTS_DIR, WINDSOR_EXPORTS_DIR, ensureDir, exportsDir } from './paths';
 import { validateSequence } from './projects';
 
 // Export jobs: one ffmpeg at a time, the rest queued. The registry lives on globalThis (survives HMR) and finished
@@ -139,7 +140,7 @@ export async function startExport(body: Record<string, unknown>): Promise<NleExp
   }
   const dir = await exportsDir();
   await ensureDir(dir);
-  await requireSpace(dir, estimateBytes(req), 'this export');
+  await assertFreeSpace(dir, { needBytes: estimateBytes(req), what: 'this export' });
   const id = randomBytes(8).toString('hex');
   const job: NleExportJob = { id, status: 'queued', progress: 0, outputPath: null, url: null, error: null, startedAt: new Date().toISOString(), finishedAt: null, log: '' };
   R.jobs.set(id, job);
@@ -212,7 +213,7 @@ async function pump(): Promise<void> {
     if (cancelled()) throw new HttpError('cancelled', 499);
     const dir = await exportsDir();
     await ensureDir(dir);
-    await requireSpace(dir, estimateBytes(req), 'this export');
+    await assertFreeSpace(dir, { needBytes: estimateBytes(req), what: 'this export' });
     const out = await uniqueOutput(dir, req.fileName);
     partial = `${out}.part`;
     R.partial = partial;

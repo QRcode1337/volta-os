@@ -4,11 +4,12 @@ import path from 'node:path';
 import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
 import { HttpError } from './http-error';
 import { redactSecrets } from './redact';
+import { WINDSOR_ROOT } from './storage';
 import type { LtmAppCount, LtmCapture, LtmCaptureList, LtmCaptureSummary, LtmDay, LtmStatus } from '@/types/ltm';
 
 // Read-only access to the unvolta-ltm capture database. Never writes.
 
-export const LTM_DB_PATH = process.env.LTM_DB_PATH ?? '/Volumes/Windsor/LTM/ltm.sqlite';
+export const LTM_DB_PATH = process.env.LTM_DB_PATH ?? path.join(WINDSOR_ROOT, 'LTM', 'ltm.sqlite');
 export const LTM_FRAMES_DIR = process.env.LTM_FRAMES_DIR ?? path.join(path.dirname(LTM_DB_PATH), 'ltm_frames');
 
 interface Row {

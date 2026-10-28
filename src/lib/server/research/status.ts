@@ -7,7 +7,8 @@ import type { AgentStatus, RootCoverage, StatusResponse } from '@/components/res
 import { cached } from '../sources/cache';
 import { loadConfig } from './config';
 import { getGraph } from './graphs';
-import { inventoryState, isPlaceholder, volumeMounted } from './inventory';
+import { WINDSOR_ROOT, isWindsorMounted, volumeMounted } from '@/lib/server/storage';
+import { inventoryState, isPlaceholder } from './inventory';
 import { getLibrary } from './library';
 import { getVault } from './vault';
 
@@ -152,10 +153,10 @@ export async function getStatus(opts: { refresh?: boolean } = {}): Promise<Statu
     holdStatus(),
     lastBatch(cfg.stageA.batchInsightsFile),
     volumeMounted('/Volumes/Voltamachina'),
-    volumeMounted('/Volumes/Windsor'),
+    isWindsorMounted(),
   ]);
   if (!voltamachina) warnings.push('/Volumes/Voltamachina is not mounted: Stage A source paths and mirror copies cannot be checked.');
-  if (!windsor) warnings.push('/Volumes/Windsor is not mounted: the inventory is held in memory only.');
+  if (!windsor) warnings.push(`${WINDSOR_ROOT} is not mounted: the inventory is held in memory only.`);
 
   const v = await getVault();
   const vault: StatusResponse['vault'] = {

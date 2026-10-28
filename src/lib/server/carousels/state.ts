@@ -1,15 +1,14 @@
 import 'server-only';
-import { randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { HttpError } from '../http-error';
-import { windsorMounted } from '../studio/storage';
+import { WINDSOR_VOLTA, isWindsorMounted, serialised, writeAtomic } from '../storage';
 
 // Review state (approvals, comment pins, copy edits, layout switches) lives on the Windsor drive only:
-//   /Volumes/Windsor/VOLTA/carousels/state.json
+//   <WINDSOR_VOLTA>/carousels/state.json
 // Nothing is ever written to Notion, and nothing to the boot disk.
 
-export const STATE_DIR = '/Volumes/Windsor/VOLTA/carousels';
+export const STATE_DIR = path.join(WINDSOR_VOLTA, 'carousels');
 export const STATE_FILE = path.join(STATE_DIR, 'state.json');
 
 export type DeckStatus = 'DRAFT' | 'APPROVED' | 'REVISION REQUESTED';
@@ -75,7 +74,7 @@ export function validateDeckState(raw: unknown): Omit<StoredDeckState, 'updatedA
 const unmounted = 'The Windsor drive is not mounted, so approvals and comments cannot be saved. Plug it in (nothing is written to the boot disk).';
 
 export async function readState(): Promise<{ doc: StateDoc | null; available: boolean; reason: string | null }> {
-  if (!(await windsorMounted())) return { doc: null, available: false, reason: unmounted };
+  if (!(await isWindsorMounted())) return { doc: null, available: false, reason: unmounted };
   try {
     const j = JSON.parse(await fs.readFile(STATE_FILE, 'utf8')) as StateDoc;
     if (j?.v !== 1 || typeof j.decks !== 'object' || !j.decks) throw new Error('unexpected shape');
@@ -88,30 +87,21 @@ export async function readState(): Promise<{ doc: StateDoc | null; available: bo
   }
 }
 
-let chain: Promise<unknown> = Promise.resolve();
-
 /** Merge one deck's state into the file (read-modify-write, serialised so two quick saves cannot clobber each other). */
 export function writeDeckState(deckId: string, raw: unknown): Promise<{ savedAt: string }> {
   if (!ID.test(deckId)) throw new HttpError('Bad deck id.', 400);
   const state = validateDeckState(raw);
-  const run = async () => {
-    if (!(await windsorMounted())) throw new HttpError(unmounted, 507);
+  return serialised(STATE_FILE, async () => {
+    if (!(await isWindsorMounted())) throw new HttpError(unmounted, 507);
     const cur = (await readState()).doc ?? { v: 1 as const, savedAt: new Date().toISOString(), decks: {} };
     const savedAt = new Date().toISOString();
     cur.decks[deckId] = { ...state, updatedAt: savedAt };
     cur.savedAt = savedAt;
-    await fs.mkdir(STATE_DIR, { recursive: true });
-    const tmp = path.join(STATE_DIR, `.state.${randomBytes(4).toString('hex')}.tmp`);
     try {
-      await fs.writeFile(tmp, `${JSON.stringify(cur, null, 2)}\n`, 'utf8');
-      await fs.rename(tmp, STATE_FILE);
+      await writeAtomic(STATE_FILE, `${JSON.stringify(cur, null, 2)}\n`);
     } catch (err) {
-      await fs.rm(tmp, { force: true }).catch(() => undefined);
       throw new HttpError(`Could not save: ${(err as Error).message}`, 500);
     }
     return { savedAt };
-  };
-  const next = chain.then(run, run);
-  chain = next.catch(() => undefined);
-  return next;
+  });
 }

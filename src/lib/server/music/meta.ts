@@ -1,7 +1,7 @@
 import 'server-only';
 import { HttpError } from '../http-error';
 import fs from 'node:fs/promises';
-import path from 'node:path';
+import { WINDSOR_ROOT, isWindsorMounted, onWindsor, requireWindsor, serialised, writeAtomic } from '../storage';
 import type { TrackMeta } from '@/components/music/types';
 import { loadConfig } from './config';
 
@@ -9,7 +9,6 @@ import { loadConfig } from './config';
 //   { version: 1, updatedAt, tracks: { "<rootId>/<relative path>": TrackMeta } }
 // Keyed by root id + relative path so renaming the root folder on disk does not orphan the notes.
 
-const MOUNT = '/Volumes/Windsor';
 const LIMITS = { lyrics: 100_000, notes: 20_000, title: 200, credit: 60, credits: 12, tag: 40, tags: 20, key: 16, url: 500 };
 
 export interface MetaStore {
@@ -19,23 +18,12 @@ export interface MetaStore {
   path: string;
 }
 
-async function windsorMounted(): Promise<boolean> {
-  try {
-    const [m, v] = await Promise.all([fs.stat(MOUNT), fs.stat('/Volumes')]);
-    return m.isDirectory() && m.dev !== v.dev;
-  } catch {
-    return false;
-  }
-}
-
-const needsWindsor = (file: string) => file === MOUNT || file.startsWith(`${MOUNT}/`);
-
 interface Cached {
   file: string;
   mtimeMs: number;
   tracks: Record<string, TrackMeta>;
 }
-const g = globalThis as unknown as { __voltaMusicMeta?: Cached; __voltaMusicMetaLock?: Promise<unknown> };
+const g = globalThis as unknown as { __voltaMusicMeta?: Cached };
 
 async function readFromDisk(file: string): Promise<Record<string, TrackMeta>> {
   const text = await fs.readFile(file, 'utf8');
@@ -49,9 +37,9 @@ async function readFromDisk(file: string): Promise<Record<string, TrackMeta>> {
 
 /** Never throws: an unmounted drive or a missing file is an empty store with a reason. */
 export async function readMeta(): Promise<MetaStore> {
-  const file = loadConfig().metaPath;
-  if (needsWindsor(file) && !(await windsorMounted())) {
-    return { tracks: {}, ok: false, reason: `${MOUNT} is not mounted. Notes are read-only (empty) until the Windsor drive is plugged in.`, path: file };
+  const file = loadConfig().metaPath; // configurable: only a file on Windsor depends on the drive being mounted
+  if (onWindsor(file) && !(await isWindsorMounted())) {
+    return { tracks: {}, ok: false, reason: `${WINDSOR_ROOT} is not mounted. Notes are read-only (empty) until the Windsor drive is plugged in.`, path: file };
   }
   try {
     const st = await fs.stat(file);
@@ -128,8 +116,8 @@ export function sanitizeMeta(raw: unknown): TrackMeta {
 /** Replace (or, when empty, remove) one track's notes. Serialised so concurrent saves cannot lose each other. */
 export async function writeTrackMeta(metaKey: string, meta: TrackMeta): Promise<TrackMeta | null> {
   const file = loadConfig().metaPath;
-  const run = async (): Promise<TrackMeta | null> => {
-    if (needsWindsor(file) && !(await windsorMounted())) throw new HttpError(`${MOUNT} is not mounted, so notes cannot be saved. Plug in the Windsor drive.`, 507);
+  return serialised(file, async (): Promise<TrackMeta | null> => {
+    if (onWindsor(file)) await requireWindsor('notes');
     let tracks: Record<string, TrackMeta> = {};
     try {
       tracks = await readFromDisk(file);
@@ -145,15 +133,8 @@ export async function writeTrackMeta(metaKey: string, meta: TrackMeta): Promise<
       saved = { ...meta, updatedAt: new Date().toISOString() };
       tracks[metaKey] = saved;
     }
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    const tmp = `${file}.${process.pid}.tmp`;
-    await fs.writeFile(tmp, `${JSON.stringify({ version: 1, updatedAt: new Date().toISOString(), tracks }, null, 2)}\n`, 'utf8');
-    await fs.rename(tmp, file);
+    await writeAtomic(file, `${JSON.stringify({ version: 1, updatedAt: new Date().toISOString(), tracks }, null, 2)}\n`);
     g.__voltaMusicMeta = undefined;
     return saved;
-  };
-  const prev = g.__voltaMusicMetaLock ?? Promise.resolve();
-  const next = prev.then(run, run);
-  g.__voltaMusicMetaLock = next.catch(() => undefined);
-  return next;
+  });
 }

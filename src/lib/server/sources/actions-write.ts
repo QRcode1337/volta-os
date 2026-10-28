@@ -12,7 +12,9 @@ import path from 'node:path';
 import type { ActionStatus } from '@/components/tasks/types';
 import { openClaudeInTerminal } from '../claude-terminal';
 import { HttpError } from '../http-error';
-import { ACTIONS_DISPLAY_PATH, ACTIONS_FILE, getActions, parseActionsMarkdown } from './actions';
+import { isEvicted } from '../icloud';
+import { writeAtomic } from '../storage';
+import { ACTIONS_DISPLAY_PATH, ACTIONS_EVICTED, ACTIONS_FILE, getActions, parseActionsMarkdown } from './actions';
 
 const STATE_DIR = path.join(os.homedir(), 'Library', 'Application Support', 'VOLTA', 'tasks');
 const BACKUP_DIR = path.join(STATE_DIR, 'backups');
@@ -36,8 +38,9 @@ const stamp = () => new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/
 async function readFile() {
   const st = await fs.stat(ACTIONS_FILE).catch(() => null);
   if (!st) throw new HttpError(`${ACTIONS_DISPLAY_PATH} does not exist.`, 404);
+  if (isEvicted(st)) throw new HttpError(ACTIONS_EVICTED, 503);
   const content = await fs.readFile(ACTIONS_FILE, 'utf8');
-  return { content, mtimeMs: st.mtimeMs, mode: st.mode };
+  return { content, mtimeMs: st.mtimeMs };
 }
 
 /** The item with this id, preferring the one at `line` when ids repeat. */
@@ -59,20 +62,13 @@ function restatus(line: string, status: ActionStatus): string {
   return `- [${MARKER[status]}] ${rest.trimEnd()} (${today()})${tailLink}`;
 }
 
-async function commit(before: { content: string; mtimeMs: number; mode: number }, after: string, log: Record<string, unknown>) {
-  await fs.mkdir(BACKUP_DIR, { recursive: true });
-  await fs.writeFile(path.join(BACKUP_DIR, `actions-${stamp()}.md`), before.content);
+async function commit(before: { content: string; mtimeMs: number }, after: string, log: Record<string, unknown>) {
+  await writeAtomic(path.join(BACKUP_DIR, `actions-${stamp()}.md`), before.content);
   const backups = (await fs.readdir(BACKUP_DIR)).filter((f) => f.startsWith('actions-')).sort();
   await Promise.all(backups.slice(0, Math.max(0, backups.length - KEEP_BACKUPS)).map((f) => fs.unlink(path.join(BACKUP_DIR, f)).catch(() => {})));
 
-  const tmp = `${ACTIONS_FILE}.volta-${process.pid}.tmp`;
-  await fs.writeFile(tmp, after, { mode: before.mode & 0o777 });
-  const now = await fs.stat(ACTIONS_FILE);
-  if (now.mtimeMs !== before.mtimeMs) {
-    await fs.unlink(tmp).catch(() => {});
-    throw new HttpError('actions.md changed while saving (an OpenClaw run may be editing it). Refresh and try again.', 409);
-  }
-  await fs.rename(tmp, ACTIONS_FILE);
+  // 409 when actions.md changed since it was read (an OpenClaw run may be editing it)
+  await writeAtomic(ACTIONS_FILE, after, { expectMtimeMs: before.mtimeMs });
   await fs.appendFile(LOG_FILE, JSON.stringify({ at: new Date().toISOString(), ...log }) + '\n');
   await getActions({ refresh: true });
 }

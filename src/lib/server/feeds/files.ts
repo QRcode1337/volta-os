@@ -1,7 +1,8 @@
 import 'server-only';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ERISMORN_MEMORY, FILE_ITEMS_PER_DIR, HEALTH_DIR, HERMES_DIR, HERMES_ITEMS, tilde } from './config';
+import { tilde } from '@/lib/server/storage';
+import { ERISMORN_MEMORY, FILE_ITEMS_PER_DIR, HEALTH_DIR, HERMES_DIR, HERMES_ITEMS } from './config';
 import type { FeedGroup, FeedItem, FeedOrigin, FeedStatus } from './types';
 import { NOISE_RE, clean, slug, stableId, titleFrom } from './util';
 

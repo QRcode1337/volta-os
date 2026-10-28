@@ -5,7 +5,7 @@ import type { EditorClipStatus, EditorMediaItem, EditorPinRecord, EditorReviewNo
 import { coordsLabel, formatClock, frameAt, pixelLabel, regionDescriptor } from '@/components/editor/spatial';
 import { HttpError } from '../http-error';
 import { getProject, loadConfig } from '../studio/config';
-import { isInside } from '../studio/storage';
+import { isInside } from '../storage';
 import { describeEditorMedia } from './media';
 
 // "Save notes to project": a dated markdown review note written next to the source project, only for projects listed

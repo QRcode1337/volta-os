@@ -1,6 +1,7 @@
 import 'server-only';
 import fs from 'node:fs';
 import path from 'node:path';
+import { WINDSOR_ROOT, WINDSOR_VOLTA, isWindsorMounted, onWindsor } from '@/lib/server/storage';
 import type { LlmErrorKind } from './types';
 
 // Per-attempt usage + latency log, one JSON object per line, on the Windsor volume (never the near-full boot
@@ -8,7 +9,6 @@ import type { LlmErrorKind } from './types';
 // redacted error. Logging never throws and never blocks a request; if the volume is not mounted the entries stay
 // in a small in-memory ring (so /api/llm/routes still shows recent calls) and `persisted` reports false.
 
-export const WINDSOR_VOLTA = '/Volumes/Windsor/VOLTA';
 export const USAGE_LOG_PATH = process.env.VOLTA_LLM_USAGE_PATH || path.join(WINDSOR_VOLTA, 'llm', 'usage.jsonl');
 const RING = 200;
 const TAIL_BYTES = 256 * 1024;
@@ -45,8 +45,8 @@ export function logUsage(entry: UsageEntry): void {
     try {
       const dir = path.dirname(USAGE_LOG_PATH);
       if (!state.dirReady) {
-        // Only create our own leaf dir; never create the volume's mount point if the drive is absent.
-        if (!fs.existsSync(path.dirname(dir)) && dir.startsWith(WINDSOR_VOLTA)) throw new Error('Windsor volume not mounted');
+        // Never create the volume's mount point if the drive is absent.
+        if (onWindsor(dir) && !(await isWindsorMounted())) throw new Error(`${WINDSOR_ROOT} is not mounted`);
         await fs.promises.mkdir(dir, { recursive: true });
         state.dirReady = true;
       }

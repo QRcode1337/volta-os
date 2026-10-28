@@ -7,7 +7,8 @@ import type { NleUploadResult } from '@/types/nle';
 import { HttpError } from '../../http-error';
 import { probeFile } from '../../studio/index-projects';
 import { MEDIA_BY_EXT, type NleMedia, type UploadMeta } from './assets';
-import { GiB, MIN_REMAIN_BYTES, UPLOADS_DIR, ensureDir, freeBytes, requireSpace, writeAtomic } from './paths';
+import { assertFreeSpace, writeAtomic } from '../../storage';
+import { UPLOADS_DIR, ensureDir } from './paths';
 
 // Raw-body upload (not multipart): streamed to uploads/u_<16 hex>.<ext>, capped at 4 GB, then ffprobed.
 
@@ -63,7 +64,7 @@ export async function receiveUpload(req: Request): Promise<NleUploadResult> {
   if (!req.body) throw new HttpError('Empty upload.', 400);
 
   await ensureDir(UPLOADS_DIR);
-  await requireSpace(UPLOADS_DIR, Number.isFinite(declared) ? declared : 0, 'this upload');
+  await assertFreeSpace(UPLOADS_DIR, { needBytes: Number.isFinite(declared) ? declared : 0, what: 'this upload' });
 
   const id = `u_${randomBytes(8).toString('hex')}`;
   const final = path.join(UPLOADS_DIR, `${id}.${ext}`);
@@ -80,7 +81,7 @@ export async function receiveUpload(req: Request): Promise<NleUploadResult> {
       if (written > MAX_UPLOAD_BYTES) throw new HttpError('Uploads are limited to 4 GB.', 413);
       if (written >= nextCheck) {
         nextCheck += SPACE_CHECK_EVERY;
-        if ((await freeBytes(UPLOADS_DIR)) < MIN_REMAIN_BYTES) throw new HttpError(`Upload stopped: fewer than ${MIN_REMAIN_BYTES / GiB} GiB would remain free.`, 507);
+        await assertFreeSpace(UPLOADS_DIR, { what: 'the rest of this upload' });
       }
       if (!out.write(value)) await new Promise<void>((r) => out.once('drain', () => r()));
     }

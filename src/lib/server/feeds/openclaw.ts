@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
-import { OPENCLAW_DIR, OPENCLAW_STATE_DB, READABLE_ROOTS, tilde } from './config';
+import { tilde } from '@/lib/server/storage';
+import { OPENCLAW_DIR, OPENCLAW_STATE_DB, READABLE_ROOTS } from './config';
 import type { FeedItem, FeedStatus } from './types';
 import { NOISE_RE, clean, jobLabel, slug, stableId, titleFrom } from './util';
 

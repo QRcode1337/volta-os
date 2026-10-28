@@ -4,7 +4,8 @@
 // NOTE: those are VOLTA's own WORKSPACE COPY, not the user's live skills in ~/.claude/skills. The compiled prompt
 // (Copy All Comments) carries the directive that targets the live skills; the response says so (`scope`).
 import { HttpError, route } from '@/lib/server/route-helpers';
-import { readWorkspaceFile, writeWorkspaceFile } from '@/lib/server/workspace';
+import { serialised } from '@/lib/server/storage';
+import { readWorkspaceFile, resolveWorkspacePath, writeWorkspaceFile } from '@/lib/server/workspace';
 import { RL_HEADING, deriveLesson, insertUnderHeading, lessonMarkdown, type RlPinInput, type TeachSkill } from '@/components/editor/rl-rules';
 
 export const runtime = 'nodejs';
@@ -49,20 +50,6 @@ function validate(raw: unknown): ApplyBody | string {
   return { project: project.replace(/[\r\n]+/g, ' '), teach: { cut: teach.cut, animate: teach.animate }, pins };
 }
 
-// Per-file promise chain: concurrent submits read-modify-write the same SKILL.md one after another,
-// so neither lesson is lost. The entry is dropped once its tail settles, so the map stays small.
-const fileQueues = new Map<string, Promise<unknown>>();
-
-function serialised<T>(key: string, fn: () => Promise<T>): Promise<T> {
-  const run = (fileQueues.get(key) ?? Promise.resolve()).then(fn, fn);
-  const tail = run.catch(() => undefined);
-  fileQueues.set(key, tail);
-  void tail.then(() => {
-    if (fileQueues.get(key) === tail) fileQueues.delete(key);
-  });
-  return run;
-}
-
 function titleFor(skill: TeachSkill): string {
   return `# ${skill} — SKILL\n\nSkill file managed by VOLTA Agentic OS. VOLTA Editor appends learned preferences below.\n\n${RL_HEADING}\n`;
 }
@@ -83,7 +70,8 @@ export const POST = route(async ({ body: raw }) => {
         skipped.push(skill);
         continue;
       }
-      const { before, after } = await serialised(lesson.file, async () => {
+      // Serialised per file: concurrent submits read-modify-write the same SKILL.md one after another, so no lesson is lost.
+      const { before, after } = await serialised(resolveWorkspacePath(lesson.file), async () => {
         const existing = await readWorkspaceFile(lesson.file);
         const after = insertUnderHeading(existing ?? titleFor(skill), lessonMarkdown(lesson, date, body.project));
         await writeWorkspaceFile(lesson.file, after);

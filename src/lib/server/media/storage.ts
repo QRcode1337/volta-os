@@ -4,30 +4,19 @@ import { randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { GenItemRecord, MediaKind } from '@/types/media';
-import { GEN_ROOT, MANIFEST_PATH, MIN_FREE_BYTES, MOUNT_POINT } from './config';
-
-const GiB = 1024 ** 3;
+import { WINDSOR_ROOT, assertFreeSpace, isInside, isWindsorMounted } from '../storage';
+import { GEN_ROOT, MANIFEST_PATH } from './config';
 
 export type StorageState = { ok: true; root: string; freeBytes: number } | { ok: false; root: string; reason: string };
 
-/** Drive mounted (a real mount, not a leftover directory) and >= 2 GiB free? Never creates anything. */
+/** Drive mounted (a real mount, not a leftover directory) with the shared free-space floor left? Never creates anything. */
 export async function checkStorage(): Promise<StorageState> {
   const fail = (reason: string): StorageState => ({ ok: false, root: GEN_ROOT, reason });
+  if (!(await isWindsorMounted())) return fail(`${WINDSOR_ROOT} is not mounted. Plug in the Windsor drive; nothing is written to the boot disk.`);
   try {
-    const [mount, volumes] = await Promise.all([fs.stat(MOUNT_POINT), fs.stat('/Volumes')]);
-    if (!mount.isDirectory() || mount.dev === volumes.dev) {
-      return fail(`${MOUNT_POINT} is not mounted. Plug in the Windsor drive; nothing is written to the boot disk.`);
-    }
-    const s = await fs.statfs(MOUNT_POINT);
-    const freeBytes = Number(s.bavail) * Number(s.bsize);
-    if (freeBytes < MIN_FREE_BYTES) {
-      return fail(`Windsor has only ${(freeBytes / GiB).toFixed(1)} GiB free (need at least ${MIN_FREE_BYTES / GiB} GiB). Free some space first.`);
-    }
-    return { ok: true, root: GEN_ROOT, freeBytes };
+    return { ok: true, root: GEN_ROOT, freeBytes: await assertFreeSpace(WINDSOR_ROOT, { what: 'new generations' }) };
   } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') return fail(`${MOUNT_POINT} is not mounted. Plug in the Windsor drive; nothing is written to the boot disk.`);
-    return fail(`Cannot check ${MOUNT_POINT}: ${(err as Error).message}`);
+    return fail(err instanceof HttpError ? `${err.message} Free some space first.` : `Cannot check ${WINDSOR_ROOT}: ${(err as Error).message}`);
   }
 }
 
@@ -105,14 +94,10 @@ export async function resolveFile(id: string): Promise<{ rec: GenItemRecord; fil
   if (!/^[a-z0-9-]{6,40}$/i.test(id)) throw new HttpError('Bad id.', 400);
   const rec = (await readManifest()).find((r) => r.id === id);
   if (!rec) throw new HttpError('Not found.', 404);
-  let real: string;
-  let root: string;
-  try {
-    [real, root] = await Promise.all([fs.realpath(rec.file), fs.realpath(GEN_ROOT)]);
-  } catch {
+  const real = await fs.realpath(rec.file).catch(() => {
     throw new HttpError('File is missing (is the Windsor drive mounted?).', 404);
-  }
-  if (!real.startsWith(root + path.sep)) throw new HttpError('Path escapes the generations root.', 403);
+  });
+  if (!(await isInside(real, GEN_ROOT))) throw new HttpError('Path escapes the generations root.', 403);
   const st = await fs.stat(real);
   if (!st.isFile()) throw new HttpError('Not a file.', 404);
   return { rec, file: real, size: st.size };

@@ -3,7 +3,8 @@ import { HttpError } from '../http-error';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { GenItemRecord, MediaKind } from '@/types/media';
-import { EXPORT_ROOT, GEN_ROOT, MIN_FREE_BYTES } from './config';
+import { assertFreeSpace, isInside } from '../storage';
+import { EXPORT_ROOT, GEN_ROOT } from './config';
 import { localDate, readManifest, requireStorage } from './storage';
 
 // "Export": copy generated files into a brand-new folder under EXPORT_ROOT, with an index.csv describing them.
@@ -41,7 +42,7 @@ function outName(i: number, r: GenItemRecord): string {
 }
 
 export async function exportItems(p: { filter: unknown; name: unknown; ids?: unknown }): Promise<ExportResult> {
-  const storage = await requireStorage();
+  await requireStorage();
   const filter: ExportFilter = p.filter === 'image' || p.filter === 'video' || p.filter === 'voice' ? p.filter : 'all';
   const ids = Array.isArray(p.ids) ? new Set(p.ids.filter((x): x is string => typeof x === 'string')) : null;
 
@@ -50,13 +51,12 @@ export async function exportItems(p: { filter: unknown; name: unknown; ids?: unk
   const recs = [...all].sort((a, b) => a.created.localeCompare(b.created));
   if (!recs.length) throw new HttpError('Nothing to export in this filter.', 400);
 
-  const genRoot = await fs.realpath(GEN_ROOT);
   const sources: { rec: GenItemRecord; file: string; size: number }[] = [];
   const skipped: string[] = [];
   for (const rec of recs) {
     try {
       const real = await fs.realpath(rec.file);
-      if (!real.startsWith(genRoot + path.sep)) throw new Error('outside the generations folder');
+      if (!(await isInside(real, GEN_ROOT))) throw new Error('outside the generations folder');
       const st = await fs.stat(real);
       if (!st.isFile()) throw new Error('not a file');
       sources.push({ rec, file: real, size: st.size });
@@ -67,9 +67,7 @@ export async function exportItems(p: { filter: unknown; name: unknown; ids?: unk
   if (!sources.length) throw new HttpError(`None of the ${recs.length} file(s) could be found on Windsor.`, 404);
 
   const bytes = sources.reduce((a, s) => a + s.size, 0);
-  if (storage.freeBytes - bytes < MIN_FREE_BYTES) {
-    throw new HttpError(`Exporting ${(bytes / 1024 ** 2).toFixed(0)} MB would leave Windsor under ${MIN_FREE_BYTES / 1024 ** 3} GiB free.`, 507);
-  }
+  await assertFreeSpace(EXPORT_ROOT, { needBytes: bytes, what: `exporting ${(bytes / 1024 ** 2).toFixed(0)} MB` });
 
   // A new folder every time: never merge into (or overwrite) an earlier export.
   await fs.mkdir(EXPORT_ROOT, { recursive: true });
@@ -108,7 +106,7 @@ export async function exportItems(p: { filter: unknown; name: unknown; ids?: unk
 /** Resolve a folder the export created (by name) for "Open in Finder"; refuses anything outside EXPORT_ROOT. */
 export async function resolveExportDir(name: unknown): Promise<string> {
   if (typeof name !== 'string' || !name || name !== exportFolderName(name) || name.includes('/')) throw new HttpError('Bad export folder.', 400);
-  const [root, real] = await Promise.all([fs.realpath(EXPORT_ROOT), fs.realpath(path.join(EXPORT_ROOT, name)).catch(() => '')]);
-  if (!real || !real.startsWith(root + path.sep)) throw new HttpError('Export folder not found.', 404);
+  const real = await fs.realpath(path.join(EXPORT_ROOT, name)).catch(() => '');
+  if (!real || !(await isInside(real, EXPORT_ROOT))) throw new HttpError('Export folder not found.', 404);
   return real;
 }

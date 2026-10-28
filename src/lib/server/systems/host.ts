@@ -5,7 +5,8 @@ import path from 'node:path';
 import type { LaunchAgentHealth, LaunchAgentState, ServiceProcess } from '@/types/systems';
 import { cached } from '@/lib/server/sources/cache';
 import { redactSecrets } from '../redact';
-import { BIN, HOME, run, tilde } from './run';
+import { tilde } from '@/lib/server/storage';
+import { BIN, HOME, run } from './run';
 
 // Host-level facts shared by every probe: who listens on which port (lsof), process uptime/RSS (ps), LaunchAgent
 // state (launchctl list) and a few plist facts. All read-only and cheap (~20–80 ms each).

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { WINDSOR_VOLTA } from '@/lib/server/storage';
 
 // config/research.json: roots, excludes, Voltamachine / vault / graph locations, the Windsor index path.
 
@@ -119,7 +120,7 @@ export function loadConfig(): ResearchConfig {
   }
 
   const cfg: ResearchConfig = {
-    indexPath: abs(str(raw.indexPath, '/Volumes/Windsor/VOLTA/research/inventory.json')),
+    indexPath: abs(str(raw.indexPath, path.join(WINDSOR_VOLTA, 'research', 'inventory.json'))),
     maxFilesPerRoot: typeof raw.maxFilesPerRoot === 'number' ? Math.max(100, Math.floor(raw.maxFilesPerRoot)) : 60_000,
     inventoryTtlMs: (typeof raw.inventoryTtlMinutes === 'number' ? Math.max(1, raw.inventoryTtlMinutes) : 30) * 60_000,
     excludeDirNames: new Set(strs(raw.excludeDirNames).map((s) => s.toLowerCase())),

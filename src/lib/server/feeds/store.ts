@@ -1,32 +1,26 @@
 import 'server-only';
 import fs from 'node:fs/promises';
-import path from 'node:path';
-import { FEEDS_DIR, READ_PATH, TRIAGE_PATH, WINDSOR_MOUNT } from './config';
+import { WINDSOR_ROOT, isWindsorMounted, onWindsor, serialised, writeAtomic } from '@/lib/server/storage';
+import { FEEDS_DIR, READ_PATH, TRIAGE_PATH } from './config';
 import type { FeedTriage } from './types';
 
 // Persistent state on the Windsor drive: read marks (read.json) and cached JEV triage labels (triage.json).
-// Atomic writes (tmp + rename), serialised per file. If the drive is not mounted nothing is written to the boot
-// disk: the state is kept in memory for this server process and the API reports persisted:false.
+// Atomic writes, serialised per file. If the drive is not mounted nothing is written to the boot disk: the state is
+// kept in memory for this server process and the API reports persisted:false.
 
 /** Bump when the triage labels/instructions change: older cached labels are ignored and items are classified again. */
 export const TRIAGE_VERSION = 2;
 const KEEP_MS = 180 * 24 * 3600 * 1000;
 
 async function driveProblem(): Promise<string | null> {
-  if (!FEEDS_DIR.startsWith(WINDSOR_MOUNT + path.sep)) return null;
-  try {
-    const [mount, volumes] = await Promise.all([fs.stat(WINDSOR_MOUNT), fs.stat('/Volumes')]);
-    if (!mount.isDirectory() || mount.dev === volumes.dev) return `${WINDSOR_MOUNT} is not mounted`;
-    return null;
-  } catch {
-    return `${WINDSOR_MOUNT} is not mounted`;
-  }
+  if (!onWindsor(FEEDS_DIR)) return null;
+  return (await isWindsorMounted()) ? null : `${WINDSOR_ROOT} is not mounted`;
 }
 
+/** A JSON file plus the in-memory copy that stands in for it (and the persisted/reason the UI shows) while Windsor is away. */
 class JsonState<T extends { version: 1 }> {
   private data: T;
   private mtimeMs = -1;
-  private chain: Promise<unknown> = Promise.resolve();
   persisted = true;
   reason: string | undefined;
   constructor(
@@ -66,7 +60,7 @@ class JsonState<T extends { version: 1 }> {
 
   /** Apply `mutate` to the data and persist it. Resolves with whether it reached the disk. */
   update(mutate: (d: T) => void): Promise<{ persisted: boolean; reason?: string }> {
-    const run = async () => {
+    return serialised(this.file, async () => {
       const d = await this.get();
       mutate(d);
       const problem = await driveProblem();
@@ -76,10 +70,7 @@ class JsonState<T extends { version: 1 }> {
         return { persisted: false, reason: `${problem}; marks are kept for this session only.` };
       }
       try {
-        await fs.mkdir(path.dirname(this.file), { recursive: true });
-        const tmp = `${this.file}.${process.pid}.tmp`;
-        await fs.writeFile(tmp, `${JSON.stringify(d)}\n`, 'utf8');
-        await fs.rename(tmp, this.file);
+        await writeAtomic(this.file, `${JSON.stringify(d)}\n`);
         this.mtimeMs = (await fs.stat(this.file)).mtimeMs;
         this.persisted = true;
         this.reason = undefined;
@@ -89,10 +80,7 @@ class JsonState<T extends { version: 1 }> {
         this.reason = (err as Error).message;
         return { persisted: false, reason: `Could not write ${this.file}: ${(err as Error).message}` };
       }
-    };
-    const next = this.chain.then(run, run);
-    this.chain = next.catch(() => undefined);
-    return next;
+    });
   }
 }
 

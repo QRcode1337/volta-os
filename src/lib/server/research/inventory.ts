@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { isEvicted as isPlaceholder } from '@/lib/server/icloud';
+import { WINDSOR_ROOT, isWindsorMounted, onWindsor, writeAtomic } from '@/lib/server/storage';
 import type { FileKind, InventoryState } from '@/components/research/types';
 import { loadConfig, type ResearchConfig, type RootCfg } from './config';
 
@@ -12,7 +13,6 @@ import { loadConfig, type ResearchConfig, type RootCfg } from './config';
 //   * Built lazily in the background on first use, held in memory, and persisted as JSON to Windsor (the boot disk is
 //     tight), so a server restart loads the file instead of walking again. A stale one is refreshed in the background.
 
-const WINDSOR = '/Volumes/Windsor';
 const STAT_CONCURRENCY = 24;
 const PERSIST_VERSION = 1;
 const MIN_REBUILD_GAP_MS = 15_000;
@@ -87,21 +87,6 @@ const PACKAGE_DOCS = new Set(['.pages', '.numbers', '.key', '.rtfd']);
 export const kindOf = (ext: string): FileKind => EXT_KIND[ext] ?? 'other';
 export const entryId = (root: string, rel: string) => createHash('sha1').update(`${root}/${rel}`).digest('hex').slice(0, 12);
 export { isPlaceholder };
-
-/**
- * True only when a real volume is mounted at `mountPoint`: a leftover empty folder under /Volumes (left behind after
- * an unclean eject) shares /Volumes' device id, so a plain exists() check would wrongly report it as mounted.
- */
-export async function volumeMounted(mountPoint: string): Promise<boolean> {
-  try {
-    const [m, v] = await Promise.all([fs.stat(mountPoint), fs.stat('/Volumes')]);
-    return m.isDirectory() && m.dev !== v.dev;
-  } catch {
-    return false;
-  }
-}
-const windsorMounted = () => volumeMounted(WINDSOR);
-const needsWindsor = (file: string) => file === WINDSOR || file.startsWith(`${WINDSOR}/`);
 
 async function mapLimit<T, U>(items: T[], limit: number, fn: (t: T) => Promise<U>): Promise<U[]> {
   const out: U[] = new Array(items.length);
@@ -225,11 +210,8 @@ async function persist(inv: Inventory): Promise<void> {
   const cfg = loadConfig();
   const file = cfg.indexPath;
   try {
-    if (needsWindsor(file) && !(await windsorMounted())) throw new Error(`${WINDSOR} is not mounted, so the index was kept in memory only.`);
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    const tmp = `${file}.${process.pid}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(inv), 'utf8');
-    await fs.rename(tmp, file);
+    if (onWindsor(file) && !(await isWindsorMounted())) throw new Error(`${WINDSOR_ROOT} is not mounted, so the index was kept in memory only.`);
+    await writeAtomic(file, JSON.stringify(inv));
     S.persisted = true;
     S.persistError = null;
   } catch (err) {
@@ -242,7 +224,7 @@ async function persist(inv: Inventory): Promise<void> {
 async function readPersisted(): Promise<Inventory | null> {
   const cfg = loadConfig();
   try {
-    if (needsWindsor(cfg.indexPath) && !(await windsorMounted())) return null;
+    if (onWindsor(cfg.indexPath) && !(await isWindsorMounted())) return null;
     const j = JSON.parse(await fs.readFile(cfg.indexPath, 'utf8')) as Inventory;
     if (j?.version !== PERSIST_VERSION || j.hash !== cfg.hash || !Array.isArray(j.entries) || !Array.isArray(j.roots)) return null;
     return j;

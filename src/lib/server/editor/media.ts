@@ -10,7 +10,7 @@ import { readManifest, resolveFile } from '../media/storage';
 import { getProject, loadConfig, projectExists, type Project } from '../studio/config';
 import { OUTPUT_SCAN_LIMIT, probeFile, projectOutputs, resolveOutputFile } from '../studio/index-projects';
 import { FEEDBACK_DIR } from './feedback';
-import { windsorMounted } from '../studio/storage';
+import { isWindsorMounted } from '../storage';
 import { isEvicted } from '@/lib/server/icloud';
 
 // The Editor media bin: every real Studio output (per configured project, incl. the Windsor renders folder) plus the
@@ -167,7 +167,7 @@ export async function listEditorMedia(opts: { refresh?: boolean } = {}): Promise
     const bm = b.items[0]?.mtime ?? '';
     return am < bm ? 1 : am > bm ? -1 : 0;
   });
-  return { groups, storage: { windsorMounted: await windsorMounted(), feedbackDir: FEEDBACK_DIR }, errors };
+  return { groups, storage: { windsorMounted: await isWindsorMounted(), feedbackDir: FEEDBACK_DIR }, errors };
 }
 
 /** Describe ONE file by its fileKey (inbox hand-offs beyond the bin's newest-N, or deep links). */

@@ -8,6 +8,7 @@ import { isEvicted as isPlaceholder } from '@/lib/server/icloud';
 import { brctlCommand, cleanTitle } from '@/components/music/format';
 import type { EmbeddedTags, MusicLibrary, MusicRoot, MusicTrack, RootCandidate } from '@/components/music/types';
 import { cached } from '../sources/cache';
+import { isInside } from '../storage';
 import { loadConfig, saveRoots, type MusicConfig } from './config';
 import { readMeta } from './meta';
 
@@ -68,15 +69,6 @@ export function bustIndex(): void {
 export const trackIdFor = (rootId: string, rel: string) => `m_${createHash('sha1').update(`${rootId}/${rel}`).digest('hex').slice(0, 16)}`;
 export const metaKeyFor = (t: { rootId: string; rel: string }) => `${t.rootId}/${t.rel}`;
 export { isPlaceholder };
-
-async function isInside(p: string, root: string): Promise<boolean> {
-  try {
-    const [rp, rr] = await Promise.all([fs.realpath(p), fs.realpath(root)]);
-    return rp === rr || rp.startsWith(rr + path.sep);
-  } catch {
-    return false;
-  }
-}
 
 async function mapLimit<T, U>(items: T[], limit: number, fn: (t: T) => Promise<U>): Promise<U[]> {
   const out: U[] = new Array(items.length);

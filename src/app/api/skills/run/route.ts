@@ -1,5 +1,4 @@
 import { execFile } from 'node:child_process';
-import os from 'node:os';
 import path from 'node:path';
 import type { EffortLevel, ModelTier, SkillRunRequest, SkillRunResult } from '@/types/os';
 import type { RealSkill } from '@/types/sources';
@@ -10,6 +9,7 @@ import { getSkills } from '@/lib/server/sources/skills';
 import { skillCommand } from '@/components/dashboard/widgets/right-skills';
 import { hashString, resolveRoutedModel, routeAndRecord } from '../../jev-router/jev';
 import { buildMockReport } from './reports';
+import { tilde } from '@/lib/server/storage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -68,7 +68,6 @@ async function resolveSkill(command: string): Promise<{ skill: RealSkill | null;
   return { skill: bare.length === 1 ? bare[0] : null, peers: matches.map((s) => s.id) };
 }
 
-const tilde = (p: string) => (p.startsWith(os.homedir()) ? `~${p.slice(os.homedir().length)}` : p);
 
 function skillNote(command: string, skill: RealSkill | null, peers: string[]): string {
   if (skill?.path) return `**SKILL.md:** \`${tilde(skill.path)}\`\n\n`;

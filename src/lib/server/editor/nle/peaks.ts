@@ -5,7 +5,8 @@ import path from 'node:path';
 import type { NlePeaks } from '@/types/nle';
 import { HttpError } from '../../http-error';
 import { resolveAsset } from './assets';
-import { CACHE_DIR, FFMPEG, ensureDir, limiter, pruneCache, sha1, writeAtomic } from './paths';
+import { writeAtomic } from '../../storage';
+import { CACHE_DIR, FFMPEG, ensureDir, limiter, pruneCache, sha1 } from './paths';
 
 // Waveform peaks: decode to mono 4 kHz s16 and keep max |sample| per 1/50 s bucket (0..1, absolute, not normalised to
 // the file's loudest peak). Cached as JSON keyed by asset id + size + mtime.

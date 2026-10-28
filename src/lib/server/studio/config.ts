@@ -3,7 +3,8 @@ import fsp from 'node:fs/promises';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { STUDIO_ROOT, windsorMounted } from './storage';
+import { isWindsorMounted } from '../storage';
+import { STUDIO_ROOT } from './storage';
 import type { ArgSpecPublic, MediaClass, PresetPublic, StudioKind, StudioProject } from '@/types/studio';
 import { isEvictedFileSync } from '@/lib/server/icloud';
 
@@ -323,7 +324,7 @@ export async function toPublicPreset(project: Project, preset: Preset): Promise<
 
 export async function projectExists(p: Project): Promise<boolean> {
   // The studio folder is created on the first run; it counts as present whenever Windsor is mounted.
-  if (p.path.startsWith(STUDIO_ROOT)) return windsorMounted();
+  if (p.path.startsWith(STUDIO_ROOT)) return isWindsorMounted();
   try {
     return (await fsp.stat(p.path)).isDirectory();
   } catch {

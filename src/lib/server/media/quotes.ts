@@ -5,6 +5,7 @@ import type { GenRequest, ImageRequest, MediaProvider, Quote, ShotBatchRequest, 
 import { MAX_REQUEST_USD, QUOTE_TTL_MS } from './config';
 import { assertWithinDailyCap } from './budget';
 import { elevenUsdPerCredit, round6 } from './pricing';
+import { GiB } from '../storage';
 import { requireStorage, todayDir } from './storage';
 import { getQuota, listTtsModels, listVoices } from './elevenlabs';
 import { listImageModels, listVideoModels } from './xai';
@@ -223,7 +224,7 @@ export async function createQuote(raw: unknown): Promise<Quote> {
   if (estUsd > 0 && spend.totalUsd + estUsd > spend.capUsd * 0.8) {
     warnings.push(`This takes today's spend to $${(spend.totalUsd + estUsd).toFixed(2)} of the $${spend.capUsd.toFixed(2)} daily cap.`);
   }
-  if (storage.freeBytes < 4 * 1024 ** 3) warnings.push(`Windsor has ${(storage.freeBytes / 1024 ** 3).toFixed(1)} GiB free.`);
+  if (storage.freeBytes < 4 * GiB) warnings.push(`Windsor has ${(storage.freeBytes / GiB).toFixed(1)} GiB free.`);
 
   prune();
   const quoteId = `q_${randomBytes(12).toString('hex')}`;

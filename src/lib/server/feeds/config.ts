@@ -1,6 +1,7 @@
 import 'server-only';
 import os from 'node:os';
 import path from 'node:path';
+import { WINDSOR_VOLTA } from '@/lib/server/storage';
 
 const HOME = os.homedir();
 const env = process.env;
@@ -12,8 +13,7 @@ export const ERISMORN_MEMORY = env.VOLTA_FEEDS_ERISMORN_MEMORY ?? path.join(HOME
 export const HERMES_DIR = env.VOLTA_FEEDS_HERMES_DIR ?? path.join(HOME, '.hermes');
 
 /** Persistent feed state (read marks, triage labels) lives on the Windsor drive, never the boot disk. */
-export const WINDSOR_MOUNT = '/Volumes/Windsor';
-export const FEEDS_DIR = env.VOLTA_FEEDS_DIR ?? path.join(WINDSOR_MOUNT, 'VOLTA', 'feeds');
+export const FEEDS_DIR = env.VOLTA_FEEDS_DIR ?? path.join(WINDSOR_VOLTA, 'feeds');
 export const READ_PATH = path.join(FEEDS_DIR, 'read.json');
 export const TRIAGE_PATH = path.join(FEEDS_DIR, 'triage.json');
 
@@ -25,5 +25,3 @@ export const MAX_BODY = 14_000;
 export const FILE_ITEMS_PER_DIR = 30;
 export const HERMES_ITEMS = 50;
 export const REFRESH_TTL_MS = 20_000;
-
-export const tilde = (p: string): string => (p.startsWith(HOME + path.sep) ? `~${p.slice(HOME.length)}` : p);

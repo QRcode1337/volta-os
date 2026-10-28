@@ -17,7 +17,8 @@ import {
   toPublicPreset,
   type Project,
 } from './config';
-import { COMPOSITIONS_CACHE, RENDERS_ROOT, STUDIO_ROOT, isInside, projectRendersDir, windsorMounted } from './storage';
+import { isInside, isWindsorMounted, writeAtomic } from '../storage';
+import { COMPOSITIONS_CACHE, RENDERS_ROOT, STUDIO_ROOT, projectRendersDir } from './storage';
 import { isEvicted } from '@/lib/server/icloud';
 
 // Project index: recent outputs (with ffprobe), compositions, and the id -> path registry behind /api/studio/file.
@@ -466,7 +467,7 @@ export async function staticCompositions(p: Project): Promise<CompositionInfo[]>
 async function loadCliCache(): Promise<void> {
   if (R.cliLoaded) return;
   R.cliLoaded = true;
-  if (!(await windsorMounted())) return;
+  if (!(await isWindsorMounted())) return;
   const text = await readIf(COMPOSITIONS_CACHE);
   if (!text) return;
   try {
@@ -480,10 +481,9 @@ async function loadCliCache(): Promise<void> {
 export async function saveCliCompositions(projectId: string, items: CompositionInfo[]): Promise<void> {
   await loadCliCache();
   R.cli.set(projectId, { at: new Date().toISOString(), items });
-  if (!(await windsorMounted())) return;
+  if (!(await isWindsorMounted())) return;
   try {
-    await fs.mkdir(STUDIO_ROOT, { recursive: true });
-    await fs.writeFile(COMPOSITIONS_CACHE, JSON.stringify(Object.fromEntries(R.cli)), 'utf8');
+    await writeAtomic(COMPOSITIONS_CACHE, JSON.stringify(Object.fromEntries(R.cli)));
   } catch {
     // memory cache still works
   }

@@ -1,15 +1,14 @@
 import 'server-only';
-import { randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { EditorClipStatus, EditorEpisodeRef, EditorEpisodeTag, EditorFeedbackDoc, EditorFeedbackResponse, EditorMediaItem, EditorPinRecord, EditorSkillTag } from '@/types/editor';
 import { HttpError } from '../http-error';
-import { windsorMounted } from '../studio/storage';
+import { WINDSOR_VOLTA, isWindsorMounted, writeAtomic } from '../storage';
 
 // Per-file review pins live on the Windsor drive, never on the boot disk:
-//   /Volumes/Windsor/VOLTA/editor/feedback/<fileKey>.json   (timestamps are local to the file)
+//   <WINDSOR_VOLTA>/editor/feedback/<fileKey>.json   (timestamps are local to the file)
 
-export const FEEDBACK_DIR = '/Volumes/Windsor/VOLTA/editor/feedback';
+export const FEEDBACK_DIR = path.join(WINDSOR_VOLTA, 'editor', 'feedback');
 const MAX_PINS = 300;
 const SKILLS = new Set<string>(['/animate', '/cut', 'audio', '/robo']);
 const STATUSES = new Set<string>(['NEEDS REVIEW', 'CHANGES REQUESTED', 'APPROVED']);
@@ -108,7 +107,7 @@ const unmounted = 'The Windsor drive is not mounted, so review notes cannot be r
 
 export async function readFeedback(fileKey: string): Promise<EditorFeedbackResponse> {
   requireFileKey(fileKey);
-  if (!(await windsorMounted())) return { doc: null, available: false, reason: unmounted };
+  if (!(await isWindsorMounted())) return { doc: null, available: false, reason: unmounted };
   try {
     const text = await fs.readFile(path.join(FEEDBACK_DIR, `${fileKey}.json`), 'utf8');
     const j = JSON.parse(text) as EditorFeedbackDoc;
@@ -122,7 +121,7 @@ export async function readFeedback(fileKey: string): Promise<EditorFeedbackRespo
 
 export async function writeFeedback(item: EditorMediaItem, pins: EditorPinRecord[], status: EditorClipStatus, episode: EditorEpisodeRef | null = null): Promise<EditorFeedbackDoc> {
   const fileKey = requireFileKey(item.id);
-  if (!(await windsorMounted())) throw new HttpError(unmounted, 507);
+  if (!(await isWindsorMounted())) throw new HttpError(unmounted, 507);
   const doc: EditorFeedbackDoc = {
     v: 1,
     fileKey,
@@ -132,14 +131,9 @@ export async function writeFeedback(item: EditorMediaItem, pins: EditorPinRecord
     pins,
     episode,
   };
-  await fs.mkdir(FEEDBACK_DIR, { recursive: true });
-  const dest = path.join(FEEDBACK_DIR, `${fileKey}.json`);
-  const tmp = path.join(FEEDBACK_DIR, `.${fileKey}.${randomBytes(4).toString('hex')}.tmp`);
   try {
-    await fs.writeFile(tmp, `${JSON.stringify(doc, null, 2)}\n`, 'utf8');
-    await fs.rename(tmp, dest);
+    await writeAtomic(path.join(FEEDBACK_DIR, `${fileKey}.json`), `${JSON.stringify(doc, null, 2)}\n`);
   } catch (err) {
-    await fs.rm(tmp, { force: true }).catch(() => undefined);
     throw new HttpError(`Could not save notes: ${(err as Error).message}`, 500);
   }
   return doc;

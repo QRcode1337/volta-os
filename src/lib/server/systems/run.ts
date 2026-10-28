@@ -9,9 +9,6 @@ import { redactSecrets } from '../redact';
 
 export const HOME = os.homedir();
 
-/** "~/…" for display (never leaks the username in paths shown to the page). */
-export const tilde = (p: string) => (p.startsWith(HOME) ? `~${p.slice(HOME.length)}` : p);
-
 /** First existing absolute path, else the bare name (resolved through PATH). */
 function bin(name: string, candidates: string[]): string {
   return candidates.find((c) => fs.existsSync(c)) ?? name;
@@ -107,5 +104,3 @@ export const obj = (v: unknown): Record<string, unknown> => (v && typeof v === '
 export const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null);
 export const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 export const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-
-export const GiB = 1024 ** 3;

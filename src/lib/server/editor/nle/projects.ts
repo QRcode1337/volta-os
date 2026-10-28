@@ -4,7 +4,8 @@ import path from 'node:path';
 import type { NleProjectSummary, NleSequence } from '@/types/nle';
 import { sequenceDuration } from '@/lib/nle/model';
 import { HttpError } from '../../http-error';
-import { PROJECTS_DIR, TRASH_DIR, ensureDir, isEvictedError, requireSpace, writeAtomic } from './paths';
+import { assertFreeSpace, writeAtomic } from '../../storage';
+import { PROJECTS_DIR, TRASH_DIR, ensureDir, isEvictedError } from './paths';
 
 // Saved Edit-mode sequences: one JSON file per sequence in projects/. Deletes move to projects/.trash/.
 
@@ -80,7 +81,7 @@ export async function saveProject(raw: unknown): Promise<{ ok: true; updatedAt: 
   const text = JSON.stringify({ ...s, updatedAt });
   if (Buffer.byteLength(text) > MAX_SEQUENCE_BYTES) throw new HttpError('Sequence is larger than 2 MB.', 413);
   await ensureDir(PROJECTS_DIR);
-  await requireSpace(PROJECTS_DIR, Buffer.byteLength(text), 'saving the sequence');
+  await assertFreeSpace(PROJECTS_DIR, { needBytes: Buffer.byteLength(text), what: 'saving the sequence' });
   await writeAtomic(fileOf(s.id), text);
   return { ok: true, updatedAt };
 }

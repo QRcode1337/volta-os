@@ -1,14 +1,14 @@
 import 'server-only';
+import path from 'node:path';
 import { HttpError } from '../http-error';
 import { redactSecrets } from '../redact';
+import { WINDSOR_VOLTA } from '../storage';
 
 /** Everything generated lands here (external drive). Nothing is ever written to the boot disk. */
-export const MOUNT_POINT = '/Volumes/Windsor';
-export const GEN_ROOT = '/Volumes/Windsor/VOLTA/generations';
+export const GEN_ROOT = path.join(WINDSOR_VOLTA, 'generations');
 export const MANIFEST_PATH = `${GEN_ROOT}/manifest.jsonl`;
 /** "Export" copies land here, one new folder per export (same drive as the generations). */
-export const EXPORT_ROOT = '/Volumes/Windsor/VOLTA/exports';
-export const MIN_FREE_BYTES = 2 * 1024 ** 3;
+export const EXPORT_ROOT = path.join(WINDSOR_VOLTA, 'exports');
 
 /** Refuse any single request estimated above this (USD). Override with VOLTA_GEN_MAX_USD. */
 export const MAX_REQUEST_USD = Number(process.env.VOLTA_GEN_MAX_USD) > 0 ? Number(process.env.VOLTA_GEN_MAX_USD) : 5;

@@ -5,7 +5,8 @@ import path from 'node:path';
 import type { PathSize, Severity, StorageSizes, VolumeUsage } from '@/types/systems';
 import { cached } from '@/lib/server/sources/cache';
 import { LTM_DB_PATH, LTM_FRAMES_DIR } from '@/lib/server/ltm';
-import { BIN, GiB, HOME, run, tilde } from './run';
+import { GiB, WINDSOR_ROOT, tilde, volumeMounted } from '@/lib/server/storage';
+import { BIN, HOME, run } from './run';
 
 // Volumes (df -k, every probe cycle — ~8 ms) and the sizes of the big directories (du -sk, nice'd, sequential,
 // cached 10 min and refreshed in the background — never on the request path).
@@ -27,7 +28,7 @@ const VOLUMES: VolumeDef[] = [
     rule: { kind: 'free', warn: 15 * GiB, critical: 8 * GiB },
     note: 'APFS container — used = capacity − free, across all volumes',
   },
-  { id: 'windsor', label: 'Windsor', mount: '/Volumes/Windsor', rule: { kind: 'pct', warn: 90, critical: 97 }, note: 'LTM database, frames and Ollama models' },
+  { id: 'windsor', label: 'Windsor', mount: WINDSOR_ROOT, rule: { kind: 'pct', warn: 90, critical: 97 }, note: 'LTM database, frames and Ollama models' },
   { id: 'voltamachina', label: 'Voltamachina', mount: '/Volumes/Voltamachina', rule: { kind: 'pct', warn: 90, critical: 97 }, note: 'cache offload drive' },
 ];
 
@@ -40,7 +41,7 @@ function thresholdText(r: VolumeDef['rule']): string {
 async function volume(def: VolumeDef): Promise<VolumeUsage> {
   const base = { id: def.id, label: def.label, mount: def.mount, thresholds: thresholdText(def.rule), note: def.note ?? null };
   const empty = { ...base, mounted: false, totalBytes: null, freeBytes: null, usedBytes: null, usedPct: null };
-  if (!fs.existsSync(def.mount)) return { ...empty, severity: def.id === 'boot' ? 'critical' : 'warn', note: 'not mounted' };
+  if (def.mount !== '/' && !(await volumeMounted(def.mount))) return { ...empty, severity: def.id === 'boot' ? 'critical' : 'warn', note: 'not mounted' };
   const r = await run(BIN.df, ['-k', def.mount], 3_000);
   const line = r.stdout.trim().split('\n')[1] ?? '';
   // Filesystem 1024-blocks Used Available Capacity iused ifree %iused Mounted on (mount may contain spaces)
@@ -125,7 +126,7 @@ async function measure(def: SizeDef): Promise<PathSize> {
   };
   if (!fs.existsSync(def.path)) {
     const vol = VOLUMES.find((v) => v.id === def.volume);
-    return { ...base, error: vol && vol.id !== 'boot' && !fs.existsSync(vol.mount) ? 'volume not mounted' : 'not found' };
+    return { ...base, error: vol && vol.id !== 'boot' && !(await volumeMounted(vol.mount)) ? 'volume not mounted' : 'not found' };
   }
   if (def.mode === 'file') {
     let bytes = 0;

@@ -3,6 +3,7 @@ import { HttpError } from '../http-error';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { WINDSOR_VOLTA, writeAtomicSync } from '../storage';
 
 // config/music.json: library roots, discovery settings, extensions and the Windsor meta path.
 
@@ -71,7 +72,7 @@ export function loadConfig(): MusicConfig {
       maxDepth: typeof disc.maxDepth === 'number' ? Math.min(4, Math.max(0, Math.floor(disc.maxDepth))) : 3,
     },
     extensions: new Set((exts.length ? exts : DEFAULT_EXTS).map((e) => e.toLowerCase())),
-    metaPath: path.resolve(expandHome(str(raw.metaPath, '/Volumes/Windsor/VOLTA/music/meta.json'))),
+    metaPath: path.resolve(expandHome(str(raw.metaPath, path.join(WINDSOR_VOLTA, 'music', 'meta.json')))),
     errors,
   };
 }
@@ -85,7 +86,5 @@ export function saveRoots(roots: { id: string; label: string; path: string; enab
     throw new HttpError(`config/music.json is unreadable, so it was not changed: ${(err as Error).message}`, 500);
   }
   raw.roots = roots.map((r) => ({ id: r.id, label: r.label, path: collapseHome(r.path), enabled: r.enabled, depth: r.depth }));
-  const tmp = `${CONFIG_PATH}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
-  fs.renameSync(tmp, CONFIG_PATH);
+  writeAtomicSync(CONFIG_PATH, `${JSON.stringify(raw, null, 2)}\n`);
 }

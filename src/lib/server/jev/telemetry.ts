@@ -1,6 +1,7 @@
 import 'server-only';
 import fs from 'node:fs';
 import path from 'node:path';
+import { WINDSOR_ROOT, WINDSOR_VOLTA, isWindsorMounted, onWindsor, serialised, writeAtomic } from '@/lib/server/storage';
 import type { JevOp, JevTelemetryFile, ModelTierName } from './types';
 
 /**
@@ -8,7 +9,7 @@ import type { JevOp, JevTelemetryFile, ModelTierName } from './types';
  * In-memory mirror is the source of truth for reads; writes are debounced + atomic (tmp → rename).
  * If the volume is not mounted the counters keep working in memory and `persisted` reports false.
  */
-export const TELEMETRY_PATH = process.env.VOLTA_JEV_TELEMETRY_PATH || '/Volumes/Windsor/VOLTA/jev/telemetry.json';
+export const TELEMETRY_PATH = process.env.VOLTA_JEV_TELEMETRY_PATH || path.join(WINDSOR_VOLTA, 'jev', 'telemetry.json');
 /** Input tokens are the only billed unit: $42 per billion = $0.042 per million. */
 export const USD_PER_INPUT_TOKEN = 0.042 / 1_000_000;
 
@@ -82,29 +83,25 @@ function scheduleFlush(h: Holder) {
   if (h.timer) return;
   h.timer = setTimeout(() => {
     h.timer = null;
-    flushNow(h);
+    void flushNow(h);
   }, FLUSH_MS);
   h.timer.unref?.();
 }
 
-function flushNow(h: Holder) {
-  try {
-    const dir = path.dirname(TELEMETRY_PATH);
-    // Only create the leaf dir under an existing parent: never fabricate a /Volumes mount point.
-    if (!fs.existsSync(dir)) {
-      if (!fs.existsSync(path.dirname(dir))) throw new Error(`volume not mounted: ${path.dirname(dir)}`);
-      fs.mkdirSync(dir);
+function flushNow(h: Holder): Promise<void> {
+  return serialised(TELEMETRY_PATH, async () => {
+    try {
+      // Never fabricate the /Volumes mount point when the drive is absent.
+      if (onWindsor(TELEMETRY_PATH) && !(await isWindsorMounted())) throw new Error(`${WINDSOR_ROOT} is not mounted`);
+      h.t.updatedAt = new Date().toISOString();
+      await writeAtomic(TELEMETRY_PATH, JSON.stringify(h.t, null, 2));
+      h.persisted = true;
+      h.persistError = null;
+    } catch (e) {
+      h.persisted = false;
+      h.persistError = (e as Error).message;
     }
-    h.t.updatedAt = new Date().toISOString();
-    const tmp = `${TELEMETRY_PATH}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(h.t, null, 2));
-    fs.renameSync(tmp, TELEMETRY_PATH);
-    h.persisted = true;
-    h.persistError = null;
-  } catch (e) {
-    h.persisted = false;
-    h.persistError = (e as Error).message;
-  }
+  });
 }
 
 /** A completed network request that returned answers. */

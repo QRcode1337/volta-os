@@ -27,6 +27,7 @@ interface Detail {
   episode: EpisodeRecord;
   notes: string;
   script: string;
+  enrich?: { status: 'ready' | 'queued' | 'running' | 'failed' | 'unavailable'; error?: string };
 }
 
 export function EpisodeView({ episode, config, busy, external, onRegenerate }: { episode: EpisodeRecord; config: PodcastConfig; busy: boolean; external: boolean; onRegenerate: (date: string) => void }) {
@@ -38,11 +39,21 @@ export function EpisodeView({ episode, config, busy, external, onRegenerate }: {
     let stop = false;
     setDetail(null);
     setErr(null);
-    api<Detail>(`/api/podcast/episode?date=${episode.date}${episode.variant ? `&src=${episode.variant}` : ''}`)
-      .then((d) => !stop && setDetail(d))
-      .catch((e: Error) => !stop && setErr(e.message));
+    setTab('notes');
+    let timer: number | undefined;
+    const load = () =>
+      api<Detail>(`/api/podcast/episode?date=${episode.date}${episode.variant ? `&src=${episode.variant}` : ''}`)
+        .then((d) => {
+          if (stop) return;
+          setDetail(d);
+          // the background transcript job is still working: look again shortly
+          if (d.enrich && (d.enrich.status === 'queued' || d.enrich.status === 'running')) timer = window.setTimeout(load, 8000);
+        })
+        .catch((e: Error) => !stop && setErr(e.message));
+    void load();
     return () => {
       stop = true;
+      window.clearTimeout(timer);
     };
   }, [episode.date, episode.variant, episode.createdAt]);
 
@@ -56,7 +67,7 @@ export function EpisodeView({ episode, config, busy, external, onRegenerate }: {
       {research?.degraded && <ResearchNotice health={research} labelOf={labelOf} />}
       <div className="flex flex-wrap items-center gap-2">
         <nav className="flex flex-wrap gap-1" aria-label="Episode sections">
-          {(lite ? TABS.slice(0, 1) : TABS).map((t) => (
+          {(lite ? TABS.filter((t) => t.id === 'notes' || t.id === 'transcript') : TABS).map((t) => (
             <button
               key={t.id}
               type="button"
@@ -118,7 +129,23 @@ export function EpisodeView({ episode, config, busy, external, onRegenerate }: {
             ))}
           </ul>
         )}
-        {detail && tab === 'transcript' && (
+        {detail && tab === 'transcript' && lite && (
+          <div className="space-y-3">
+            {detail.script ? (
+              <>
+                <p className="font-mono text-[10px] uppercase tracking-[0.05em] text-muted">Auto-transcribed locally (Whisper); speakers are not labelled.</p>
+                {detail.script.split('\n').filter(Boolean).map((l, i) => (
+                  <p key={i} className="text-[13px] leading-relaxed text-secondary">{l}</p>
+                ))}
+              </>
+            ) : (
+              <p className="text-[12.5px] text-secondary">
+                {detail.enrich?.status === 'failed' ? `Transcript failed: ${detail.enrich.error ?? 'unknown error'}` : detail.enrich?.status === 'unavailable' ? 'Transcript not queued yet.' : 'Transcribing in the background. This page updates when it is ready.'}
+              </p>
+            )}
+          </div>
+        )}
+        {detail && tab === 'transcript' && !lite && (
           <div className="space-y-2">
             {detail.script.split('\n').filter(Boolean).map((l, i) => {
               const at = l.indexOf(':');

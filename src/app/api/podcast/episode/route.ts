@@ -1,4 +1,5 @@
 import { HttpError, route } from '@/lib/server/route-helpers';
+import { getEnrichment } from '@/lib/server/podcast/enrich';
 import { getEpisode, readText } from '@/lib/server/podcast/storage';
 import { isDate } from '@/lib/server/podcast/util';
 
@@ -11,7 +12,11 @@ export const GET = route(async ({ url }) => {
   if (!isDate(date)) throw new HttpError('`date` must be YYYY-MM-DD.', 400);
   const episode = await getEpisode(date, url.searchParams.get('src') === 'gemini' ? 'gemini' : undefined);
   if (!episode) throw new HttpError(`No episode for ${date}.`, 404);
-  if (episode.audioUrl) return { episode, notes: episode.description, script: '' };
+  if (episode.audioUrl) {
+    const en = await getEnrichment(episode);
+    const notes = [en.summary && `## Summary\n\n${en.summary}`, `## About this episode\n\n${episode.description}`].filter(Boolean).join('\n\n');
+    return { episode, notes, script: en.transcript, enrich: { status: en.status, error: en.error } };
+  }
   const [notes, script] = await Promise.all([readText(episode.notesFile), readText(episode.scriptFile)]);
   return { episode, notes: notes ?? '', script: script ?? '' };
 });

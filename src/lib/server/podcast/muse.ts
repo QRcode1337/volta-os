@@ -2,6 +2,7 @@ import 'server-only';
 import { HttpError } from '../http-error';
 import type { EpisodeRecord } from './types';
 import { localDate } from './util';
+import { enqueueMissing } from './enrich';
 
 // External episode source: a muse.ai podcast feed (config/podcast.json -> externalFeed). Episodes are produced and hosted by
 // muse.ai, so nothing is generated, stored or billed here: we read the RSS and play/redirect to the enclosure URLs.
@@ -68,6 +69,7 @@ export async function museEpisodes(url: string): Promise<EpisodeRecord[]> {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const episodes = parseMuseFeed(await res.text());
     cache = { url, at: Date.now(), episodes };
+    void enqueueMissing(episodes).catch(() => {});
     return episodes;
   } catch (err) {
     if (cache && cache.url === url) return cache.episodes; // stale beats nothing

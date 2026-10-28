@@ -164,6 +164,13 @@ async function synthChunk(cfg: PodcastConfig, chunk: Turn[], expectedSec: number
     }
     if (!res.ok) {
       lastErr = `HTTP ${res.status}: ${redactSecrets(j.error?.message ?? raw.slice(0, 200))}`;
+      if (res.status === 429 && /spend(ing)? cap/i.test(lastErr)) {
+        // Google AI Studio's monthly project spend cap: retrying can't help until the cap is raised or the month rolls over.
+        throw new HttpError(
+          'Gemini TTS is blocked by your Google AI Studio monthly spending cap. Raise the cap at https://ai.studio/spend (or wait for the new month), then generate the episode again.',
+          402,
+        );
+      }
       if (res.status === 429) {
         const wait = Number(res.headers.get('retry-after')) || 20 * attempt;
         await sleep(Math.min(90, wait) * 1000);

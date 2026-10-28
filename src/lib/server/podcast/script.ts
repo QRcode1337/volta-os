@@ -64,7 +64,7 @@ export function buildScriptPrompt(stories: Story[], cfg: PodcastConfig, date: st
     `- ${a.name}: ${a.persona}`,
     `- ${b.name}: ${b.persona}`,
     '',
-    'LENGTH: between ' + cfg.script.minWords + ' and ' + cfg.script.maxWords + ` spoken words in total (aim for ${cfg.script.targetWords}), about 12 minutes. Each story gets roughly its target_words; the strongest stories lead.`,
+    'LENGTH: between ' + cfg.script.minWords + ' and ' + cfg.script.maxWords + ` spoken words in total (aim for ${cfg.script.targetWords}), about 12 minutes. Each story gets roughly its target_words; the strongest stories lead. Under ${cfg.script.minWords} words is a failed episode: if in doubt, go longer by adding more of the facts provided and more back-and-forth, never filler or invented detail.`,
     '',
     'STRUCTURE: a cold open with a one-line tease of the biggest story, a short welcome with the date, then every story below in a sensible order (group related ones, link them where honest), a brief "what to watch" wrap-up that only restates things already covered, and a sign-off that says the sources are in the show notes.',
     '',
@@ -113,7 +113,14 @@ export function parseScript(text: string, cfg: PodcastConfig): { turns: Turn[]; 
   return { turns, dropped, raw: rawLines.join('\n') };
 }
 
-function validate(turns: Turn[], stories: Story[], cfg: PodcastConfig, dropped: number): { issues: string[]; words: number } {
+interface Check {
+  issues: string[];
+  words: number;
+  /** Stories never cited. */
+  missing: number;
+}
+
+function validate(turns: Turn[], stories: Story[], cfg: PodcastConfig, dropped: number): Check {
   const words = turns.reduce((a, t) => a + wordCount(t.text), 0);
   const issues: string[] = [];
   if (words < cfg.script.minWords) issues.push(`Too short: ${words} spoken words, need at least ${cfg.script.minWords}. Expand the stories with more of the facts provided and more back-and-forth.`);
@@ -130,7 +137,15 @@ function validate(turns: Turn[], stories: Story[], cfg: PodcastConfig, dropped: 
   const known = new Set(corpus.match(/\d[\d,.]*/g)?.map((x) => x.replace(/[,.]+$/, '').replace(/,/g, '')));
   const stray = [...new Set(turns.flatMap((t) => t.text.match(/\d[\d,.]*/g) ?? []).map((x) => x.replace(/[,.]+$/, '').replace(/,/g, '')))].filter((x) => x && !known.has(x) && !['1', '2', '3', '4', '5'].includes(x));
   if (stray.length > 2) issues.push(`Numbers that appear in no story note (remove or replace with words from the notes): ${stray.slice(0, 8).join(', ')}.`);
-  return { issues, words };
+  return { issues, words, missing: missing.length };
+}
+
+const MAX_REVISIONS = 3;
+
+/** Lower is better: words outside [min, max], uncovered stories, then any other issue. */
+function badness(v: Check, cfg: PodcastConfig): number {
+  const off = v.words < cfg.script.minWords ? cfg.script.minWords - v.words : v.words > cfg.script.maxWords ? v.words - cfg.script.maxWords : 0;
+  return off * 2 + v.missing * 300 + v.issues.length * 25;
 }
 
 export async function writeScript(stories: Story[], cfg: PodcastConfig, date: string, onDetail: (s: string) => void): Promise<ScriptResult> {
@@ -145,22 +160,29 @@ export async function writeScript(stories: Story[], cfg: PodcastConfig, date: st
   let r = await call(buildScriptPrompt(stories, cfg, date));
   let parsed = parseScript(r.text, cfg);
   let v = validate(parsed.turns, stories, cfg, parsed.dropped);
-  if (v.issues.length && parsed.turns.length > 0) {
-    onDetail(`revising the script (${v.issues.length} issue${v.issues.length === 1 ? '' : 's'})`);
+  // Revise until the draft is in range and covers every story. Length and coverage dominate the score, so a revision
+  // that fixes "too short" wins even if it introduces a minor style issue.
+  for (let round = 1; round <= MAX_REVISIONS && v.issues.length && parsed.turns.length > 0; round++) {
+    onDetail(`revising the script (${v.issues.length} issue${v.issues.length === 1 ? '' : 's'}, pass ${round}/${MAX_REVISIONS})`);
     try {
       const r2 = await call(buildScriptPrompt(stories, cfg, date, { previous: parsed.raw, issues: v.issues }));
       const p2 = parseScript(r2.text, cfg);
       const v2 = validate(p2.turns, stories, cfg, p2.dropped);
-      if (p2.turns.length && v2.issues.length <= v.issues.length) {
+      if (p2.turns.length && badness(v2, cfg) < badness(v, cfg)) {
         r = r2;
         parsed = p2;
         v = v2;
       }
     } catch (e) {
-      warnings.push(`Script revision failed (${errMsg(e)}); using the first draft.`);
+      warnings.push(`Script revision ${round} failed (${errMsg(e)}).`);
     }
   }
-  if (parsed.turns.length < 20 || v.words < 900) throw new Error(`Script too thin (${parsed.turns.length} turns, ${v.words} words) from ${r.backend}.`);
+  // Never publish a short episode: TTS is paid, so stop here (nothing spent on audio) rather than voice a thin script.
+  if (v.words < cfg.script.minWords || parsed.turns.length < 20) {
+    throw new Error(
+      `Script still too short after ${MAX_REVISIONS} revisions (${v.words} spoken words, ${parsed.turns.length} turns; need at least ${cfg.script.minWords}) from ${r.backend}. Nothing was spent on audio.`,
+    );
+  }
   for (const i of v.issues) warnings.push(`Script: ${i}`);
   // Only a real fallback is worth a warning: the long-write chain is [OmniRoute, claude -p] (llm.ts ROUTES), so OmniRoute
   // answering is the normal case. `fallbackFrom` holds the errors of the backends that failed before the one that answered.

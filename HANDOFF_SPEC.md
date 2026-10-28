@@ -1,9 +1,9 @@
-# RUBRIC AGENTIC OS — MASTER MULTI-AGENT HANDOFF SPECIFICATION
+# VOLTA (formerly RUBRIC) AGENTIC OS — MASTER MULTI-AGENT HANDOFF SPECIFICATION
 
 > **Amended by** `MICRO_APPS_SPEC.md` (Sub-Agent 5 is split into 5A–5D) and `INTEGRATION_CONTRACTS.md` (binding cross-agent contracts). Where they conflict with this file, those win.
 
 ## 1. SYSTEM OVERVIEW & ARCHITECTURE
-You are building **RUBRIC Agentic OS**, a local-first, full-viewport command center (`localhost:50000`) and workspace architecture modeled 1:1 after Jay E's (RoboNuggets) Claude 5.5 Agentic OS.
+You are building **VOLTA Agentic OS**, a local-first, full-viewport command center (`localhost:50000`) and workspace architecture modeled 1:1 after Jay E's (RoboNuggets) Claude 5.5 Agentic OS.
 
 ### Core Tech Stack
 - **Framework:** Next.js 15 (App Router, TypeScript) running on port `50000` (`npm run dev -- -p 50000`).

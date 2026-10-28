@@ -19,6 +19,7 @@ import type {
   TranscriptItem,
   TranscriptPage,
 } from '@/types/sessions';
+import { cached } from './cache';
 import { CLAUDE_MEM_URL } from './claude-mem';
 
 // VOLTA Sessions — a read-only index of Claude Code transcripts (~/.claude/projects/<project>/<session>.jsonl,
@@ -575,7 +576,6 @@ interface IndexState {
   progress: SessionIndexProgress;
   agg: { version: number; value: Aggregate } | null;
   transcripts: Map<string, TranscriptCache>;
-  memory: Map<string, { at: number; value: SessionMemory }>;
 }
 
 const G = globalThis as unknown as { __voltaSessionsV1?: unknown; __voltaSessionsV2?: IndexState };
@@ -597,7 +597,6 @@ const S: IndexState = (G.__voltaSessionsV2 ??= {
   },
   agg: null,
   transcripts: new Map(),
-  memory: new Map(),
 });
 
 const yieldLoop = () => new Promise<void>((r) => setImmediate(r));
@@ -1406,7 +1405,6 @@ export async function getTranscriptPage(id: string, opts: { agentId?: string | n
 // The worker's GET /api/observations and /api/summaries accept ?contentSessionId= (the Claude Code session id).
 
 const MEMORY_TTL_MS = 60_000;
-const MEMORY_LRU = 24;
 
 function jsonList(v: unknown): string[] {
   if (Array.isArray(v)) return v.filter((x): x is string => typeof x === 'string');
@@ -1426,9 +1424,12 @@ async function memFetch(url: string): Promise<unknown> {
   return r.json();
 }
 
-export async function getSessionMemory(id: string): Promise<SessionMemory> {
-  const hit = S.memory.get(id);
-  if (hit && Date.now() - hit.at < MEMORY_TTL_MS) return hit.value;
+/** Never throws: an unreachable worker is cached as `online: false` for the TTL too. */
+export function getSessionMemory(id: string): Promise<SessionMemory> {
+  return cached(`session-memory:${id}`, MEMORY_TTL_MS, () => loadSessionMemory(id));
+}
+
+async function loadSessionMemory(id: string): Promise<SessionMemory> {
   const q = `contentSessionId=${encodeURIComponent(id)}`;
   let value: SessionMemory;
   try {
@@ -1464,8 +1465,5 @@ export async function getSessionMemory(id: string): Promise<SessionMemory> {
   } catch (err) {
     value = { online: false, url: CLAUDE_MEM_URL, observations: [], hasMore: false, summaries: [], error: (err as Error).message };
   }
-  S.memory.delete(id);
-  S.memory.set(id, { at: Date.now(), value });
-  while (S.memory.size > MEMORY_LRU) S.memory.delete(S.memory.keys().next().value as string);
   return value;
 }

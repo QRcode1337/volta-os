@@ -5,6 +5,7 @@ import type { BrainGraph, BrainGraphNode, RecentNote } from '@/types/sources';
 import { obsidianUrl, registeredVaults, vaultSnapshot, type NoteFileEntry, type VaultSnapshot } from '../vaults';
 import { isEvicted } from '@/lib/server/icloud';
 import { mapLimit } from '@/lib/server/proc';
+import { cached } from './cache';
 
 // Notes across the user's registered Obsidian vaults: recent edits + a wikilink graph. Read-only.
 
@@ -81,39 +82,15 @@ function linksOf(n: NoteFile): Promise<string[] | null> {
   return p;
 }
 
-type GraphEntry = { sig: string; graph?: BrainGraph; inflight?: Promise<BrainGraph> };
-/** One graph per allowed size, rebuilt only when the vault snapshot's signature changes. */
-const graphs = ((globalThis as unknown as { __voltaGraphs?: Map<number, GraphEntry> }).__voltaGraphs ??= new Map());
-
 /**
  * Wikilink graph across all vaults, capped to `maxNodes` (highest degree first, then most recent). Built from the
- * same snapshot as /api/vaults, so totalNotes and the per-vault counts always match it. A rebuild after a vault
- * change only re-reads the notes whose (mtime, size) changed (linkCache), so it costs about one stat walk.
+ * same snapshot as /api/vaults, so totalNotes and the per-vault counts always match it. Keyed by the snapshot's
+ * signature, so it is rebuilt only after a vault change, and that rebuild only re-reads the notes whose (mtime, size)
+ * changed (linkCache), so it costs about one stat walk.
  */
 export async function getBrainGraph(maxNodes = 700): Promise<BrainGraph> {
   const snap = await vaultSnapshot();
-  const prev = graphs.get(maxNodes);
-  if (prev && prev.sig === snap.signature) {
-    if (prev.graph) return prev.graph;
-    if (prev.inflight) return prev.inflight;
-  }
-  const entry: GraphEntry = { sig: snap.signature };
-  entry.inflight = buildGraph(snap, maxNodes).then(
-    (graph) => {
-      entry.graph = graph;
-      entry.inflight = undefined;
-      return graph;
-    },
-    (err: unknown) => {
-      if (graphs.get(maxNodes) === entry) {
-        if (prev?.graph) graphs.set(maxNodes, prev);
-        else graphs.delete(maxNodes);
-      }
-      throw err;
-    },
-  );
-  graphs.set(maxNodes, entry);
-  return entry.inflight;
+  return cached(`brain-graph:${maxNodes}`, Infinity, () => buildGraph(snap, maxNodes), { sig: snap.signature });
 }
 
 async function buildGraph(snap: VaultSnapshot, maxNodes: number): Promise<BrainGraph> {

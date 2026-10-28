@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { WINDSOR_VOLTA } from '@/lib/server/storage';
+import { memoByFiles } from '../sources/cache';
 
 // config/research.json: roots, excludes, Voltamachine / vault / graph locations, the Windsor index path.
 
@@ -57,17 +58,11 @@ const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is st
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 const abs = (p: string) => path.resolve(expandHome(p));
 
-let memo: { mtimeMs: number; cfg: ResearchConfig } | null = null;
-
 export function loadConfig(): ResearchConfig {
-  let mtimeMs = 0;
-  try {
-    mtimeMs = fs.statSync(CONFIG_PATH).mtimeMs;
-  } catch {
-    // reported below as unreadable
-  }
-  if (memo && memo.mtimeMs === mtimeMs) return memo.cfg;
+  return memoByFiles('research-config', [CONFIG_PATH], parseConfig);
+}
 
+function parseConfig(): ResearchConfig {
   const errors: string[] = [];
   let raw: Record<string, unknown> = {};
   try {
@@ -164,7 +159,6 @@ export function loadConfig(): ResearchConfig {
     )
     .digest('hex')
     .slice(0, 12);
-  memo = { mtimeMs, cfg };
   return cfg;
 }
 

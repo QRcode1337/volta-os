@@ -3,6 +3,7 @@ import { HttpError } from '../http-error';
 import fs from 'node:fs/promises';
 import { WINDSOR_ROOT, isWindsorMounted, onWindsor, requireWindsor, serialised, writeAtomic } from '../storage';
 import type { TrackMeta } from '@/components/music/types';
+import { cached } from '../sources/cache';
 import { loadConfig } from './config';
 
 // Per-track notes: lyrics, credits, Suno link, mood tags, BPM, key. One JSON file on the Windsor drive:
@@ -17,13 +18,6 @@ export interface MetaStore {
   reason: string | null;
   path: string;
 }
-
-interface Cached {
-  file: string;
-  mtimeMs: number;
-  tracks: Record<string, TrackMeta>;
-}
-const g = globalThis as unknown as { __voltaMusicMeta?: Cached };
 
 async function readFromDisk(file: string): Promise<Record<string, TrackMeta>> {
   const text = await fs.readFile(file, 'utf8');
@@ -42,11 +36,8 @@ export async function readMeta(): Promise<MetaStore> {
     return { tracks: {}, ok: false, reason: `${WINDSOR_ROOT} is not mounted. Notes are read-only (empty) until the Windsor drive is plugged in.`, path: file };
   }
   try {
-    const st = await fs.stat(file);
-    const c = g.__voltaMusicMeta;
-    if (c && c.file === file && c.mtimeMs === st.mtimeMs) return { tracks: c.tracks, ok: true, reason: null, path: file };
-    const tracks = await readFromDisk(file);
-    g.__voltaMusicMeta = { file, mtimeMs: st.mtimeMs, tracks };
+    // No TTL: only a change to the file (including our own writes) invalidates it.
+    const tracks = await cached(`music-meta:${file}`, Infinity, () => readFromDisk(file), { mtimeOf: [file] });
     return { tracks, ok: true, reason: null, path: file };
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { tracks: {}, ok: true, reason: null, path: file };
@@ -134,7 +125,6 @@ export async function writeTrackMeta(metaKey: string, meta: TrackMeta): Promise<
       tracks[metaKey] = saved;
     }
     await writeAtomic(file, `${JSON.stringify({ version: 1, updatedAt: new Date().toISOString(), tracks }, null, 2)}\n`);
-    g.__voltaMusicMeta = undefined;
     return saved;
   });
 }

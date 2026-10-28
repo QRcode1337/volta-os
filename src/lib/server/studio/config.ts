@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { isWindsorMounted } from '../storage';
+import { memoByFiles } from '../sources/cache';
 import { STUDIO_ROOT } from './storage';
 import type { ArgSpecPublic, MediaClass, PresetPublic, StudioKind, StudioProject } from '@/types/studio';
 import { isEvictedFileSync } from '@/lib/server/icloud';
@@ -197,17 +198,13 @@ function parseProject(raw: unknown): Project {
   };
 }
 
-let cache: { mtimeMs: number; value: StudioConfig } | null = null;
-
 /** Re-reads the file when it changes (edit the JSON, refresh the app). Bad entries are reported, not fatal. */
 export function loadConfig(): StudioConfig {
-  let st: fs.Stats;
-  try {
-    st = fs.statSync(CONFIG_PATH);
-  } catch {
-    return { projects: [], errors: [`Missing ${CONFIG_PATH}`] };
-  }
-  if (cache && cache.mtimeMs === st.mtimeMs) return cache.value;
+  return memoByFiles('studio-config', [CONFIG_PATH], parseConfig);
+}
+
+function parseConfig(): StudioConfig {
+  if (!fs.existsSync(CONFIG_PATH)) return { projects: [], errors: [`Missing ${CONFIG_PATH}`] };
   const value: StudioConfig = { projects: [], errors: [] };
   try {
     const json = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as { projects?: unknown[] };
@@ -225,7 +222,6 @@ export function loadConfig(): StudioConfig {
   } catch (err) {
     value.errors.push(`studio-projects.json: ${(err as Error).message}`);
   }
-  cache = { mtimeMs: st.mtimeMs, value };
   return value;
 }
 

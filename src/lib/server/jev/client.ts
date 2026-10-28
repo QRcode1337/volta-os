@@ -1,5 +1,6 @@
 import 'server-only';
 import { mapLimit } from '../proc';
+import { breaker } from '../sources/cache';
 import { cacheGet, cacheKey, cacheSet, dedupe } from './cache';
 import { recordCacheHit, recordError, recordRequest } from './telemetry';
 import {
@@ -43,16 +44,13 @@ const TEXT_CHARS = 8_000;
 export const jevConfigured = (): boolean => Boolean(process.env.TYPESAFE_JEV_API_KEY?.trim());
 
 // ── circuit breaker: when JEV is unreachable, fail fast instead of making every caller wait out the timeout ──
-const breaker = (() => {
-  const g = globalThis as typeof globalThis & { __voltaJevBreaker?: { fails: number; openUntil: number } };
-  return (g.__voltaJevBreaker ??= { fails: 0, openUntil: 0 });
-})();
-const BREAKER_FAILS = 3;
-const BREAKER_OPEN_MS = 30_000;
+// Three failures in a row open it for 30 s; a rejected key opens it for 5 min at once.
+const failing = breaker('jev', { failures: 3, coolMs: 30_000 });
+const badKey = breaker('jev-auth', { failures: 1, coolMs: 5 * 60_000 });
 
 export function jevCircuit(): { open: boolean; retryInMs: number } {
-  const left = breaker.openUntil - Date.now();
-  return { open: left > 0, retryInMs: Math.max(0, left) };
+  const retryInMs = Math.max(failing.state().retryInMs, badKey.state().retryInMs);
+  return { open: retryInMs > 0, retryInMs };
 }
 
 function statusError(status: number): JevError {
@@ -93,7 +91,8 @@ async function post(state: unknown, questions: Record<string, JevQuestion>, time
       if (!res.ok) throw statusError(res.status);
       const data = (await res.json()) as RawResponse;
       if (!data.answers || typeof data.answers !== 'object') throw new JevError('bad_response', 'JEV returned no answers');
-      breaker.fails = 0;
+      failing.ok();
+      badKey.ok();
       return { answers: data.answers, usage: { input_tokens: data.usage?.input_tokens ?? 0, output_tokens: data.usage?.output_tokens ?? 0 } };
     } catch (e) {
       const err =
@@ -111,9 +110,8 @@ async function post(state: unknown, questions: Record<string, JevQuestion>, time
   }
   const err = last ?? new JevError('timeout', `JEV timed out after ${timeoutMs}ms`);
   if (err.code !== 'bad_request') {
-    breaker.fails += 1;
-    if (err.code === 'auth') breaker.openUntil = Date.now() + 5 * 60_000;
-    else if (breaker.fails >= BREAKER_FAILS) breaker.openUntil = Date.now() + BREAKER_OPEN_MS;
+    failing.fail('', err.message);
+    if (err.code === 'auth') badKey.fail('', err.message);
   }
   recordError(err.code, err.message);
   throw err;

@@ -206,21 +206,35 @@ export function listCaptures(opts: CaptureQuery): LtmCaptureList {
 }
 
 export function getCapture(id: number): LtmCapture | null {
+  return getCaptures([id]).get(id) ?? null;
+}
+
+/** Several captures in one query (ids that are missing or hidden are absent from the map). */
+export function getCaptures(ids: readonly number[]): Map<number, LtmCapture> {
+  const uniq = [...new Set(ids)];
+  if (!uniq.length) return new Map();
   return withDb((db) => {
-    const r = db
-      .prepare('SELECT id, timestamp, app_name, window_title, frame_path, content FROM memory WHERE id = ?')
-      .get(id) as Row | undefined;
-    if (!r) return null;
-    const prev = db.prepare('SELECT MAX(id) AS id FROM memory WHERE id < ?').get(id) as { id: number | null };
-    const next = db.prepare('SELECT MIN(id) AS id FROM memory WHERE id > ?').get(id) as { id: number | null };
-    return {
-      ...toSummary(r),
-      snippet: '',
-      content: redactSecrets(r.content ?? ''),
-      framePath: r.frame_path || null,
-      prevId: prev.id,
-      nextId: next.id,
-    };
+    const rows = db
+      .prepare(
+        `SELECT id, timestamp, app_name, window_title, frame_path, content,
+           (SELECT MAX(p.id) FROM memory p WHERE p.id < m.id) AS prev_id,
+           (SELECT MIN(n.id) FROM memory n WHERE n.id > m.id) AS next_id
+         FROM memory m WHERE id IN (${uniq.map(() => '?').join(',')})`,
+      )
+      .all(...uniq) as unknown as (Row & { prev_id: number | null; next_id: number | null })[];
+    return new Map(
+      rows.map((r): [number, LtmCapture] => [
+        r.id,
+        {
+          ...toSummary(r),
+          snippet: '',
+          content: redactSecrets(r.content ?? ''),
+          framePath: r.frame_path || null,
+          prevId: r.prev_id,
+          nextId: r.next_id,
+        },
+      ]),
+    );
   });
 }
 

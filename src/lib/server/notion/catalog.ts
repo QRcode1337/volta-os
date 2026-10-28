@@ -1,6 +1,6 @@
 import 'server-only';
 import type { NotionNoAccess, VpCatalog, VpEpisode, VpGroup, VpGroupKind, VpItem, VpItemKind } from '@/types/notion';
-import { cached } from '../sources/cache';
+import { cached, type CachedOptions } from '../sources/cache';
 import { NotionError, notionConfigured, pageUrl, stripDashes } from './client';
 import { blockPageMentions, blockPlainText } from './markdown';
 import { fetchPageMeta, fetchTopBlocks, NO_ACCESS_HINT, TTL_MS } from './pages';
@@ -206,9 +206,9 @@ function episodeSubject(e: VpEpisode): string {
   return head || `Episode ${e.number}`;
 }
 
-export function getCatalog(opts: { force?: boolean } = {}): Promise<VpCatalog> {
+export function getCatalog(opts: Pick<CachedOptions, 'force' | 'minForceMs'> = {}): Promise<VpCatalog> {
   if (!notionConfigured()) throw new NotionError('NOTION_TOKEN is not set in .env.local.', 503, 'not_configured');
-  return cached('notion:catalog', TTL_MS, buildCatalog, { maxStaleMs: 24 * 3_600_000, force: opts.force });
+  return cached('notion:catalog', TTL_MS, buildCatalog, { maxStaleMs: 24 * 3_600_000, ...opts });
 }
 
 export const KNOWN_PAGE_IDS = KNOWN.map((k) => k.id);

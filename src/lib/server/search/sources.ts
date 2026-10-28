@@ -1,7 +1,7 @@
 import 'server-only';
 import { HonchoApiError, HonchoOfflineError, listPeers, listSessions, listWorkspaces, searchWorkspace } from '../honcho';
-import { getCapture, listCaptures } from '../ltm';
-import { cached } from '../sources/cache';
+import { getCaptures, listCaptures } from '../ltm';
+import { breaker, cached } from '../sources/cache';
 import { CLAUDE_MEM_URL } from '../sources/claude-mem';
 import { getMcpServers } from '../sources/mcp';
 import { getNotionPages } from '../sources/notion';
@@ -44,11 +44,11 @@ function hit(source: SearchSourceId, id: string, pq: ParsedQuery, p: Omit<Search
 export async function searchLtm({ pq, limit }: SourceContext): Promise<SourceOutput> {
   await Promise.resolve(); // node:sqlite is synchronous: let the network sources start first
   const list = listCaptures({ q: pq.q, limit });
+  const full = getCaptures(list.items.map((c) => c.id)); // full OCR text, so the snippet is masked before it is windowed
   const hits = list.items.map((c) => {
-    const full = getCapture(c.id); // full OCR text, so the snippet is masked before it is windowed
     return hit('ltm', String(c.id), pq, {
       title: c.title || c.app,
-      text: full?.content ?? c.snippet,
+      text: full.get(c.id)?.content ?? c.snippet,
       when: c.ts,
       // LtmApp deep link: opens the capture's day, selects it, and highlights the query (search scoped to that day).
       href: `/apps/ltm?${new URLSearchParams({ date: c.ts.slice(0, 10), capture: String(c.id), q: pq.q })}`,
@@ -159,8 +159,7 @@ const honchoIds = () =>
   });
 
 /** Message search that just failed upstream is not retried for 5 min (each attempt costs an embedding call). */
-const BREAKER_MS = 5 * 60_000;
-const breaker = ((globalThis as unknown as { __voltaSearchHonchoBreaker?: Map<string, { until: number; reason: string }> }).__voltaSearchHonchoBreaker ??= new Map());
+const messageSearch = breaker('search:honcho-messages', { failures: 1, coolMs: 5 * 60_000 });
 
 const honchoHref = (w: string, p: Record<string, string>) => `/apps/honcho?${new URLSearchParams({ w, ...p }).toString()}`;
 
@@ -174,20 +173,19 @@ export async function searchHoncho({ pq, limit }: SourceContext, semanticOk: boo
   }
   const hits: SearchHit[] = [];
   const problems: string[] = [];
-  const now = Date.now();
 
   // Message search (Honcho's own /search; embedding-backed), one call per workspace, under its own budget so
   // the id matches below still return when it is slow.
   const messageRuns = semanticOk
     ? idx.map(async ({ workspace }) => {
-        const open = breaker.get(workspace);
-        if (open && open.until > now) {
-          problems.push(`${workspace}: ${open.reason} — retry in ${Math.ceil((open.until - now) / 60_000)}m`);
+        const open = messageSearch.state(workspace);
+        if (open.open) {
+          problems.push(`${workspace}: ${open.reason} — retry in ${Math.ceil(open.retryInMs / 60_000)}m`);
           return;
         }
         try {
           const msgs = await withTimeout(searchWorkspace(workspace, pq.q, limit), 2_000);
-          breaker.delete(workspace);
+          messageSearch.ok(workspace);
           for (const m of msgs)
             hits.push(
               hit('honcho', `msg:${workspace}:${m.id}`, pq, {
@@ -205,7 +203,7 @@ export async function searchHoncho({ pq, limit }: SourceContext, semanticOk: boo
           if (err instanceof SourceTimeout) problems.push(`${workspace}: message search timed out`);
           else if (err instanceof HonchoApiError) {
             const reason = `message search failed (HTTP ${err.status})`;
-            breaker.set(workspace, { until: now + BREAKER_MS, reason });
+            messageSearch.fail(workspace, reason);
             problems.push(`${workspace}: ${reason}`);
           } else problems.push(`${workspace}: ${(err as Error).message}`);
         }

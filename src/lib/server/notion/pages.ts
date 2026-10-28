@@ -1,6 +1,6 @@
 import 'server-only';
 import type { NotionPageDoc, NotionPageRef, NotionSection } from '@/types/notion';
-import { cached } from '../sources/cache';
+import { cached, type CachedOptions } from '../sources/cache';
 import { listChildren, notionGet, pageTitle, pageUrl, stripDashes, NotionError, type RawBlock, type RawPage } from './client';
 import { blocksToMarkdown, type BlockNode } from './markdown';
 
@@ -99,9 +99,9 @@ async function loadPage(id: string): Promise<NotionPageDoc> {
   };
 }
 
-export function getPage(id: string, opts: { force?: boolean } = {}): Promise<NotionPageDoc> {
+export function getPage(id: string, opts: Pick<CachedOptions, 'force' | 'minForceMs'> = {}): Promise<NotionPageDoc> {
   const pid = stripDashes(id);
-  return cached(`notion:page:${pid}`, TTL_MS, () => loadPage(pid), { maxStaleMs: MAX_STALE_MS, force: opts.force });
+  return cached(`notion:page:${pid}`, TTL_MS, () => loadPage(pid), { maxStaleMs: MAX_STALE_MS, ...opts });
 }
 
 /** Like getPage but resolves null for pages the integration cannot see (404/403); other errors still throw. */

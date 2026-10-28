@@ -29,8 +29,8 @@ export { FILE as ACTIONS_FILE, DISPLAY_PATH as ACTIONS_DISPLAY_PATH };
 export const ACTIONS_EVICTED = `${DISPLAY_PATH} is an iCloud placeholder (not downloaded to the Mac), so it was not opened. Download it in Finder, then refresh.`;
 const OPENCLAW_ROOT = path.join(os.homedir(), '.openclaw');
 const MAX_BYTES = 2 * 1024 * 1024;
-/** Parse results are memoised per mtime; this only dedupes bursts of requests and re-stats the file. */
-const STAT_TTL_MS = 3_000;
+/** The parse is dropped as soon as the file's mtime/size changes; the TTL only re-checks iCloud eviction (which can flip without an edit). */
+const PARSE_TTL_MS = 60_000;
 const DEFAULT_AGENT = 'OpenClaw';
 
 const STATUS_BY_MARKER: Record<string, ActionStatus> = { ' ': 'todo', '>': 'progress', x: 'done', X: 'done', '!': 'blocked', '@': 'awaiting' };
@@ -174,27 +174,21 @@ export function parseActionsMarkdown(content: string): { items: Parsed['items'];
   return { items, updatedFrontmatter };
 }
 
-let memo: { mtimeMs: number; size: number; parsed: Parsed } | null = null;
-
 async function loadParsed(): Promise<Parsed> {
   let st;
   try {
     st = await fs.stat(FILE);
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
-    memo = null;
     return { available: false, reason: code === 'ENOENT' ? `${DISPLAY_PATH} does not exist.` : `Cannot read ${DISPLAY_PATH}: ${(err as Error).message}`, source: emptySource(null, null), items: [] };
   }
-  if (memo && memo.mtimeMs === st.mtimeMs && memo.size === st.size) return memo.parsed;
   if (isEvicted(st)) return { available: false, reason: ACTIONS_EVICTED, source: emptySource(st.mtime, st.size), items: [] };
   if (st.size > MAX_BYTES) {
     return { available: false, reason: `${DISPLAY_PATH} is larger than ${MAX_BYTES / 1024 / 1024} MB; refusing to parse it.`, source: emptySource(st.mtime, st.size), items: [] };
   }
   const content = await fs.readFile(FILE, 'utf8');
   const { items, updatedFrontmatter } = parseActionsMarkdown(content);
-  const parsed: Parsed = { available: true, source: emptySource(st.mtime, st.size, updatedFrontmatter), items };
-  memo = { mtimeMs: st.mtimeMs, size: st.size, parsed };
-  return parsed;
+  return { available: true, source: emptySource(st.mtime, st.size, updatedFrontmatter), items };
 }
 
 function localToday(now: Date): number {
@@ -224,7 +218,7 @@ export function countActions(items: { status: ActionStatus; agent: string; secti
 }
 
 export async function getActions(opts: { refresh?: boolean; countsOnly?: boolean } = {}): Promise<ActionsResponse> {
-  const parsed = await cached('actions:parsed', STAT_TTL_MS, loadParsed, { force: opts.refresh });
+  const parsed = await cached('actions:parsed', PARSE_TTL_MS, loadParsed, { force: opts.refresh, mtimeOf: [FILE] });
   const now = new Date();
   const counts = countActions(parsed.items);
   const base = { available: parsed.available, reason: parsed.reason, source: parsed.source, counts, generatedAt: now.toISOString() };

@@ -3,16 +3,9 @@ import { HttpError } from '../http-error';
 import { NotionError } from './client';
 import { NO_ACCESS_HINT } from './pages';
 
-/** Last time each cache key was force-refreshed, so `?refresh=1` cannot be used to hammer Notion. */
-const forced = ((globalThis as unknown as { __voltaNotionForce?: Map<string, number> }).__voltaNotionForce ??= new Map());
-const FORCE_COOLDOWN_MS = 30_000;
-
-export function allowForce(req: Request, key: string): boolean {
-  if (new URL(req.url).searchParams.get('refresh') !== '1') return false;
-  const last = forced.get(key) ?? 0;
-  if (Date.now() - last < FORCE_COOLDOWN_MS) return false;
-  forced.set(key, Date.now());
-  return true;
+/** `?refresh=1` forces a reload, but at most once per 30 s per cache key, so it cannot be used to hammer Notion. */
+export function refreshOpts(req: Request): { force: boolean; minForceMs: number } {
+  return { force: new URL(req.url).searchParams.get('refresh') === '1', minForceMs: 30_000 };
 }
 
 /**

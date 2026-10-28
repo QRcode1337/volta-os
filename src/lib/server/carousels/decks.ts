@@ -2,7 +2,7 @@ import 'server-only';
 import type { Deck } from '@/components/media/data';
 import type { NotionNoAccess } from '@/types/notion';
 import { HttpError } from '../http-error';
-import { cached } from '../sources/cache';
+import { cached, type CachedOptions } from '../sources/cache';
 import { getCatalog } from '../notion/catalog';
 import { NotionError, pageUrl } from '../notion/client';
 import { NO_ACCESS_HINT, TTL_MS, getPage } from '../notion/pages';
@@ -57,6 +57,6 @@ async function load(): Promise<DecksPayload> {
   return { decks, sources, inaccessible, errors, fetchedAt: new Date().toISOString() };
 }
 
-export function getDecks(opts: { force?: boolean } = {}): Promise<DecksPayload> {
-  return cached('carousels:decks', TTL_MS, load, { maxStaleMs: 24 * 3_600_000, force: opts.force });
+export function getDecks(opts: Pick<CachedOptions, 'force' | 'minForceMs'> = {}): Promise<DecksPayload> {
+  return cached('carousels:decks', TTL_MS, load, { maxStaleMs: 24 * 3_600_000, ...opts });
 }

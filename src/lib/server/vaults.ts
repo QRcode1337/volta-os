@@ -65,9 +65,12 @@ export interface RegisteredVault {
   open: boolean;
 }
 
-/** Vaults registered in Obsidian's own config (excluding the built-in Sandbox). Re-read at most every 30s. */
+/** Vaults registered in Obsidian's own config (excluding the built-in Sandbox). Re-read when the file changes, else at most every 30s. */
 export function registeredVaults(): Promise<RegisteredVault[]> {
-  return cached('obsidian-vaults', 30_000, async () => {
+  return cached(
+    'obsidian-vaults',
+    30_000,
+    async () => {
     let cfg: ObsidianConfig = {};
     try {
       cfg = JSON.parse(await fs.readFile(OBSIDIAN_CONFIG, 'utf8')) as ObsidianConfig;
@@ -83,7 +86,9 @@ export function registeredVaults(): Promise<RegisteredVault[]> {
         location: v.path.includes('/Mobile Documents/') ? ('icloud' as const) : ('local' as const),
         open: !!v.open,
       }));
-  });
+    },
+    { mtimeOf: [OBSIDIAN_CONFIG] },
+  );
 }
 
 export interface VaultSnapshot {
@@ -95,12 +100,9 @@ export interface VaultSnapshot {
 
 const NOTES_TTL_MS = 2 * 60_000;
 const FORCE_MIN_MS = 10_000; // ?refresh=1 re-walks at most this often
-let lastForcedAt = 0;
 
 /** One walk of every registered vault (cached 2 min, stale-while-revalidate). `force` re-walks now (rate-limited). */
 export function vaultSnapshot(force = false): Promise<VaultSnapshot> {
-  const doForce = force && Date.now() - lastForcedAt > FORCE_MIN_MS;
-  if (doForce) lastForcedAt = Date.now();
   return cached(
     'vault-notes:v3',
     NOTES_TTL_MS,
@@ -120,7 +122,7 @@ export function vaultSnapshot(force = false): Promise<VaultSnapshot> {
         .join('|');
       return { vaults, signature, at: Date.now() };
     },
-    { force: doForce },
+    { force, minForceMs: FORCE_MIN_MS },
   );
 }
 

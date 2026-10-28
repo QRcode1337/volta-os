@@ -1,6 +1,6 @@
 import 'server-only';
 import type { DreamEntry } from '@/types/notion';
-import { cached } from '../sources/cache';
+import { cached, type CachedOptions } from '../sources/cache';
 import { notionQuery, pageTitle, pageUrl, stripDashes, type ListResp, type RawPage } from './client';
 import { TTL_MS } from './pages';
 
@@ -25,6 +25,6 @@ async function loadDreams(limit: number): Promise<DreamEntry[]> {
   });
 }
 
-export function getDreams(limit = 5, opts: { force?: boolean } = {}): Promise<DreamEntry[]> {
-  return cached(`notion:dreams:${limit}`, TTL_MS, () => loadDreams(limit), { maxStaleMs: 24 * 3_600_000, force: opts.force });
+export function getDreams(limit = 5, opts: Pick<CachedOptions, 'force' | 'minForceMs'> = {}): Promise<DreamEntry[]> {
+  return cached(`notion:dreams:${limit}`, TTL_MS, () => loadDreams(limit), { maxStaleMs: 24 * 3_600_000, ...opts });
 }

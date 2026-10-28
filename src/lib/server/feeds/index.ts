@@ -19,7 +19,7 @@ interface Store {
   warnings: string[];
   refreshedAt: number;
 }
-const g = globalThis as unknown as { __feedsStore?: Store; __feedsForceAt?: number };
+const g = globalThis as unknown as { __feedsStore?: Store };
 const store = (): Store => (g.__feedsStore ??= { cron: new Map(), files: [], consumed: new Set(), watermark: 0, warnings: [], refreshedAt: 0 });
 const OVERLAP_MS = 6 * 3600 * 1000;
 
@@ -46,9 +46,7 @@ async function refresh(): Promise<number> {
 
 async function ensureFresh(force: boolean): Promise<Store> {
   // `force` (the Refresh button) is rate-limited to once per 5 s.
-  const allow = force && Date.now() - (g.__feedsForceAt ?? 0) > 5_000;
-  if (allow) g.__feedsForceAt = Date.now();
-  await cached('feeds:refresh', REFRESH_TTL_MS, refresh, { force: allow });
+  await cached('feeds:refresh', REFRESH_TTL_MS, refresh, { force, minForceMs: 5_000 });
   return store();
 }
 

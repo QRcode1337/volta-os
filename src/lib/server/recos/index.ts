@@ -2,7 +2,7 @@ import 'server-only';
 import type { NotionPageDoc } from '@/types/notion';
 import type { Reco, RecoSignal, RecosPayload } from '@/types/recos';
 import { stripMd } from '@/lib/notion-md';
-import { cached } from '../sources/cache';
+import { cached, type CachedOptions } from '../sources/cache';
 import { getMemorySources } from '../sources';
 import { getRoutines } from '../sources/routines';
 import { getSystemsReport } from '../systems';
@@ -221,6 +221,6 @@ async function build(): Promise<RecosPayload> {
 }
 
 /** 2 minutes: the Systems probes take ~5 s and Notion pages are cached separately for 10 minutes. */
-export function getRecos(opts: { force?: boolean } = {}): Promise<RecosPayload> {
-  return cached('recos:payload', 120_000, build, { maxStaleMs: 30 * 60_000, force: opts.force });
+export function getRecos(opts: Pick<CachedOptions, 'force' | 'minForceMs'> = {}): Promise<RecosPayload> {
+  return cached('recos:payload', 120_000, build, { maxStaleMs: 30 * 60_000, ...opts });
 }

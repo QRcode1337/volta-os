@@ -1,6 +1,7 @@
 import 'server-only';
 import fs from 'node:fs';
 import path from 'node:path';
+import { memoByFiles } from '../sources/cache';
 import type { RoutesConfig, TaskRoute } from './types';
 
 // config/llm-routes.json: task -> OmniRoute combo chain, the local LM Studio fallback and the request limits.
@@ -29,17 +30,11 @@ const str = (v: unknown, d: string) => (typeof v === 'string' && v.trim() ? v.tr
 /** Task and combo names are used in URLs-free JSON and logs only, but keep them boring anyway. */
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
-let memo: { mtimeMs: number; cfg: RoutesConfig } | null = null;
-
 export function loadRoutes(): RoutesConfig {
-  let mtimeMs = 0;
-  try {
-    mtimeMs = fs.statSync(CONFIG_PATH).mtimeMs;
-  } catch {
-    // reported below
-  }
-  if (memo && memo.mtimeMs === mtimeMs) return memo.cfg;
+  return memoByFiles('llm-routes', [CONFIG_PATH], parseRoutes);
+}
 
+function parseRoutes(): RoutesConfig {
   const errors: string[] = [];
   let raw: Record<string, unknown> = {};
   try {
@@ -103,7 +98,6 @@ export function loadRoutes(): RoutesConfig {
     cfg.tasks = DEFAULTS.tasks;
     errors.push('No valid tasks in config/llm-routes.json; using built-in defaults.');
   }
-  memo = { mtimeMs, cfg };
   return cfg;
 }
 

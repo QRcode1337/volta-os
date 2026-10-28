@@ -172,12 +172,7 @@ async function scan(): Promise<ReposData> {
   };
 }
 
-let lastForcedAt = 0;
-const FORCE_MIN_MS = 60_000;
-
 /** Top repos by recent activity. Cached 15 min (stale-while-revalidate); `force` re-scans at most once a minute. */
 export function topRepos(force = false): Promise<ReposData> {
-  const doForce = force && Date.now() - lastForcedAt > FORCE_MIN_MS;
-  if (doForce) lastForcedAt = Date.now();
-  return cached('launchpad:repos', TTL_MS, scan, { maxStaleMs: 6 * 60 * 60_000, force: doForce });
+  return cached('launchpad:repos', TTL_MS, scan, { maxStaleMs: 6 * 60 * 60_000, force, minForceMs: 60_000 });
 }

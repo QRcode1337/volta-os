@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { WINDSOR_VOLTA, writeAtomicSync } from '../storage';
+import { memoByFiles } from '../sources/cache';
 import type { PodcastConfig, TopicConfig } from './types';
 
 // config/podcast.json is the single source of truth (topic weights are edited from the app and written back).
@@ -25,20 +26,12 @@ function normalize(raw: PodcastConfig): PodcastConfig {
   return cfg;
 }
 
-let memo: { mtimeMs: number; cfg: PodcastConfig } | null = null;
-
 /** Parsed + normalised config (re-read when the file changes). Throws a clear error when missing or malformed. */
 export function loadConfig(): PodcastConfig {
-  let st: fs.Stats;
-  try {
-    st = fs.statSync(CONFIG_PATH);
-  } catch {
-    throw new Error(`config/podcast.json is missing (${CONFIG_PATH}).`);
-  }
-  if (memo && memo.mtimeMs === st.mtimeMs) return memo.cfg;
-  const cfg = normalize(JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as PodcastConfig);
-  memo = { mtimeMs: st.mtimeMs, cfg };
-  return cfg;
+  return memoByFiles('podcast-config', [CONFIG_PATH], () => {
+    if (!fs.existsSync(CONFIG_PATH)) throw new Error(`config/podcast.json is missing (${CONFIG_PATH}).`);
+    return normalize(JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as PodcastConfig);
+  });
 }
 
 export interface ConfigPatch {
@@ -62,7 +55,6 @@ export function patchConfig(patch: ConfigPatch): PodcastConfig {
     raw.storyCount = patch.storyCount;
   }
   writeAtomicSync(CONFIG_PATH, `${JSON.stringify(raw, null, 2)}\n`);
-  memo = null;
   return loadConfig();
 }
 

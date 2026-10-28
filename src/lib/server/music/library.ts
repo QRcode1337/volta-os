@@ -1,4 +1,5 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
@@ -8,7 +9,6 @@ import { brctlCommand, cleanTitle } from '@/components/music/format';
 import type { EmbeddedTags, MusicLibrary, MusicRoot, MusicTrack, RootCandidate } from '@/components/music/types';
 import { cached } from '../sources/cache';
 import { loadConfig, saveRoots, type MusicConfig } from './config';
-import { MusicError } from './errors';
 import { readMeta } from './meta';
 
 // Track index. Tracks live in iCloud-synced folders where every file may be a dataless placeholder.
@@ -326,7 +326,7 @@ export async function setRootEnabled(rawPath: string, enabled: boolean): Promise
   } else {
     if (!enabled) return;
     const cand = (await getCandidates()).find((c) => c.path === p);
-    if (!cand) throw new MusicError('That folder is not one of the discovered music folders.', 400);
+    if (!cand) throw new HttpError('That folder is not one of the discovered music folders.', 400);
     const base = path.basename(p).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'folder';
     let id = base;
     for (let i = 2; rows.some((r) => r.id === id); i++) id = `${base}-${i}`;
@@ -371,34 +371,34 @@ export interface ResolvedTrack {
 
 /** id -> verified file. The path must resolve (symlinks and `..` included) inside an enabled configured root. */
 export async function resolveTrack(id: string): Promise<ResolvedTrack> {
-  if (typeof id !== 'string' || !/^m_[0-9a-f]{16}$/.test(id)) throw new MusicError('Bad track id.', 400);
+  if (typeof id !== 'string' || !/^m_[0-9a-f]{16}$/.test(id)) throw new HttpError('Bad track id.', 400);
   let idx = await getIndex();
   let track = idx.byId.get(id);
   if (!track) {
     idx = await getIndex(true);
     track = idx.byId.get(id);
   }
-  if (!track) throw new MusicError('Unknown track (it may have moved; refresh the library).', 404);
+  if (!track) throw new HttpError('Unknown track (it may have moved; refresh the library).', 404);
   const root = loadConfig().roots.find((r) => r.id === track!.rootId && r.enabled);
-  if (!root) throw new MusicError('That track belongs to a library root that is disabled.', 403);
+  if (!root) throw new HttpError('That track belongs to a library root that is disabled.', 403);
   let real: string;
   try {
     real = await fs.realpath(track.path);
   } catch {
-    throw new MusicError('File is missing.', 404);
+    throw new HttpError('File is missing.', 404);
   }
-  if (!(await isInside(real, root.path))) throw new MusicError('Path is outside the configured music roots.', 403);
+  if (!(await isInside(real, root.path))) throw new HttpError('Path is outside the configured music roots.', 403);
   const mime = AUDIO[path.extname(real).toLowerCase()];
-  if (!mime) throw new MusicError('Not a servable audio type.', 415);
+  if (!mime) throw new HttpError('Not a servable audio type.', 415);
   const st = await fs.stat(real);
-  if (!st.isFile()) throw new MusicError('Not a file.', 404);
+  if (!st.isFile()) throw new HttpError('Not a file.', 404);
   return { track, path: real, size: st.size, mtimeMs: st.mtimeMs, mime, offline: isPlaceholder(st) };
 }
 
 /** Throws a 409 carrying the brctl command when the track is still a placeholder. */
 export function assertLocal(r: ResolvedTrack): void {
   if (r.offline) {
-    throw new MusicError(`${r.track.fileName} is in iCloud and not downloaded to this Mac. Run the brctl command to fetch it.`, 409, {
+    throw new HttpError(`${r.track.fileName} is in iCloud and not downloaded to this Mac. Run the brctl command to fetch it.`, 409, {
       storage: 'icloud',
       command: brctlCommand(r.track.folder),
     });
@@ -414,13 +414,13 @@ export async function trackCover(id: string): Promise<{ mime: string; data: Buff
   const hit = S.covers.get(key);
   if (hit) return hit;
   const pr = await probeLocal(r.path, r.size, r.mtimeMs);
-  if (!pr.hasCover) throw new MusicError('No embedded cover art.', 404);
+  if (!pr.hasCover) throw new HttpError('No embedded cover art.', 404);
   const data = await new Promise<Buffer>((resolve, reject) => {
     execFile(
       FFMPEG,
       ['-v', 'error', '-nostdin', '-i', r.path, '-an', '-map', '0:v:0', '-frames:v', '1', '-c:v', 'copy', '-f', 'image2pipe', 'pipe:1'],
       { timeout: PROBE_TIMEOUT_MS, maxBuffer: 12 * 1024 * 1024, encoding: 'buffer' },
-      (err, stdout) => (err || !stdout.length ? reject(new MusicError('Could not extract the cover art.', 404)) : resolve(stdout)),
+      (err, stdout) => (err || !stdout.length ? reject(new HttpError('Could not extract the cover art.', 404)) : resolve(stdout)),
     );
   });
   const mime = data[0] === 0xff && data[1] === 0xd8 ? 'image/jpeg' : data[0] === 0x89 && data[1] === 0x50 ? 'image/png' : 'application/octet-stream';

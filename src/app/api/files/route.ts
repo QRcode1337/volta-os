@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import type { WorkspaceFileResponse } from '@/types/os';
 import { BRAIN_NODES, SKILLS } from '@/lib/mock-data';
 import { resolveWorkspacePath, writeWorkspaceFile } from '@/lib/server/workspace';
-import { rejectNonLocalMutation, rejectNonLocalRead } from '@/lib/server/local-only';
+import { HttpError, NO_STORE, route } from '@/lib/server/route-helpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,10 +12,6 @@ const MAX_READ_BYTES = 1_000_000;
 const MAX_WRITE_CHARS = 512_000;
 const MAX_PATH_CHARS = 512;
 const WRITABLE_EXT = /\.(md|markdown|txt|html|json|ya?ml|csv|css|tsx?|jsx?)$/i;
-
-function err(status: number, message: string) {
-  return NextResponse.json({ error: message }, { status });
-}
 
 /** "workspace/skills/x.md" | "/skills/x.md" | "skills/x.md" → "skills/x.md" */
 function normalise(p: string): string {
@@ -51,65 +47,60 @@ function fallbackContent(rel: string): string | null {
   return null;
 }
 
-/** GET /api/files?path=skills/tone/SKILL.md → WorkspaceFileResponse */
-export async function GET(req: Request) {
-  const denied = rejectNonLocalRead(req);
-  if (denied) return denied;
-  const v = validatePath(new URL(req.url).searchParams.get('path'));
-  if ('error' in v) return err(400, v.error);
+/** GET /api/files?path=skills/tone/SKILL.md → WorkspaceFileResponse (404 with `exists: false` when there is no file or seed). */
+export const GET = route(async ({ url }) => {
+  const v = validatePath(url.searchParams.get('path'));
+  if ('error' in v) throw new HttpError(v.error, 400);
   const abs = resolveWorkspacePath(v.rel);
 
   try {
     const stat = await fs.stat(abs);
-    if (stat.isDirectory()) return err(400, '`path` is a directory');
-    if (stat.size > MAX_READ_BYTES) return err(413, `File exceeds ${MAX_READ_BYTES} bytes`);
+    if (stat.isDirectory()) throw new HttpError('`path` is a directory', 400);
+    if (stat.size > MAX_READ_BYTES) throw new HttpError(`File exceeds ${MAX_READ_BYTES} bytes`, 413);
     const content = await fs.readFile(abs, 'utf8');
     const res: WorkspaceFileResponse = { path: v.rel, content, exists: true };
-    return NextResponse.json(res, { headers: { 'Cache-Control': 'no-store' } });
+    return res;
   } catch (e) {
+    if (e instanceof HttpError) throw e;
     const code = (e as NodeJS.ErrnoException).code;
-    if (code !== 'ENOENT' && code !== 'ENOTDIR') return err(500, `Could not read file (${code ?? 'unknown error'})`);
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') throw new HttpError(`Could not read file (${code ?? 'unknown error'})`, 500);
   }
 
   const fallback = fallbackContent(v.rel);
   const res: WorkspaceFileResponse = { path: v.rel, content: fallback ?? '', exists: false };
-  return NextResponse.json(res, { status: fallback === null ? 404 : 200, headers: { 'Cache-Control': 'no-store' } });
-}
+  return NextResponse.json(res, { status: fallback === null ? 404 : 200, headers: NO_STORE });
+});
 
 /** PUT /api/files { path, content } → WorkspaceFileResponse (writes via writeWorkspaceFile). */
-export async function PUT(req: Request) {
-  const denied = rejectNonLocalMutation(req);
-  if (denied) return denied;
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return err(400, 'Body must be valid JSON: { path: string, content: string }');
-  }
-  if (!body || typeof body !== 'object') return err(400, 'Body must be an object');
-  const { path: rawPath, content } = body as { path?: unknown; content?: unknown };
+export const PUT = route(
+  async ({ body }) => {
+    const { path: rawPath, content } = body as { path?: unknown; content?: unknown };
 
-  const v = validatePath(rawPath);
-  if ('error' in v) return err(400, v.error);
-  if (!WRITABLE_EXT.test(v.rel)) return err(400, 'Only text files (md, txt, html, json, yaml, csv, css, ts/tsx, js/jsx) are writable');
-  if (typeof content !== 'string') return err(400, '`content` must be a string');
-  if (content.length > MAX_WRITE_CHARS) return err(413, `\`content\` exceeds ${MAX_WRITE_CHARS} characters`);
+    const v = validatePath(rawPath);
+    if ('error' in v) throw new HttpError(v.error, 400);
+    if (!WRITABLE_EXT.test(v.rel)) throw new HttpError('Only text files (md, txt, html, json, yaml, csv, css, ts/tsx, js/jsx) are writable', 400);
+    if (typeof content !== 'string') throw new HttpError('`content` must be a string', 400);
+    if (content.length > MAX_WRITE_CHARS) throw new HttpError(`\`content\` exceeds ${MAX_WRITE_CHARS} characters`, 413);
 
-  const abs = resolveWorkspacePath(v.rel);
-  try {
-    const stat = await fs.stat(abs);
-    if (stat.isDirectory()) return err(400, '`path` is a directory');
-  } catch (e) {
-    const code = (e as NodeJS.ErrnoException).code;
-    if (code !== 'ENOENT') return err(500, `Could not stat file (${code ?? 'unknown error'})`);
-    // ENOENT → creating a new file
-  }
+    const abs = resolveWorkspacePath(v.rel);
+    try {
+      const stat = await fs.stat(abs);
+      if (stat.isDirectory()) throw new HttpError('`path` is a directory', 400);
+    } catch (e) {
+      if (e instanceof HttpError) throw e;
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') throw new HttpError(`Could not stat file (${code ?? 'unknown error'})`, 500);
+      // ENOENT → creating a new file
+    }
 
-  try {
-    await writeWorkspaceFile(v.rel, content);
-  } catch (e) {
-    return err(500, `Could not write file (${(e as NodeJS.ErrnoException).code ?? (e as Error).message})`);
-  }
-  const res: WorkspaceFileResponse = { path: v.rel, content, exists: true };
-  return NextResponse.json(res);
-}
+    try {
+      await writeWorkspaceFile(v.rel, content);
+    } catch (e) {
+      throw new HttpError(`Could not write file (${(e as NodeJS.ErrnoException).code ?? (e as Error).message})`, 500);
+    }
+    const res: WorkspaceFileResponse = { path: v.rel, content, exists: true };
+    return res;
+  },
+  // JSON-escaped content can take up to 6 bytes per character; the character cap above is the real limit.
+  { json: true, maxBytes: MAX_WRITE_CHARS * 6 + 4096 },
+);

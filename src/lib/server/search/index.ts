@@ -1,6 +1,6 @@
 import 'server-only';
 import { HonchoOfflineError } from '../honcho';
-import { LtmUnavailableError } from '../ltm';
+import { isLtmUnavailable } from '../ltm';
 import { cached } from '../sources/cache';
 import { getSkills } from '../sources/skills';
 import { getNotesIndex, notesIndexProgress } from './notes-index';
@@ -62,7 +62,7 @@ async function runSource(id: SearchSourceId, ctx: SourceContext): Promise<Search
       } else if (def.warms) note = `${note} — ${def.warms}; it keeps running and the next search uses it`;
       return { ...base, status: 'timeout', ms: ms(), total: null, hits: [], note };
     }
-    if (err instanceof SourceOffline || err instanceof LtmUnavailableError || err instanceof HonchoOfflineError) {
+    if (err instanceof SourceOffline || isLtmUnavailable(err) || err instanceof HonchoOfflineError) {
       return { ...base, status: 'offline', ms: ms(), total: null, hits: [], note: err.message };
     }
     if (!ctx.signal.aborted) console.error(`[volta search] ${id} failed`, err);

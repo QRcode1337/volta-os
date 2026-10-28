@@ -1,4 +1,5 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -54,13 +55,13 @@ export function patchConfig(patch: ConfigPatch): PodcastConfig {
   if (patch.weights) {
     const ids = new Set(raw.topics.map((t: TopicConfig) => t.id));
     for (const [id, w] of Object.entries(patch.weights)) {
-      if (!ids.has(id)) throw new Error(`Unknown topic "${id}".`);
-      if (typeof w !== 'number' || !Number.isFinite(w) || w < 0 || w > 5) throw new Error(`Weight for "${id}" must be 0-5.`);
+      if (!ids.has(id)) throw new HttpError(`Unknown topic "${id}".`, 400);
+      if (typeof w !== 'number' || !Number.isFinite(w) || w < 0 || w > 5) throw new HttpError(`Weight for "${id}" must be 0-5.`, 400);
     }
     raw.topics = raw.topics.map((t) => (t.id in patch.weights! ? { ...t, weight: Math.round(patch.weights![t.id]) } : t));
   }
   if (patch.storyCount !== undefined) {
-    if (!Number.isInteger(patch.storyCount) || patch.storyCount < 6 || patch.storyCount > 10) throw new Error('storyCount must be an integer 6-10.');
+    if (!Number.isInteger(patch.storyCount) || patch.storyCount < 6 || patch.storyCount > 10) throw new HttpError('storyCount must be an integer 6-10.', 400);
     raw.storyCount = patch.storyCount;
   }
   const tmp = `${CONFIG_PATH}.${process.pid}.tmp`;

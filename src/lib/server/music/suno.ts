@@ -1,16 +1,14 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import fs from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { NextResponse } from 'next/server';
-import { rejectNonLocalMutation, rejectNonLocalRead } from '../local-only';
 import { SUNO_CREDIT_CHOICES } from '@/components/music/suno-types';
 import type { SunoClip, SunoCredit, SunoMissing, SunoSaveContext, SunoSaveResult, SunoStatus } from '@/components/music/suno-types';
 import { bustIndex } from './library';
 import { loadConfig, saveRoots } from './config';
-import { MusicError, fail } from './errors';
 import { readMeta, sanitizeMeta, writeTrackMeta } from './meta';
 
 // Bridge from VOLTA Music to the local gcui-art/suno-api service (a LaunchAgent on 127.0.0.1).
@@ -43,9 +41,9 @@ function baseUrl(): string {
   try {
     u = new URL(raw);
   } catch {
-    throw new MusicError(`SUNO_API_URL is not a valid URL: ${raw}`, 500);
+    throw new HttpError(`SUNO_API_URL is not a valid URL: ${raw}`, 500);
   }
-  if (!LOOPBACK.has(u.hostname)) throw new MusicError('SUNO_API_URL must point at this machine (127.0.0.1 or localhost).', 500);
+  if (!LOOPBACK.has(u.hostname)) throw new HttpError('SUNO_API_URL must point at this machine (127.0.0.1 or localhost).', 500);
   return raw;
 }
 
@@ -71,8 +69,8 @@ async function svc(pathAndQuery: string, init: RequestInit = {}, timeoutMs = 20_
   try {
     res = await fetch(`${baseUrl()}${pathAndQuery}`, { ...init, cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) });
   } catch (err) {
-    if (err instanceof MusicError) throw err;
-    if ((err as Error).name === 'TimeoutError') throw new MusicError('The Suno service did not answer in time. If a generation was just submitted, check again in a minute before retrying.', 504);
+    if (err instanceof HttpError) throw err;
+    if ((err as Error).name === 'TimeoutError') throw new HttpError('The Suno service did not answer in time. If a generation was just submitted, check again in a minute before retrying.', 504);
     throw new ServiceDown((err as Error).message);
   }
   const text = await res.text();
@@ -134,7 +132,7 @@ export async function sunoStatus(): Promise<SunoStatus> {
   try {
     reply = await svc('/api/get_limit', {}, 25_000);
   } catch (err) {
-    if (err instanceof MusicError) throw err;
+    if (err instanceof HttpError) throw err;
     return {
       ...base,
       state: 'down',
@@ -191,9 +189,9 @@ function toClip(raw: unknown): SunoClip {
 function cleanIds(raw: unknown): string[] {
   const list = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : [];
   const ids = list.map((s) => (typeof s === 'string' ? s.trim() : '')).filter(Boolean);
-  if (!ids.length) throw new MusicError('ids is required.', 400);
-  if (ids.length > LIMITS.clips) throw new MusicError(`At most ${LIMITS.clips} ids at a time.`, 400);
-  if (ids.some((i) => !UUID_RE.test(i))) throw new MusicError('ids must be Suno clip ids (UUIDs).', 400);
+  if (!ids.length) throw new HttpError('ids is required.', 400);
+  if (ids.length > LIMITS.clips) throw new HttpError(`At most ${LIMITS.clips} ids at a time.`, 400);
+  if (ids.some((i) => !UUID_RE.test(i))) throw new HttpError('ids must be Suno clip ids (UUIDs).', 400);
   return [...new Set(ids.map((i) => i.toLowerCase()))];
 }
 
@@ -202,10 +200,10 @@ async function fetchClips(ids: string[]): Promise<SunoClip[]> {
   try {
     reply = await svc(`/api/get?ids=${encodeURIComponent(ids.join(','))}`, {}, 25_000);
   } catch (err) {
-    if (err instanceof MusicError) throw err;
-    throw new MusicError('The Suno service is not answering. Check the setup panel.', 503);
+    if (err instanceof HttpError) throw err;
+    throw new HttpError('The Suno service is not answering. Check the setup panel.', 503);
   }
-  if (!reply.ok || !Array.isArray(reply.data)) throw new MusicError(`Could not read clip status from Suno${serviceError(reply.data) ? `: ${serviceError(reply.data)}` : ''}.`, 502);
+  if (!reply.ok || !Array.isArray(reply.data)) throw new HttpError(`Could not read clip status from Suno${serviceError(reply.data) ? `: ${serviceError(reply.data)}` : ''}.`, 502);
   return (reply.data as unknown[]).map(toClip).filter((c) => c.id);
 }
 
@@ -219,26 +217,26 @@ const g = globalThis as unknown as { __voltaSunoBusy?: boolean };
 
 function str(v: unknown, field: string, max: number, required: boolean): string {
   if (v === undefined || v === null) v = '';
-  if (typeof v !== 'string') throw new MusicError(`${field} must be text.`, 400);
+  if (typeof v !== 'string') throw new HttpError(`${field} must be text.`, 400);
   const t = v.replace(/\r\n/g, '\n').trim();
-  if (required && !t) throw new MusicError(`${field} is required.`, 400);
-  if (t.length > max) throw new MusicError(`${field} is too long (max ${max} characters).`, 400);
+  if (required && !t) throw new HttpError(`${field} is required.`, 400);
+  if (t.length > max) throw new HttpError(`${field} is too long (max ${max} characters).`, 400);
   return t;
 }
 
 export async function generate(body: Record<string, unknown>): Promise<{ clips: SunoClip[]; credits: SunoStatus['credits'] }> {
-  if (body.confirm !== true) throw new MusicError('Generating spends Suno credits. Confirm in the panel first.', 400);
+  if (body.confirm !== true) throw new HttpError('Generating spends Suno credits. Confirm in the panel first.', 400);
   const instrumental = body.instrumental === true;
   const title = str(body.title, 'Title', LIMITS.title, true);
   const tags = str(body.tags, 'Style tags', LIMITS.tags, true);
   const lyrics = instrumental ? '' : str(body.lyrics, 'Lyrics', LIMITS.lyrics, true);
 
-  if (g.__voltaSunoBusy) throw new MusicError('A generation is already being submitted. Wait for it to finish.', 409);
+  if (g.__voltaSunoBusy) throw new HttpError('A generation is already being submitted. Wait for it to finish.', 409);
   g.__voltaSunoBusy = true;
   try {
     const st = await sunoStatus();
-    if (!st.ready) throw new MusicError(st.message, 503, { status: st });
-    if (st.credits && st.credits.left <= 0) throw new MusicError('Suno reports 0 credits left, so nothing was submitted.', 402);
+    if (!st.ready) throw new HttpError(st.message, 503, { status: st });
+    if (st.credits && st.credits.left <= 0) throw new HttpError('Suno reports 0 credits left, so nothing was submitted.', 402);
 
     let reply: SvcReply;
     try {
@@ -252,14 +250,14 @@ export async function generate(body: Record<string, unknown>): Promise<{ clips: 
         170_000,
       );
     } catch (err) {
-      if (err instanceof MusicError) throw err;
-      throw new MusicError('The Suno service stopped answering while submitting. Nothing was confirmed; check your Suno library before retrying.', 503);
+      if (err instanceof HttpError) throw err;
+      throw new HttpError('The Suno service stopped answering while submitting. Nothing was confirmed; check your Suno library before retrying.', 503);
     }
     if (!reply.ok || !Array.isArray(reply.data)) {
-      throw new MusicError(`Suno did not accept the generation${serviceError(reply.data) ? `: ${serviceError(reply.data)}` : ''}.`, reply.status >= 400 && reply.status < 600 ? reply.status : 502);
+      throw new HttpError(`Suno did not accept the generation${serviceError(reply.data) ? `: ${serviceError(reply.data)}` : ''}.`, reply.status >= 400 && reply.status < 600 ? reply.status : 502);
     }
     const clips = (reply.data as unknown[]).map(toClip).filter((c) => c.id);
-    if (!clips.length) throw new MusicError('Suno returned no clips. Check your Suno library before retrying.', 502);
+    if (!clips.length) throw new HttpError('Suno returned no clips. Check your Suno library before retrying.', 502);
     const after = await sunoStatus().catch(() => null);
     return { clips, credits: after?.credits ?? st.credits };
   } finally {
@@ -355,7 +353,7 @@ function cleanContext(raw: unknown): SunoSaveContext {
 export async function saveClips(body: Record<string, unknown>): Promise<{ results: SunoSaveResult[]; rootEnabled: boolean; dir: string }> {
   const ids = cleanIds(body.ids);
   const ctx = cleanContext(body);
-  if (!(await windsorMounted())) throw new MusicError(`${MOUNT} is not mounted, so the songs cannot be saved. Plug in the Windsor drive; Suno keeps the clips, so nothing is lost.`, 507);
+  if (!(await windsorMounted())) throw new HttpError(`${MOUNT} is not mounted, so the songs cannot be saved. Plug in the Windsor drive; Suno keeps the clips, so nothing is lost.`, 507);
   const clips = await fetchClips(ids);
   const root = ensureSunoRoot();
   await fs.mkdir(SUNO_OUT_DIR, { recursive: true });
@@ -411,42 +409,4 @@ export async function saveClips(body: Record<string, unknown>): Promise<{ result
   }
   bustIndex();
   return { results, rootEnabled: root.enabled, dir: SUNO_OUT_DIR };
-}
-
-// ───────────────────────── route wrappers ─────────────────────────
-
-/** GET wrapper: loopback Host + same-origin, JSON out, MusicError statuses preserved. */
-export function sunoGet(run: (req: Request) => Promise<unknown> | unknown) {
-  return async function GET(req: Request) {
-    const denied = rejectNonLocalRead(req);
-    if (denied) return denied;
-    try {
-      return NextResponse.json(await run(req), { headers: { 'Cache-Control': 'no-store' } });
-    } catch (err) {
-      return fail(err);
-    }
-  };
-}
-
-/** POST wrapper: loopback Host + same-origin + application/json, small bounded JSON object body. */
-export function sunoPost(run: (body: Record<string, unknown>) => Promise<unknown> | unknown, opts: { maxBytes?: number } = {}) {
-  const maxBytes = opts.maxBytes ?? 64 * 1024;
-  return async function POST(req: Request) {
-    const denied = rejectNonLocalMutation(req);
-    if (denied) return denied;
-    try {
-      const text = await req.text();
-      if (text.length > maxBytes) throw new MusicError('Request body too large.', 413);
-      let body: unknown;
-      try {
-        body = JSON.parse(text);
-      } catch {
-        throw new MusicError('Body must be valid JSON.', 400);
-      }
-      if (!body || typeof body !== 'object' || Array.isArray(body)) throw new MusicError('Body must be a JSON object.', 400);
-      return NextResponse.json(await run(body as Record<string, unknown>), { headers: { 'Cache-Control': 'no-store' } });
-    } catch (err) {
-      return fail(err);
-    }
-  };
 }

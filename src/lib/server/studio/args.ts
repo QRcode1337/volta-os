@@ -1,11 +1,12 @@
 import 'server-only';
 import path from 'node:path';
 import os from 'node:os';
+import { HttpError } from '../http-error';
 import { redactSecrets } from '../redact';
 import type { ArgSpec, Preset, Project } from './config';
 import { resolveExecutable, resolveOutputDir } from './config';
 import { knownCompositionIds, resolveInput } from './index-projects';
-import { StudioError, projectRendersDir } from './storage';
+import { projectRendersDir } from './storage';
 
 // Turns { projectId, presetId, args } into a final argv. The browser sends only validated values (numbers, enum keys,
 // composition ids, file ids); everything else in the argv is literal text from config/studio-projects.json.
@@ -41,7 +42,7 @@ function concatFilter(items: { probe: Probe; name: string }[]): string {
     if (it.probe.hasAudio) {
       parts.push(`[${i}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[a${i}]`);
     } else {
-      if (!it.probe.durationSec) throw new StudioError(`${it.name} has no audio and its duration could not be read, so silence cannot be padded in.`, 400);
+      if (!it.probe.durationSec) throw new HttpError(`${it.name} has no audio and its duration could not be read, so silence cannot be padded in.`, 400);
       parts.push(`anullsrc=r=48000:cl=stereo,atrim=duration=${it.probe.durationSec},asetpts=PTS-STARTPTS[a${i}]`);
     }
   });
@@ -55,11 +56,11 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 
 export async function buildJob(project: Project, preset: Preset, rawArgs: unknown): Promise<BuiltJob> {
   const raw = rawArgs === undefined || rawArgs === null ? {} : rawArgs;
-  if (!isPlainObject(raw)) throw new StudioError('args must be an object.', 400);
-  for (const k of Object.keys(raw)) if (!(k in preset.args)) throw new StudioError(`Unknown argument "${k}" for ${preset.id}.`, 400);
+  if (!isPlainObject(raw)) throw new HttpError('args must be an object.', 400);
+  for (const k of Object.keys(raw)) if (!(k in preset.args)) throw new HttpError(`Unknown argument "${k}" for ${preset.id}.`, 400);
 
   const exe = resolveExecutable(preset.argv[0] as string, project);
-  if (!exe) throw new StudioError(`${preset.argv[0]} is not an allowed or installed executable for this project.`, 400);
+  if (!exe) throw new HttpError(`${preset.argv[0]} is not an allowed or installed executable for this project.`, 400);
 
   const values = new Map<string, string | string[]>(); // substituted into argv
   const files = new Map<string, { path: string; name: string; probe: Probe }[]>();
@@ -69,31 +70,31 @@ export async function buildJob(project: Project, preset: Preset, rawArgs: unknow
     let v = raw[name];
     if (v === undefined || v === null || v === '') {
       if ('default' in spec && spec.default !== undefined) v = spec.default;
-      else throw new StudioError(`"${spec.label}" is required.`, 400);
+      else throw new HttpError(`"${spec.label}" is required.`, 400);
     }
     switch (spec.type) {
       case 'number':
       case 'int': {
         const n = typeof v === 'number' ? v : typeof v === 'string' && /^\d+(\.\d+)?$/.test(v) ? Number(v) : NaN;
-        if (!Number.isFinite(n)) throw new StudioError(`"${spec.label}" must be a number.`, 400);
-        if (spec.type === 'int' && !Number.isInteger(n)) throw new StudioError(`"${spec.label}" must be a whole number.`, 400);
-        if (n < spec.min || n > spec.max) throw new StudioError(`"${spec.label}" must be between ${spec.min} and ${spec.max}.`, 400);
+        if (!Number.isFinite(n)) throw new HttpError(`"${spec.label}" must be a number.`, 400);
+        if (spec.type === 'int' && !Number.isInteger(n)) throw new HttpError(`"${spec.label}" must be a whole number.`, 400);
+        if (n < spec.min || n > spec.max) throw new HttpError(`"${spec.label}" must be between ${spec.min} and ${spec.max}.`, 400);
         values.set(name, fmtNum(n));
         display[spec.label] = fmtNum(n);
         break;
       }
       case 'enum': {
         if (typeof v !== 'string' || !Object.prototype.hasOwnProperty.call(spec.values, v)) {
-          throw new StudioError(`"${spec.label}" must be one of: ${Object.keys(spec.values).join(', ')}.`, 400);
+          throw new HttpError(`"${spec.label}" must be one of: ${Object.keys(spec.values).join(', ')}.`, 400);
         }
         values.set(name, spec.values[v]);
         display[spec.label] = v;
         break;
       }
       case 'composition': {
-        if (typeof v !== 'string' || !/^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$/.test(v)) throw new StudioError(`"${spec.label}" is not a valid composition id.`, 400);
+        if (typeof v !== 'string' || !/^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$/.test(v)) throw new HttpError(`"${spec.label}" is not a valid composition id.`, 400);
         const known = await knownCompositionIds(project);
-        if (known.length && !known.includes(v)) throw new StudioError(`Unknown composition "${v}". Known: ${known.join(', ')}.`, 400);
+        if (known.length && !known.includes(v)) throw new HttpError(`Unknown composition "${v}". Known: ${known.join(', ')}.`, 400);
         values.set(name, v);
         display[spec.label] = v;
         break;
@@ -107,7 +108,7 @@ export async function buildJob(project: Project, preset: Preset, rawArgs: unknow
       }
       case 'files': {
         if (!Array.isArray(v) || v.length < spec.min || v.length > spec.max) {
-          throw new StudioError(`"${spec.label}" needs ${spec.min} to ${spec.max} files.`, 400);
+          throw new HttpError(`"${spec.label}" needs ${spec.min} to ${spec.max} files.`, 400);
         }
         const rs = [];
         for (const id of v) rs.push(await resolveInput(id as string, spec.kinds));
@@ -140,7 +141,7 @@ export async function buildJob(project: Project, preset: Preset, rawArgs: unknow
       if (key === 'out') return outPath ?? '';
       if (key === 'projectDir') return project.path;
       const v = values.get(key);
-      if (typeof v !== 'string') throw new StudioError(`Placeholder {${key}} cannot be used inside a larger argument.`, 500);
+      if (typeof v !== 'string') throw new HttpError(`Placeholder {${key}} cannot be used inside a larger argument.`, 500);
       return v;
     });
   for (let i = 1; i < preset.argv.length; i++) {
@@ -159,7 +160,7 @@ export async function buildJob(project: Project, preset: Preset, rawArgs: unknow
   for (const [name, spec] of Object.entries(preset.args)) {
     if (spec.type === 'composition' || spec.type === 'number' || spec.type === 'int') {
       const v = values.get(name);
-      if (typeof v === 'string' && v.startsWith('-')) throw new StudioError('Refusing an argument that looks like an option.', 400);
+      if (typeof v === 'string' && v.startsWith('-')) throw new HttpError('Refusing an argument that looks like an option.', 400);
     }
   }
 

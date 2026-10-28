@@ -1,5 +1,5 @@
 import 'server-only';
-import { redactSecrets } from '@/app/api/honcho/_shared';
+import { redactSecrets } from '@/lib/server/redact';
 import type { ObsidianVault } from '@/types/ltm';
 import { LTM_LIVE_MINUTES, type MemorySource, type NotionPage, type SourceMetric } from '@/types/sources';
 import { HONCHO_START_COMMAND, HONCHO_URL, health as honchoHealth, listPeers, listSessions, listWorkspaces } from '../honcho';

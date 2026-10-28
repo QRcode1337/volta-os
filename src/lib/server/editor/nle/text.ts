@@ -4,7 +4,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { NleTextStyle } from '@/types/nle';
 import { FONT_STACK } from '@/lib/nle/model';
-import { CACHE_DIR, NleError, ensureDir, sha1 } from './paths';
+import { HttpError } from '../../http-error';
+import { CACHE_DIR, ensureDir, sha1 } from './paths';
 
 // Text clips → transparent PNGs. The Homebrew ffmpeg on this host is built without libfreetype (no drawtext), so text
 // is rasterised with CoreText by a tiny Swift helper compiled once into cache/bin/. Fonts resolve exactly like the
@@ -132,7 +133,7 @@ function compileHelper(): Promise<string> {
     const tmp = `${BIN}.${process.pid}.tmp`;
     await new Promise<void>((resolve, reject) =>
       execFile('/usr/bin/swiftc', ['-O', '-o', tmp, src], { timeout: 180_000, maxBuffer: 4 * 1024 * 1024 }, (err, _o, stderr) =>
-        err ? reject(new NleError(`Cannot build the text renderer (needs Xcode Command Line Tools / swiftc): ${String(stderr || err.message).trim().split('\n')[0].slice(0, 200)}`, 500)) : resolve(),
+        err ? reject(new HttpError(`Cannot build the text renderer (needs Xcode Command Line Tools / swiftc): ${String(stderr || err.message).trim().split('\n')[0].slice(0, 200)}`, 500)) : resolve(),
       ),
     );
     await fs.rename(tmp, BIN);
@@ -239,12 +240,12 @@ export async function renderText(style: NleTextStyle, px: number): Promise<TextR
     p.stderr.on('data', (d: Buffer) => (se += d.toString()));
     p.on('error', (e) => {
       clearTimeout(timer);
-      reject(new NleError(`Text renderer failed to start: ${e.message}`, 500));
+      reject(new HttpError(`Text renderer failed to start: ${e.message}`, 500));
     });
     p.on('close', (code) => {
       clearTimeout(timer);
       if (code === 0) resolve(so);
-      else reject(new NleError(`Text renderer failed: ${se.trim().slice(0, 200) || `exit ${code}`}`, 500));
+      else reject(new HttpError(`Text renderer failed: ${se.trim().slice(0, 200) || `exit ${code}`}`, 500));
     });
     p.stdin.end(JSON.stringify({ ...spec, out }));
   });

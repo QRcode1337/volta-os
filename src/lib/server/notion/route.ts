@@ -1,6 +1,5 @@
 import 'server-only';
-import { NextResponse } from 'next/server';
-import { rejectNonLocalRead } from '../local-only';
+import { HttpError } from '../http-error';
 import { NotionError } from './client';
 import { NO_ACCESS_HINT } from './pages';
 
@@ -16,24 +15,14 @@ export function allowForce(req: Request, key: string): boolean {
   return true;
 }
 
-export class BadRequest extends Error {}
-
-/** GET wrapper for the Notion routes: localhost-only, same-origin, and Notion errors mapped to useful JSON. */
-export function notionJson<T>(load: (req: Request) => Promise<T>) {
-  return async function GET(req: Request) {
-    const denied = rejectNonLocalRead(req);
-    if (denied) return denied;
-    try {
-      return NextResponse.json(await load(req), { headers: { 'Cache-Control': 'no-store' } });
-    } catch (err) {
-      if (err instanceof BadRequest) return NextResponse.json({ error: err.message }, { status: 400 });
-      if (err instanceof NotionError) {
-        if (err.code === 'not_configured') return NextResponse.json({ error: err.message, notConfigured: true }, { status: 503 });
-        if (err.noAccess) return NextResponse.json({ error: 'Notion cannot see this page.', noAccess: true, hint: NO_ACCESS_HINT }, { status: 404 });
-        return NextResponse.json({ error: err.message, code: err.code }, { status: err.status === 429 ? 429 : 502 });
-      }
-      console.error('[volta notion api]', err);
-      return NextResponse.json({ error: (err as Error).message || 'failed' }, { status: 500 });
-    }
-  };
+/**
+ * Rethrow a Notion failure as the HttpError the routes answer with (anything else is rethrown unchanged), so a route
+ * can write `getCatalog(...).catch(notionHttp)`: not configured -> 503 {notConfigured}, not shared with the integration
+ * -> 404 {noAccess, hint}, rate limited -> 429 {code}, any other Notion failure -> 502 {code}.
+ */
+export function notionHttp(err: unknown): never {
+  if (!(err instanceof NotionError)) throw err;
+  if (err.code === 'not_configured') throw new HttpError(err.message, 503, { notConfigured: true });
+  if (err.noAccess) throw new HttpError('Notion cannot see this page.', 404, { noAccess: true, hint: NO_ACCESS_HINT });
+  throw new HttpError(err.message, err.status === 429 ? 429 : 502, { code: err.code });
 }

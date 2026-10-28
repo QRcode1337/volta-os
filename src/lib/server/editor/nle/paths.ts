@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { StudioError, windsorMounted } from '../../studio/storage';
+import { HttpError } from '../../http-error';
+import { windsorMounted } from '../../studio/storage';
 
 // VOLTA Editor — Edit mode storage. Live state (uploads, caches, saved sequences, exports when Windsor is unplugged)
 // lives under ~/Library/Application Support/VOLTA/editor/ — NOT in iCloud-synced ErisMornCloud, where macOS evicts
@@ -24,8 +25,6 @@ export const FFPROBE = '/opt/homebrew/bin/ffprobe';
 export const GiB = 1024 ** 3;
 /** Free space that must REMAIN on a volume after a bulk write. */
 export const MIN_REMAIN_BYTES = 3 * GiB;
-
-export { StudioError as NleError };
 
 export async function ensureDir(dir: string): Promise<string> {
   await fs.mkdir(dir, { recursive: true });
@@ -56,7 +55,7 @@ export async function freeBytes(p: string): Promise<number> {
 export async function requireSpace(dir: string, bytes: number, what: string): Promise<number> {
   const free = await freeBytes(dir);
   if (free - bytes < MIN_REMAIN_BYTES) {
-    throw new StudioError(
+    throw new HttpError(
       `Not enough disk space for ${what}: ${(free / GiB).toFixed(1)} GiB free on the volume holding ${tildePath(dir)}` +
         (bytes > 0 ? ` and this needs about ${(bytes / GiB).toFixed(2)} GiB` : '') +
         `; at least ${MIN_REMAIN_BYTES / GiB} GiB must remain free.`,

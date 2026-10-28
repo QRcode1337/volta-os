@@ -3,8 +3,9 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { NlePeaks } from '@/types/nle';
+import { HttpError } from '../../http-error';
 import { resolveAsset } from './assets';
-import { CACHE_DIR, FFMPEG, NleError, ensureDir, limiter, pruneCache, sha1, writeAtomic } from './paths';
+import { CACHE_DIR, FFMPEG, ensureDir, limiter, pruneCache, sha1, writeAtomic } from './paths';
 
 // Waveform peaks: decode to mono 4 kHz s16 and keep max |sample| per 1/50 s bucket (0..1, absolute, not normalised to
 // the file's loudest peak). Cached as JSON keyed by asset id + size + mtime.
@@ -17,7 +18,7 @@ const inflight = new Map<string, Promise<NlePeaks>>();
 
 export async function getPeaks(id: string): Promise<NlePeaks> {
   const a = await resolveAsset(id);
-  if (a.media === 'image' || !a.hasAudio) throw new NleError('This asset has no audio stream.', 404);
+  if (a.media === 'image' || !a.hasAudio) throw new HttpError('This asset has no audio stream.', 404);
   const key = sha1(`peaks|v1|${a.id}|${a.path}|${a.size}|${Math.round(a.mtimeMs)}`);
   const file = path.join(CACHE_DIR, `peaks_${key}.json`);
   try {
@@ -70,14 +71,14 @@ function computePeaks(file: string): Promise<NlePeaks> {
     });
     ff.on('error', (e) => {
       clearTimeout(timer);
-      reject(new NleError(`ffmpeg failed to start: ${e.message}`, 500));
+      reject(new HttpError(`ffmpeg failed to start: ${e.message}`, 500));
     });
     ff.on('close', (code) => {
       clearTimeout(timer);
       if (n > 0) peaks.push(Math.round((cur / 32768) * 1000) / 1000);
       if (code !== 0 && total === 0) {
         const msg = err.trim().split('\n').pop() ?? 'unknown error';
-        return reject(new NleError(/matches no streams|does not contain any stream/i.test(err) ? 'This asset has no audio stream.' : `Waveform decode failed: ${msg.slice(0, 200)}`, /matches no streams/i.test(err) ? 404 : 500));
+        return reject(new HttpError(/matches no streams|does not contain any stream/i.test(err) ? 'This asset has no audio stream.' : `Waveform decode failed: ${msg.slice(0, 200)}`, /matches no streams/i.test(err) ? 404 : 500));
       }
       resolve({ rate: RATE, peaks, duration: Math.round((total / SR) * 1000) / 1000 });
     });

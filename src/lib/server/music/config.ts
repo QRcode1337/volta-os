@@ -1,8 +1,8 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { MusicError } from './errors';
 
 // config/music.json: library roots, discovery settings, extensions and the Windsor meta path.
 
@@ -82,7 +82,7 @@ export function saveRoots(roots: { id: string; label: string; path: string; enab
   try {
     raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as Record<string, unknown>;
   } catch (err) {
-    throw new MusicError(`config/music.json is unreadable, so it was not changed: ${(err as Error).message}`, 500);
+    throw new HttpError(`config/music.json is unreadable, so it was not changed: ${(err as Error).message}`, 500);
   }
   raw.roots = roots.map((r) => ({ id: r.id, label: r.label, path: collapseHome(r.path), enabled: r.enabled, depth: r.depth }));
   const tmp = `${CONFIG_PATH}.${process.pid}.tmp`;

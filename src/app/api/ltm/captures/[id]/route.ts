@@ -1,21 +1,16 @@
-import { NextResponse } from 'next/server';
+import { HttpError, route } from '@/lib/server/route-helpers';
 import { getCapture } from '@/lib/server/ltm';
-import { rejectNonLocalRead } from '@/lib/server/local-only';
-import { intParam, ltmError, noStore } from '../../_shared';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const denied = rejectNonLocalRead(req);
-  if (denied) return denied;
-  const id = intParam((await params).id);
-  if (id == null) return NextResponse.json({ error: 'invalid id' }, { status: 400 });
-  try {
+export const GET = route<{ id: string }>(
+  ({ params }) => {
+    const id = Number(params.id);
+    if (!Number.isInteger(id) || id < 0) throw new HttpError('invalid id', 400);
     const capture = getCapture(id);
-    if (!capture) return NextResponse.json({ error: 'not found' }, { status: 404 });
-    return NextResponse.json(capture, { headers: noStore });
-  } catch (err) {
-    return ltmError(err);
-  }
-}
+    if (!capture) throw new HttpError('not found', 404);
+    return capture;
+  },
+  { tag: 'ltm' },
+);

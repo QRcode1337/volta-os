@@ -1,4 +1,4 @@
-import { localJson } from '@/lib/server/route-helpers';
+import { route } from '@/lib/server/route-helpers';
 import { loadRoutes, chainFor, recentUsage } from '@/lib/server/llm';
 import type { UsageEntry } from '@/lib/server/llm/usage-log';
 
@@ -26,7 +26,7 @@ function summarise(entries: UsageEntry[]) {
 }
 
 /** GET /api/llm/routes: the task -> combo table (no secrets), whether a gateway key is set, and recent per-task usage. */
-export const GET = localJson(async () => {
+export const GET = route(async () => {
   const cfg = loadRoutes();
   const usage = recentUsage(200);
   return {

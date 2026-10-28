@@ -3,7 +3,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { GraphCommunity, GraphData, GraphEdge, GraphNode } from '@/components/research/types';
 import { cached } from '../sources/cache';
-import { loadConfig, ResearchError, type GraphCfg } from './config';
+import { HttpError } from '../http-error';
+import { loadConfig, type GraphCfg } from './config';
 import { isPlaceholder } from './inventory';
 
 // Graphify outputs (graph.json + GRAPH_REPORT.md). Read-only; a graph that is an iCloud placeholder is refused, not opened.
@@ -43,8 +44,8 @@ const asStr = (v: unknown) => (typeof v === 'string' ? v : '');
 async function load(cfg: GraphCfg): Promise<LoadedGraph> {
   const file = path.join(cfg.dir, 'graph.json');
   const st = await fs.stat(file).catch(() => null);
-  if (!st) throw new ResearchError(`${file} does not exist.`, 404);
-  if (isPlaceholder(st)) throw new ResearchError(`${file} is an iCloud placeholder (not downloaded), so it was not opened.`, 409);
+  if (!st) throw new HttpError(`${file} does not exist.`, 404);
+  if (isPlaceholder(st)) throw new HttpError(`${file} is an iCloud placeholder (not downloaded), so it was not opened.`, 409);
   const j = JSON.parse(await fs.readFile(file, 'utf8')) as { nodes?: Record<string, unknown>[]; links?: Record<string, unknown>[] };
 
   const nodes: GNode[] = [];
@@ -98,7 +99,7 @@ async function load(cfg: GraphCfg): Promise<LoadedGraph> {
 
 export function graphCfg(id: string): GraphCfg {
   const g = loadConfig().graphs.find((x) => x.id === id);
-  if (!g) throw new ResearchError(`Unknown graph "${id}".`, 404);
+  if (!g) throw new HttpError(`Unknown graph "${id}".`, 404);
   return g;
 }
 

@@ -3,8 +3,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { EditorClipStatus, EditorMediaItem, EditorPinRecord, EditorReviewNoteResponse } from '@/types/editor';
 import { coordsLabel, formatClock, frameAt, pixelLabel, regionDescriptor } from '@/components/editor/spatial';
+import { HttpError } from '../http-error';
 import { getProject, loadConfig } from '../studio/config';
-import { StudioError, isInside } from '../studio/storage';
+import { isInside } from '../studio/storage';
 import { describeEditorMedia } from './media';
 
 // "Save notes to project": a dated markdown review note written next to the source project, only for projects listed
@@ -56,29 +57,29 @@ export function reviewNoteMarkdown(item: EditorMediaItem, pins: EditorPinRecord[
 
 export async function saveReviewNote(fileKey: string, pins: EditorPinRecord[], status: EditorClipStatus): Promise<EditorReviewNoteResponse> {
   if (!fileKey.startsWith('o_')) {
-    throw new StudioError('Only Studio project files can have notes saved to a project. Generations files do not belong to a project.', 422);
+    throw new HttpError('Only Studio project files can have notes saved to a project. Generations files do not belong to a project.', 422);
   }
   const item = await describeEditorMedia(fileKey);
   const project = item.projectId ? getProject(item.projectId) : null;
   // Re-check against the config file itself (not just the in-memory registry entry).
   if (!project || !loadConfig().projects.some((p) => p.id === project.id)) {
-    throw new StudioError('This file is not in a project listed in config/studio-projects.json.', 403);
+    throw new HttpError('This file is not in a project listed in config/studio-projects.json.', 403);
   }
   let root: string;
   try {
     root = await fs.realpath(project.path);
   } catch {
-    throw new StudioError(`The project folder ${project.path} does not exist (is the drive mounted?).`, 404);
+    throw new HttpError(`The project folder ${project.path} does not exist (is the drive mounted?).`, 404);
   }
   const dir = path.join(root, NOTES_DIR);
   try {
     await fs.mkdir(dir); // single level only: the project folder itself must already exist
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw new StudioError(`Cannot create ${dir}: ${(err as Error).message}`, 500);
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw new HttpError(`Cannot create ${dir}: ${(err as Error).message}`, 500);
   }
   const st = await fs.lstat(dir);
   if (!st.isDirectory() || st.isSymbolicLink() || !(await isInside(dir, root))) {
-    throw new StudioError(`${NOTES_DIR} inside the project must be a real folder (not a link); refusing to write outside the project.`, 403);
+    throw new HttpError(`${NOTES_DIR} inside the project must be a real folder (not a link); refusing to write outside the project.`, 403);
   }
 
   const now = new Date();
@@ -92,8 +93,8 @@ export async function saveReviewNote(fileKey: string, pins: EditorPinRecord[], s
       await fs.writeFile(dest, body, { encoding: 'utf8', flag: 'wx' }); // wx: fail instead of overwriting
       return { path: dest, relPath: path.join(NOTES_DIR, name), projectId: project.id, projectName: project.name, pinCount: pins.length };
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw new StudioError(`Could not write the note: ${(err as Error).message}`, 500);
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw new HttpError(`Could not write the note: ${(err as Error).message}`, 500);
     }
   }
-  throw new StudioError('Could not find a free file name for the note.', 409);
+  throw new HttpError('Could not find a free file name for the note.', 409);
 }

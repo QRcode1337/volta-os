@@ -2,6 +2,7 @@ import 'server-only';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
+import { HttpError } from './http-error';
 import { redactSecrets } from './redact';
 import type { LtmAppCount, LtmCapture, LtmCaptureList, LtmCaptureSummary, LtmDay, LtmStatus } from '@/types/ltm';
 
@@ -28,7 +29,7 @@ const g = globalThis as unknown as { __ltmDbFiltered?: DatabaseSyncT };
 function openDb(): DatabaseSyncT {
   if (g.__ltmDbFiltered) return g.__ltmDbFiltered;
   if (!fs.existsSync(LTM_DB_PATH)) {
-    throw new LtmUnavailableError(
+    throw ltmUnavailable(
       fs.existsSync(path.dirname(path.dirname(LTM_DB_PATH)))
         ? `Database not found at ${LTM_DB_PATH}`
         : `Drive not mounted (${path.dirname(path.dirname(LTM_DB_PATH))})`,
@@ -45,7 +46,9 @@ function openDb(): DatabaseSyncT {
   return db;
 }
 
-export class LtmUnavailableError extends Error {}
+/** LTM can't be reached (drive unmounted, database missing or busy): a 503 with `unavailable: true`. */
+export const ltmUnavailable = (message: string) => new HttpError(message, 503, { unavailable: true });
+export const isLtmUnavailable = (err: unknown): err is HttpError => err instanceof HttpError && err.extra?.unavailable === true;
 
 /** Run a query; drop the cached handle if the drive went away so the next call reopens. */
 function withDb<T>(fn: (db: DatabaseSyncT) => T): T {
@@ -60,9 +63,9 @@ function withDb<T>(fn: (db: DatabaseSyncT) => T): T {
         // already gone
       }
       g.__ltmDbFiltered = undefined;
-      throw new LtmUnavailableError('Drive was unmounted');
+      throw ltmUnavailable('Drive was unmounted');
     }
-    if ((err as { errcode?: number }).errcode === 5) throw new LtmUnavailableError('LTM database is busy (ingest running); try again shortly');
+    if ((err as { errcode?: number }).errcode === 5) throw ltmUnavailable('LTM database is busy (ingest running); try again shortly');
     throw err;
   }
 }

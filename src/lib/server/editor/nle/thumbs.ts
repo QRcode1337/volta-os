@@ -2,8 +2,9 @@ import 'server-only';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { HttpError } from '../../http-error';
 import { resolveAsset } from './assets';
-import { CACHE_DIR, FFMPEG, NleError, ensureDir, limiter, onDisk, pruneCache, sha1 } from './paths';
+import { CACHE_DIR, FFMPEG, ensureDir, limiter, onDisk, pruneCache, sha1 } from './paths';
 
 // Filmstrip sprites for timeline clips: `count` frames tiled horizontally (count x 1), each 90 px tall, frame i sampled
 // at (i + 0.5) * duration / count. One ffmpeg call: one fast-seeked input per frame, hstacked. Cached in cache/.
@@ -24,8 +25,8 @@ const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 
 export async function getThumbs(id: string, rawCount: number): Promise<{ meta: ThumbsMeta; file: string; etag: string }> {
   const a = await resolveAsset(id);
-  if (a.media === 'audio') throw new NleError('Audio-only assets have no thumbnails.', 404);
-  if (!a.width || !a.height) throw new NleError('This asset has no video frames.', 404);
+  if (a.media === 'audio') throw new HttpError('Audio-only assets have no thumbnails.', 404);
+  if (!a.width || !a.height) throw new HttpError('This asset has no video frames.', 404);
   const count = a.media === 'image' ? 1 : Math.max(1, Math.min(40, Math.round(Number.isFinite(rawCount) ? rawCount : 10)));
   const duration = a.media === 'image' ? 0 : (a.durationSec ?? 0);
   const frameW = Math.min(360, even((FRAME_H * a.width) / a.height));
@@ -68,7 +69,7 @@ async function buildSprite(src: string, still: boolean, count: number, duration:
     execFile(FFMPEG, args, { timeout: 60_000, maxBuffer: 1024 * 1024 }, (err, _so, stderr) => {
       if (err) {
         const msg = String(stderr || err.message).trim().split('\n').pop() ?? 'failed';
-        reject(new NleError(`Thumbnail render failed: ${msg.slice(0, 200)}`, 500));
+        reject(new HttpError(`Thumbnail render failed: ${msg.slice(0, 200)}`, 500));
       } else resolve();
     });
   }).catch(async (e) => {

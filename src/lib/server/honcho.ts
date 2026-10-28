@@ -15,6 +15,8 @@ import type {
   HonchoStats,
   HonchoWorkspace,
 } from '@/types/honcho';
+import { HttpError } from './http-error';
+import { redactSecrets } from './redact';
 
 // Server-only client for the self-hosted Honcho memory server (Plastic Labs, Docker).
 // Read-mostly: the only non-read calls are dialectic chat + semantic queries, which
@@ -52,6 +54,22 @@ export class HonchoTimeoutError extends Error {
     super(message);
     this.name = 'HonchoTimeoutError';
   }
+}
+
+/**
+ * The one Honcho -> HTTP mapping (used by the /api/honcho routes). Messages are masked like proxied bodies:
+ * upstream FastAPI details can echo request text. Anything that is not a Honcho error is returned unchanged.
+ */
+export function honchoHttpError(err: unknown): unknown {
+  if (err instanceof HonchoOfflineError) return new HttpError(redactSecrets(err.message), 503, { offline: true, url: HONCHO_URL });
+  if (err instanceof HonchoTimeoutError) return new HttpError(redactSecrets(err.message), 504, { timeout: true });
+  if (err instanceof HonchoApiError) {
+    const status = err.status >= 400 && err.status < 600 ? err.status : 502;
+    // A 503 from Honcho itself (e.g. DB not ready) is not "offline"; surface it as a gateway error.
+    return new HttpError(redactSecrets(err.message), status === 503 ? 502 : status, { upstreamStatus: err.status });
+  }
+  if ((err as Error)?.name === 'AbortError') return new HttpError('cancelled', 499);
+  return err;
 }
 
 type Query = Record<string, string | number | boolean | null | undefined>;

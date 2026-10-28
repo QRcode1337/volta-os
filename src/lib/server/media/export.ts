@@ -1,8 +1,9 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { GenItemRecord, MediaKind } from '@/types/media';
-import { EXPORT_ROOT, GEN_ROOT, MIN_FREE_BYTES, MediaError } from './config';
+import { EXPORT_ROOT, GEN_ROOT, MIN_FREE_BYTES } from './config';
 import { localDate, readManifest, requireStorage } from './storage';
 
 // "Export": copy generated files into a brand-new folder under EXPORT_ROOT, with an index.csv describing them.
@@ -47,7 +48,7 @@ export async function exportItems(p: { filter: unknown; name: unknown; ids?: unk
   // Newest first in the gallery; export oldest first so numbering follows creation (= shot order within a batch).
   const all = (await readManifest()).filter((r) => (filter === 'all' || r.kind === filter) && (!ids || ids.has(r.id)));
   const recs = [...all].sort((a, b) => a.created.localeCompare(b.created));
-  if (!recs.length) throw new MediaError('Nothing to export in this filter.', 400);
+  if (!recs.length) throw new HttpError('Nothing to export in this filter.', 400);
 
   const genRoot = await fs.realpath(GEN_ROOT);
   const sources: { rec: GenItemRecord; file: string; size: number }[] = [];
@@ -63,11 +64,11 @@ export async function exportItems(p: { filter: unknown; name: unknown; ids?: unk
       skipped.push(`${rec.id}: ${(err as Error).message.includes('ENOENT') ? 'file missing' : (err as Error).message}`);
     }
   }
-  if (!sources.length) throw new MediaError(`None of the ${recs.length} file(s) could be found on Windsor.`, 404);
+  if (!sources.length) throw new HttpError(`None of the ${recs.length} file(s) could be found on Windsor.`, 404);
 
   const bytes = sources.reduce((a, s) => a + s.size, 0);
   if (storage.freeBytes - bytes < MIN_FREE_BYTES) {
-    throw new MediaError(`Exporting ${(bytes / 1024 ** 2).toFixed(0)} MB would leave Windsor under ${MIN_FREE_BYTES / 1024 ** 3} GiB free.`, 507);
+    throw new HttpError(`Exporting ${(bytes / 1024 ** 2).toFixed(0)} MB would leave Windsor under ${MIN_FREE_BYTES / 1024 ** 3} GiB free.`, 507);
   }
 
   // A new folder every time: never merge into (or overwrite) an earlier export.
@@ -106,8 +107,8 @@ export async function exportItems(p: { filter: unknown; name: unknown; ids?: unk
 
 /** Resolve a folder the export created (by name) for "Open in Finder"; refuses anything outside EXPORT_ROOT. */
 export async function resolveExportDir(name: unknown): Promise<string> {
-  if (typeof name !== 'string' || !name || name !== exportFolderName(name) || name.includes('/')) throw new MediaError('Bad export folder.', 400);
+  if (typeof name !== 'string' || !name || name !== exportFolderName(name) || name.includes('/')) throw new HttpError('Bad export folder.', 400);
   const [root, real] = await Promise.all([fs.realpath(EXPORT_ROOT), fs.realpath(path.join(EXPORT_ROOT, name)).catch(() => '')]);
-  if (!real || !real.startsWith(root + path.sep)) throw new MediaError('Export folder not found.', 404);
+  if (!real || !real.startsWith(root + path.sep)) throw new HttpError('Export folder not found.', 404);
   return real;
 }

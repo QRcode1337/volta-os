@@ -1,11 +1,11 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import { randomBytes } from 'node:crypto';
 import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { CostBreakdown, EpisodeRecord, JobState, PodcastConfig, Stage, StageTiming, Story } from './types';
 import { assertWithinDailyCap } from '../media/budget';
-import { MediaError } from '../media/config';
 import { PODCAST_ROOT, geminiKey, loadConfig } from './config';
 import { gatherFixedSources } from './gather';
 import { claudeBin } from './llm';
@@ -13,7 +13,7 @@ import { buildNotes } from './notes';
 import { rankAndSelect } from './rank';
 import { researchTopics, researchWarnings, runResearch, summarizeResearch, type ResearchOutcome } from './research';
 import { writeScript, writeTitle } from './script';
-import { PodcastError, getEpisode, paths, pruneOld, requireStorage, upsertEpisode, writeFileAtomic } from './storage';
+import { getEpisode, paths, pruneOld, requireStorage, upsertEpisode, writeFileAtomic } from './storage';
 import { assemble, estimate, estimateForWords, ffmpegAvailable, synthesize } from './tts';
 import { errMsg, isDate, localDate, round } from './util';
 
@@ -59,33 +59,23 @@ export interface StartOptions {
   trigger: 'manual' | 'scheduled';
 }
 
-/** The shared VOLTA daily spend cap (VOLTA_GEN_DAILY_USD) counts podcast TTS, so it gates scheduled runs too. */
-async function withinDailyCap(usd: number): Promise<void> {
-  try {
-    await assertWithinDailyCap(usd);
-  } catch (e) {
-    if (e instanceof MediaError) throw new PodcastError(e.message, e.status);
-    throw e;
-  }
-}
-
 export async function startGeneration(opts: StartOptions): Promise<JobState> {
   const cfg = loadConfig();
   const date = opts.date ?? localDate();
-  if (!isDate(date)) throw new PodcastError('`date` must be YYYY-MM-DD.', 400);
-  if (currentJob()?.status === 'running') throw new PodcastError('An episode is already being generated.', 409);
+  if (!isDate(date)) throw new HttpError('`date` must be YYYY-MM-DD.', 400);
+  if (currentJob()?.status === 'running') throw new HttpError('An episode is already being generated.', 409);
 
   await requireStorage(); // 507 if Windsor is missing or has < 2 GiB free
-  if (!geminiKey()) throw new PodcastError('GEMINI_API_KEY is missing from .env.local (then restart the dev server).', 503);
-  if (!(await ffmpegAvailable())) throw new PodcastError('ffmpeg not found at /opt/homebrew/bin/ffmpeg.', 503);
-  if (!opts.force && (await getEpisode(date))) throw new PodcastError(`An episode for ${date} already exists. Use regenerate to replace it.`, 409);
+  if (!geminiKey()) throw new HttpError('GEMINI_API_KEY is missing from .env.local (then restart the dev server).', 503);
+  if (!(await ffmpegAvailable())) throw new HttpError('ffmpeg not found at /opt/homebrew/bin/ffmpeg.', 503);
+  if (!opts.force && (await getEpisode(date))) throw new HttpError(`An episode for ${date} already exists. Use regenerate to replace it.`, 409);
 
   const est = estimate(cfg, date);
-  if (est.maxUsd > cfg.cost.hardCapUsd) throw new PodcastError(`Estimated cost $${est.maxUsd.toFixed(2)} exceeds the hard cap $${cfg.cost.hardCapUsd.toFixed(2)}.`, 422);
+  if (est.maxUsd > cfg.cost.hardCapUsd) throw new HttpError(`Estimated cost $${est.maxUsd.toFixed(2)} exceeds the hard cap $${cfg.cost.hardCapUsd.toFixed(2)}.`, 422);
   if (opts.trigger === 'manual' && est.needsConfirm && !(typeof opts.confirmUsd === 'number' && opts.confirmUsd + 1e-9 >= est.maxUsd)) {
-    throw new PodcastError(`Estimated cost up to $${est.maxUsd.toFixed(2)} is above $${cfg.cost.confirmAboveUsd.toFixed(2)}: confirm it first.`, 402);
+    throw new HttpError(`Estimated cost up to $${est.maxUsd.toFixed(2)} is above $${cfg.cost.confirmAboveUsd.toFixed(2)}: confirm it first.`, 402);
   }
-  await withinDailyCap(est.maxUsd);
+  await assertWithinDailyCap(est.maxUsd); // the shared VOLTA daily cap (VOLTA_GEN_DAILY_USD) counts podcast TTS, so it gates scheduled runs too
 
   const job: JobState = {
     id: `${Date.now().toString(36)}-${randomBytes(3).toString('hex')}`,
@@ -167,7 +157,7 @@ async function run(job: JobState, cfg: PodcastConfig, opts: StartOptions): Promi
     begin('rank', 'de-duplicating and ranking');
     const all = [...research.candidates, ...fixed.candidates];
     const ranked = await rankAndSelect(all, cfg, detail);
-    if (ranked.stories.length < 3) throw new PodcastError(`Only ${ranked.stories.length} usable stories found (pool ${ranked.poolSize}); refusing to make a thin episode.`, 422);
+    if (ranked.stories.length < 3) throw new HttpError(`Only ${ranked.stories.length} usable stories found (pool ${ranked.poolSize}); refusing to make a thin episode.`, 422);
     end(`${ranked.stories.length} picked from ${ranked.poolSize}${ranked.jevUsed ? ' (JEV)' : ''}`);
 
     // 4. script
@@ -178,10 +168,10 @@ async function run(job: JobState, cfg: PodcastConfig, opts: StartOptions): Promi
     const meta = await writeTitle(ranked.stories, cfg, date);
     const scriptCost = estimateForWords(cfg, date, script.words);
     if (opts.trigger === 'manual' && scriptCost > cfg.cost.confirmAboveUsd && !(typeof opts.confirmUsd === 'number' && opts.confirmUsd >= scriptCost)) {
-      throw new PodcastError(`The script came out longer than estimated (cost $${scriptCost.toFixed(2)}, above the confirmed amount). Nothing was spent on audio; run again and confirm.`, 402);
+      throw new HttpError(`The script came out longer than estimated (cost $${scriptCost.toFixed(2)}, above the confirmed amount). Nothing was spent on audio; run again and confirm.`, 402);
     }
-    if (scriptCost > cfg.cost.hardCapUsd) throw new PodcastError(`Audio would cost about $${scriptCost.toFixed(2)}, above the hard cap $${cfg.cost.hardCapUsd.toFixed(2)}.`, 422);
-    await withinDailyCap(scriptCost);
+    if (scriptCost > cfg.cost.hardCapUsd) throw new HttpError(`Audio would cost about $${scriptCost.toFixed(2)}, above the hard cap $${cfg.cost.hardCapUsd.toFixed(2)}.`, 422);
+    await assertWithinDailyCap(scriptCost);
     end(`${script.words} words via ${script.backend}`);
 
     // 5. text to speech

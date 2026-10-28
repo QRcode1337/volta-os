@@ -15,6 +15,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { cached } from './cache';
+import { HttpError } from '../http-error';
 import { redactSecrets } from '../redact';
 import { isEvicted } from '../icloud';
 import type { ActionCounts, ActionItem, ActionLink, ActionsResponse, ActionsSource, ActionStatus } from '@/components/tasks/types';
@@ -235,12 +236,6 @@ const WIKI_ROOT = path.join(OPENCLAW_ROOT, 'wiki');
 const NOTE_RE = /^wiki\/[\w./-]+\.md$/;
 const NOTE_MAX_BYTES = 512 * 1024;
 
-export class NoteError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-  }
-}
-
 export interface WikiNote {
   /** Display path, home-relative. */
   path: string;
@@ -251,17 +246,17 @@ export interface WikiNote {
 
 /** `rel` is the repo-relative form the board emits (`wiki/main/concepts/x.md`); only files under ~/.openclaw/wiki. */
 export async function readWikiNote(rel: string): Promise<WikiNote> {
-  if (!NOTE_RE.test(rel) || rel.split('/').includes('..')) throw new NoteError(400, 'path must look like wiki/…/note.md');
+  if (!NOTE_RE.test(rel) || rel.split('/').includes('..')) throw new HttpError('path must look like wiki/…/note.md', 400);
   let real: string;
   try {
     real = await fs.realpath(path.join(OPENCLAW_ROOT, rel));
   } catch {
-    throw new NoteError(404, `~/.openclaw/${rel} does not exist`);
+    throw new HttpError(`~/.openclaw/${rel} does not exist`, 404);
   }
-  if (!real.startsWith((await fs.realpath(WIKI_ROOT)) + path.sep)) throw new NoteError(400, 'path is outside ~/.openclaw/wiki');
+  if (!real.startsWith((await fs.realpath(WIKI_ROOT)) + path.sep)) throw new HttpError('path is outside ~/.openclaw/wiki', 400);
   const st = await fs.stat(real);
-  if (!st.isFile()) throw new NoteError(404, `~/.openclaw/${rel} is not a file`);
-  if (isEvicted(st)) throw new NoteError(409, `~/.openclaw/${rel} is in iCloud only (not downloaded to the Mac)`);
+  if (!st.isFile()) throw new HttpError(`~/.openclaw/${rel} is not a file`, 404);
+  if (isEvicted(st)) throw new HttpError(`~/.openclaw/${rel} is in iCloud only (not downloaded to the Mac)`, 409);
   const fh = await fs.open(real, 'r');
   try {
     const buf = Buffer.alloc(Math.min(st.size, NOTE_MAX_BYTES));

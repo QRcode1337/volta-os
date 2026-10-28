@@ -1,11 +1,15 @@
 import { getPage } from '@/lib/server/notion/pages';
-import { allowForce, BadRequest, notionJson } from '@/lib/server/notion/route';
+import { allowForce, notionHttp } from '@/lib/server/notion/route';
+import { HttpError, route } from '@/lib/server/route-helpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export const GET = notionJson(async (req) => {
-  const id = (new URL(req.url).searchParams.get('id') ?? '').replace(/-/g, '').toLowerCase();
-  if (!/^[0-9a-f]{32}$/.test(id)) throw new BadRequest('id must be a 32-character Notion page id.');
-  return getPage(id, { force: allowForce(req, id) });
-});
+export const GET = route(
+  ({ req, url }) => {
+    const id = (url.searchParams.get('id') ?? '').replace(/-/g, '').toLowerCase();
+    if (!/^[0-9a-f]{32}$/.test(id)) throw new HttpError('id must be a 32-character Notion page id.', 400);
+    return getPage(id, { force: allowForce(req, id) }).catch(notionHttp);
+  },
+  { tag: 'volta notion api' },
+);

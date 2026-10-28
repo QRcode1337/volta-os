@@ -4,8 +4,8 @@
 import fs from 'node:fs';
 import { Readable } from 'node:stream';
 import { NextResponse } from 'next/server';
-import { rejectNonLocalRead } from '@/lib/server/local-only';
-import { assertLocal, fail, resolveTrack } from '@/lib/server/music';
+import { route } from '@/lib/server/route-helpers';
+import { assertLocal, resolveTrack } from '@/lib/server/music';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,32 +27,29 @@ function parseRange(header: string, size: number): { start: number; end: number 
   return { start, end };
 }
 
-export async function GET(req: Request) {
-  const denied = rejectNonLocalRead(req);
-  if (denied) return denied;
-  try {
-    const r = await resolveTrack(new URL(req.url).searchParams.get('id') ?? '');
-    assertLocal(r);
-    const base = {
-      'Content-Type': r.mime,
-      'Accept-Ranges': 'bytes',
-      'Cache-Control': 'private, no-cache',
-      ETag: `"${r.size}-${Math.round(r.mtimeMs)}"`,
-      'X-Content-Type-Options': 'nosniff',
-      'Content-Disposition': `inline; filename="${r.track.fileName.replace(/[^\w.-]+/g, '_')}"`,
-    };
-    const rangeHeader = req.headers.get('range');
-    const range = rangeHeader ? parseRange(rangeHeader, r.size) : null;
-    if (range === 'invalid') return new NextResponse(null, { status: 416, headers: { ...base, 'Content-Range': `bytes */${r.size}` } });
-    if (r.size === 0) return new NextResponse(null, { status: 200, headers: { ...base, 'Content-Length': '0' } });
-    const [start, end] = range ? [range.start, range.end] : [0, r.size - 1];
-    const nodeStream = fs.createReadStream(r.path, { start, end });
-    req.signal.addEventListener('abort', () => nodeStream.destroy());
-    return new NextResponse(Readable.toWeb(nodeStream) as ReadableStream, {
-      status: range ? 206 : 200,
-      headers: { ...base, 'Content-Length': String(end - start + 1), ...(range ? { 'Content-Range': `bytes ${start}-${end}/${r.size}` } : {}) },
-    });
-  } catch (err) {
-    return fail(err);
-  }
-}
+export const GET = route(
+  async ({ req, url }) => {
+    const r = await resolveTrack(url.searchParams.get('id') ?? '');
+      assertLocal(r);
+      const base = {
+        'Content-Type': r.mime,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'private, no-cache',
+        ETag: `"${r.size}-${Math.round(r.mtimeMs)}"`,
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Disposition': `inline; filename="${r.track.fileName.replace(/[^\w.-]+/g, '_')}"`,
+      };
+      const rangeHeader = req.headers.get('range');
+      const range = rangeHeader ? parseRange(rangeHeader, r.size) : null;
+      if (range === 'invalid') return new NextResponse(null, { status: 416, headers: { ...base, 'Content-Range': `bytes */${r.size}` } });
+      if (r.size === 0) return new NextResponse(null, { status: 200, headers: { ...base, 'Content-Length': '0' } });
+      const [start, end] = range ? [range.start, range.end] : [0, r.size - 1];
+      const nodeStream = fs.createReadStream(r.path, { start, end });
+      req.signal.addEventListener('abort', () => nodeStream.destroy());
+      return new NextResponse(Readable.toWeb(nodeStream) as ReadableStream, {
+        status: range ? 206 : 200,
+        headers: { ...base, 'Content-Length': String(end - start + 1), ...(range ? { 'Content-Range': `bytes ${start}-${end}/${r.size}` } : {}) },
+      });
+  },
+  { tag: 'music api' },
+);

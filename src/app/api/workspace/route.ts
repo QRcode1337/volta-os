@@ -1,9 +1,8 @@
-import { NextResponse } from 'next/server';
 import fs from 'node:fs/promises';
 import type { BrainNode, Department, EffortLevel, ModelTier, RoutineItem, SkillCardItem, WorkspaceResponse } from '@/types/os';
 import { ARTIFACTS, BRAIN_EDGES, BRAIN_NODES, EFFORT_LEVELS, MODEL_TIERS, ROUTINES, SKILLS, TOTAL_BRAIN_FILES } from '@/lib/mock-data';
 import { listWorkspaceFiles, readWorkspaceFile, resolveWorkspacePath } from '@/lib/server/workspace';
-import { rejectNonLocalRead } from '@/lib/server/local-only';
+import { HttpError, route } from '@/lib/server/route-helpers';
 import { parseFrontmatter } from './frontmatter';
 
 export const runtime = 'nodejs';
@@ -107,15 +106,10 @@ async function fileStats(files: string[]): Promise<Map<string, { size: number; m
 }
 
 /** GET /api/workspace → WorkspaceResponse (real ./workspace scan merged with the procedural Second Brain). */
-export async function GET(req: Request) {
-  const denied = rejectNonLocalRead(req);
-  if (denied) return denied;
-  let files: string[];
-  try {
-    files = await listWorkspaceFiles();
-  } catch (e) {
-    return NextResponse.json({ error: `Workspace scan failed: ${(e as Error).message}` }, { status: 500 });
-  }
+export const GET = route(async () => {
+  const files = await listWorkspaceFiles().catch((e: Error) => {
+    throw new HttpError(`Workspace scan failed: ${e.message}`, 500);
+  });
   const onDisk = new Set(files);
   const [stats, skills, routines] = await Promise.all([fileStats(files), loadSkills(onDisk), loadRoutines(onDisk)]);
   const skillById = new Map(skills.map((s) => [s.id, s]));
@@ -166,5 +160,5 @@ export async function GET(req: Request) {
     routines,
     artifacts: ARTIFACTS,
   };
-  return NextResponse.json(res, { headers: { 'Cache-Control': 'no-store' } });
-}
+  return res;
+});

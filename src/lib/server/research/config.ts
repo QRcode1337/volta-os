@@ -12,15 +12,6 @@ const ID_RE = /^[a-z0-9][a-z0-9-]{0,40}$/;
 
 export const expandHome = (p: string) => (p === '~' ? HOME : p.startsWith('~/') ? path.join(HOME, p.slice(2)) : p);
 
-export class ResearchError extends Error {
-  constructor(
-    message: string,
-    public status = 400,
-  ) {
-    super(message);
-  }
-}
-
 export interface RootCfg {
   id: string;
   label: string;

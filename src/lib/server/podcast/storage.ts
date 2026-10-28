@@ -1,4 +1,5 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -7,16 +8,6 @@ import { MIN_FREE_BYTES, MOUNT_POINT, PODCAST_ROOT } from './config';
 import { isDate } from './util';
 
 const GiB = 1024 ** 3;
-
-export class PodcastError extends Error {
-  constructor(
-    message: string,
-    public status = 500,
-  ) {
-    super(message);
-    this.name = 'PodcastError';
-  }
-}
 
 export type StorageState = { ok: true; root: string; freeBytes: number } | { ok: false; root: string; reason: string };
 
@@ -43,7 +34,7 @@ export async function checkStorage(): Promise<StorageState> {
 /** Throws a clear 507 when storage is unusable. */
 export async function requireStorage(): Promise<{ root: string; freeBytes: number }> {
   const s = await checkStorage();
-  if (!s.ok) throw new PodcastError(s.reason, 507);
+  if (!s.ok) throw new HttpError(s.reason, 507);
   return s;
 }
 

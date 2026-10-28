@@ -1,9 +1,10 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import type { GenItemRecord, GenRequest, ImageRequest, JobState, MediaKind, MediaProvider, Quote, ShotBatchRequest, VideoRequest, VoiceRequest } from '@/types/media';
 import { assertWithinDailyCap } from './budget';
-import { MediaError, errorMessage } from './config';
+import { errorMessage } from './config';
 import { getQuota, synthesize } from './elevenlabs';
 import { registry, rateLimit } from './quotes';
 import { allocOutput, appendManifest, mimeForExt, requireStorage, sniffImageExt } from './storage';
@@ -28,12 +29,12 @@ export function getJob(id: string): JobState | null {
  * before the first provider call.
  */
 export async function startGeneration(quoteId: unknown): Promise<{ jobId: string }> {
-  if (typeof quoteId !== 'string' || !/^q_[0-9a-f]{24}$/.test(quoteId)) throw new MediaError('quoteId is required (POST /api/media/quote first).', 400);
-  if (registry.inflight) throw new MediaError('A generation is already running; wait for it to finish.', 429);
+  if (typeof quoteId !== 'string' || !/^q_[0-9a-f]{24}$/.test(quoteId)) throw new HttpError('quoteId is required (POST /api/media/quote first).', 400);
+  if (registry.inflight) throw new HttpError('A generation is already running; wait for it to finish.', 429);
   const stored = registry.quotes.get(quoteId);
-  if (!stored) throw new MediaError('Unknown quote. Request a new estimate.', 404);
-  if (stored.used) throw new MediaError('This quote was already used. Request a new estimate.', 409);
-  if (stored.expiresAt < Date.now()) throw new MediaError('Quote expired. Request a new estimate.', 410);
+  if (!stored) throw new HttpError('Unknown quote. Request a new estimate.', 404);
+  if (stored.used) throw new HttpError('This quote was already used. Request a new estimate.', 409);
+  if (stored.expiresAt < Date.now()) throw new HttpError('Quote expired. Request a new estimate.', 410);
 
   const jobId = `j_${randomBytes(8).toString('hex')}`;
   registry.inflight = jobId; // sync, before any await
@@ -44,9 +45,9 @@ export async function startGeneration(quoteId: unknown): Promise<{ jobId: string
     await assertWithinDailyCap(stored.quote.estUsd);
     if (stored.req.kind === 'voice') {
       const quota = await getQuota();
-      if ((stored.credits ?? 0) > quota.remaining) throw new MediaError('Not enough ElevenLabs credits left for this request.', 422);
+      if ((stored.credits ?? 0) > quota.remaining) throw new HttpError('Not enough ElevenLabs credits left for this request.', 422);
     }
-    if (stored.used || stored.expiresAt < Date.now()) throw new MediaError('Quote no longer valid.', 409);
+    if (stored.used || stored.expiresAt < Date.now()) throw new HttpError('Quote no longer valid.', 409);
     stored.used = true; // consumed before spending
   } catch (err) {
     registry.inflight = null;
@@ -157,7 +158,7 @@ async function runVideo(job: JobState, r: VideoRequest, estUsd: number, provider
   const started = Date.now();
   while (pending.size) {
     if (Date.now() - started > VIDEO_MAX_MS) {
-      throw new MediaError(`Video still rendering after 15 min. xAI request id(s) (charged on completion): ${[...pending].join(', ')}`, 504);
+      throw new HttpError(`Video still rendering after 15 min. xAI request id(s) (charged on completion): ${[...pending].join(', ')}`, 504);
     }
     await sleep(POLL_MS);
     job.progress = `rendering ${ids.length - pending.size}/${ids.length} done (${Math.round((Date.now() - started) / 1000)}s)`;
@@ -165,7 +166,7 @@ async function runVideo(job: JobState, r: VideoRequest, estUsd: number, provider
       const res = await pollVideo(rid);
       if (res.status === 'pending') continue;
       pending.delete(rid);
-      if (res.status === 'failed') throw new MediaError(`xAI video ${rid} failed: ${res.reason}`, 502);
+      if (res.status === 'failed') throw new HttpError(`xAI video ${rid} failed: ${res.reason}`, 502);
       job.progress = 'downloading video';
       await save(job, { kind: 'video', provider, model: r.model, prompt: r.prompt, params: { ...params, requestId: rid }, ext: 'mp4', estUsd: each, write: (f) => downloadVideoTo(res.url, f) });
     }
@@ -266,5 +267,5 @@ async function runShots(job: JobState, r: ShotBatchRequest, estUsd: number) {
 
   await Promise.all([pollXai(), runOmni()]);
   job.progress = `${done}/${total} shots done`;
-  if (failures.length) throw new MediaError(`${failures.length} of ${total} shot(s) failed: ${failures.join(' | ')}`, 502);
+  if (failures.length) throw new HttpError(`${failures.length} of ${total} shot(s) failed: ${failures.join(' | ')}`, 502);
 }

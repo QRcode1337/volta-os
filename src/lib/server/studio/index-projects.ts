@@ -4,9 +4,9 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { CompositionInfo, GenerationInput, MediaClass, MusicInput, StudioOutput, StudioProject } from '@/types/studio';
+import { HttpError } from '../http-error';
 import { readManifest, resolveFile } from '../media/storage';
-import { MediaError } from '../media/config';
-import { MusicError, assertLocal, getLibrary, musicInputs, resolveTrack } from '../music';
+import { assertLocal, getLibrary, musicInputs, resolveTrack } from '../music';
 import { brctlCommand } from '@/components/music/format';
 import {
   getProject,
@@ -17,7 +17,7 @@ import {
   toPublicPreset,
   type Project,
 } from './config';
-import { COMPOSITIONS_CACHE, RENDERS_ROOT, STUDIO_ROOT, StudioError, isInside, projectRendersDir, windsorMounted } from './storage';
+import { COMPOSITIONS_CACHE, RENDERS_ROOT, STUDIO_ROOT, isInside, projectRendersDir, windsorMounted } from './storage';
 import { isEvicted } from '@/lib/server/icloud';
 
 // Project index: recent outputs (with ffprobe), compositions, and the id -> path registry behind /api/studio/file.
@@ -289,31 +289,31 @@ export interface ResolvedFile {
 
 /** id -> verified file. The path must resolve (symlinks and `..` included) inside a known project's folders or the Windsor studio root. */
 export async function resolveOutputFile(id: string): Promise<ResolvedFile> {
-  if (!/^o_[0-9a-f]{16}$/.test(id)) throw new StudioError('Bad file id.', 400);
+  if (!/^o_[0-9a-f]{16}$/.test(id)) throw new HttpError('Bad file id.', 400);
   let ent = R.files.get(id);
   if (!ent) {
     await scanAllThrottled();
     ent = R.files.get(id);
   }
-  if (!ent) throw new StudioError('Unknown file (it may have moved; refresh the project).', 404);
+  if (!ent) throw new HttpError('Unknown file (it may have moved; refresh the project).', 404);
   const project = getProject(ent.projectId);
-  if (!project) throw new StudioError('Project is no longer in the config.', 404);
+  if (!project) throw new HttpError('Project is no longer in the config.', 404);
   let real: string;
   try {
     real = await fs.realpath(ent.path);
   } catch {
-    throw new StudioError('File is missing (is the drive mounted?).', 404);
+    throw new HttpError('File is missing (is the drive mounted?).', 404);
   }
   let ok = await isInside(real, STUDIO_ROOT);
   for (const root of allowedRoots(project)) {
     if (ok) break;
     ok = await isInside(real, root);
   }
-  if (!ok) throw new StudioError('Path is outside the known project folders.', 403);
+  if (!ok) throw new HttpError('Path is outside the known project folders.', 403);
   const ext = path.extname(real).toLowerCase();
-  if (!MEDIA_EXT[ext]) throw new StudioError('Not a servable media type.', 415);
+  if (!MEDIA_EXT[ext]) throw new HttpError('Not a servable media type.', 415);
   const st = await fs.stat(real);
-  if (!st.isFile()) throw new StudioError('Not a file.', 404);
+  if (!st.isFile()) throw new HttpError('Not a file.', 404);
   return {
     id,
     path: real,
@@ -362,7 +362,7 @@ export async function musicStudioInputs(): Promise<MusicInput[]> {
 
 /** File arg value (an `o_`, `g_` or `m_` id) -> verified path. The client never supplies paths. */
 export async function resolveInput(id: string, kinds: MediaClass[]): Promise<{ path: string; media: MediaClass; name: string; probe: Probe }> {
-  if (typeof id !== 'string') throw new StudioError('File id must be a string.', 400);
+  if (typeof id !== 'string') throw new HttpError('File id must be a string.', 400);
   let file: string;
   let media: MediaClass;
   let name: string;
@@ -378,22 +378,17 @@ export async function resolveInput(id: string, kinds: MediaClass[]): Promise<{ p
       size = r.size;
       mtimeMs = r.mtimeMs;
     } catch (err) {
-      if (err instanceof MusicError) throw new StudioError(err.status === 409 ? `${err.message} (${String(err.extra.command ?? '')})` : err.message, err.status);
+      if (err instanceof HttpError && err.status === 409) throw new HttpError(`${err.message} (${String(err.extra?.command ?? '')})`, 409, err.extra);
       throw err;
     }
   } else if (id.startsWith('g_')) {
-    try {
-      const { rec, file: f, size: s } = await resolveFile(id.slice(2));
-      if (rec.kind !== 'video' && rec.kind !== 'voice') throw new StudioError('Only Generations video and voice items can be used here.', 400);
-      file = f;
-      media = rec.kind === 'video' ? 'video' : 'audio';
-      name = path.basename(f);
-      size = s;
-      mtimeMs = (await fs.stat(f)).mtimeMs;
-    } catch (err) {
-      if (err instanceof MediaError) throw new StudioError(err.message, err.status);
-      throw err;
-    }
+    const { rec, file: f, size: s } = await resolveFile(id.slice(2));
+    if (rec.kind !== 'video' && rec.kind !== 'voice') throw new HttpError('Only Generations video and voice items can be used here.', 400);
+    file = f;
+    media = rec.kind === 'video' ? 'video' : 'audio';
+    name = path.basename(f);
+    size = s;
+    mtimeMs = (await fs.stat(f)).mtimeMs;
   } else {
     const r = await resolveOutputFile(id);
     file = r.path;
@@ -401,9 +396,9 @@ export async function resolveInput(id: string, kinds: MediaClass[]): Promise<{ p
     name = r.name;
     size = r.size;
     mtimeMs = r.mtimeMs;
-    if (r.offline) throw new StudioError(`${r.name} is an iCloud placeholder (not downloaded to this Mac). Open it in Finder to download it first.`, 409);
+    if (r.offline) throw new HttpError(`${r.name} is an iCloud placeholder (not downloaded to this Mac). Open it in Finder to download it first.`, 409);
   }
-  if (!kinds.includes(media)) throw new StudioError(`${name} is ${media}, but this input needs ${kinds.join(' or ')}.`, 400);
+  if (!kinds.includes(media)) throw new HttpError(`${name} is ${media}, but this input needs ${kinds.join(' or ')}.`, 400);
   return { path: file, media, name, probe: await probeFile(file, size, mtimeMs) };
 }
 

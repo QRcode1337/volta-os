@@ -1,4 +1,4 @@
-import { localJson } from '@/lib/server/route-helpers';
+import { route } from '@/lib/server/route-helpers';
 import { getUsageSummary } from '@/lib/server/sources/transcripts';
 import type { UsageSummary } from '@/types/sources';
 import { jevTelemetry } from '../jev-router/jev';
@@ -18,7 +18,7 @@ interface CacheStatus {
 }
 
 /** GET /api/cache-status → CacheStatus (no client reads this today; /api/usage is the real-data source). */
-export const GET = localJson(async (): Promise<CacheStatus> => {
+export const GET = route(async (): Promise<CacheStatus> => {
   const usage = await getUsageSummary();
   const t = jevTelemetry();
   return {

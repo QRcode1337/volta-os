@@ -2,6 +2,7 @@ import 'server-only';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { StudioStorage } from '@/types/studio';
+import { HttpError } from '../http-error';
 
 // VOLTA Studio writes ONLY to the Windsor drive by default (renders, logs, job history). Nothing goes to the boot disk.
 export const STUDIO_MOUNT = '/Volumes/Windsor';
@@ -12,17 +13,6 @@ export const JOBS_FILE = `${STUDIO_ROOT}/jobs.jsonl`;
 export const COMPOSITIONS_CACHE = `${STUDIO_ROOT}/compositions-cache.json`;
 export const MIN_FREE_BYTES = 3 * 1024 ** 3;
 const GiB = 1024 ** 3;
-
-/** Error with an HTTP status that route handlers pass straight to the client (text is already safe to show). */
-export class StudioError extends Error {
-  constructor(
-    message: string,
-    public status = 500,
-  ) {
-    super(message);
-    this.name = 'StudioError';
-  }
-}
 
 /** Is Windsor a real mount (not a leftover directory on the boot disk)? */
 export async function windsorMounted(): Promise<boolean> {
@@ -53,12 +43,12 @@ export async function checkStudioStorage(): Promise<StudioStorage> {
 /** Throws a clear 507 when Windsor is unusable. */
 export async function requireStudioStorage(): Promise<void> {
   const s = await checkStudioStorage();
-  if (!s.ok) throw new StudioError(s.reason ?? 'Windsor is unavailable.', 507);
+  if (!s.ok) throw new HttpError(s.reason ?? 'Windsor is unavailable.', 507);
 }
 
 /** Create the studio folders (only when Windsor is really mounted). */
 export async function ensureStudioDirs(projectId?: string): Promise<void> {
-  if (!(await windsorMounted())) throw new StudioError(`${STUDIO_MOUNT} is not mounted.`, 507);
+  if (!(await windsorMounted())) throw new HttpError(`${STUDIO_MOUNT} is not mounted.`, 507);
   await fs.mkdir(LOGS_DIR, { recursive: true });
   await fs.mkdir(projectId ? path.join(RENDERS_ROOT, projectId) : RENDERS_ROOT, { recursive: true });
 }

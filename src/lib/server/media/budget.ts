@@ -1,7 +1,8 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import type { DailySpend } from '@/types/media';
 import { listEpisodes } from '@/lib/server/podcast/storage';
-import { DAILY_CAP_USD, MAX_REQUEST_USD, MediaError } from './config';
+import { DAILY_CAP_USD, MAX_REQUEST_USD } from './config';
 import { round6 } from './pricing';
 import { localDate, todaySpendUsd } from './storage';
 
@@ -44,11 +45,11 @@ export async function assertWithinDailyCap(estUsd: number): Promise<DailySpend> 
     s = await dailySpend();
   } catch (err) {
     if (estUsd <= 0) throw err;
-    throw new MediaError(`Cannot read today's spend ledger, so paid generation is paused: ${(err as Error).message}`, 503);
+    throw new HttpError(`Cannot read today's spend ledger, so paid generation is paused: ${(err as Error).message}`, 503);
   }
   if (estUsd > 0 && s.totalUsd + estUsd > s.capUsd + 1e-9) {
     const parts = s.podcastUsd > 0 ? ` (Generations $${s.generationsUsd.toFixed(2)} + podcast TTS $${s.podcastUsd.toFixed(2)})` : '';
-    throw new MediaError(
+    throw new HttpError(
       `Daily spend cap: $${s.totalUsd.toFixed(2)} spent today${parts} + this request's est. $${estUsd.toFixed(2)} would exceed the $${s.capUsd.toFixed(2)} daily cap ($${s.remainingUsd.toFixed(2)} left). Try a smaller request or wait until tomorrow (set VOLTA_GEN_DAILY_USD to change the cap).`,
       402,
     );

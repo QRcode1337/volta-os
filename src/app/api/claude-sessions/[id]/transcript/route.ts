@@ -1,5 +1,6 @@
+import { HttpError, intParam, route } from '@/lib/server/route-helpers';
 import { getTranscriptPage, SESSION_ID_RE } from '@/lib/server/sources/sessions';
-import { BadRequest, intParam, sessionRoute } from '../../_shared';
+import { sessionIdOf } from '../../_shared';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,13 +10,18 @@ export const dynamic = 'force-dynamic';
  * A page of the readable transcript (offset=-1 → last page). Tool calls are compact rows with their
  * (truncated) results attached; secrets are masked.
  */
-export const GET = sessionRoute((req, id) => {
-  const sp = new URL(req.url).searchParams;
-  const agent = sp.get('agent') || null;
-  if (agent && !SESSION_ID_RE.test(agent)) throw new BadRequest('invalid agent');
-  return getTranscriptPage(id, {
-    agentId: agent,
-    offset: intParam(sp.get('offset'), 'offset', 0, -1, 1_000_000),
-    limit: intParam(sp.get('limit'), 'limit', 120, 1, 400),
-  });
-});
+export const GET = route<{ id: string }>(
+  async ({ params, url }) => {
+    const id = sessionIdOf(params.id);
+    const agent = url.searchParams.get('agent') || null;
+    if (agent && !SESSION_ID_RE.test(agent)) throw new HttpError('invalid agent', 400);
+    const page = await getTranscriptPage(id, {
+      agentId: agent,
+      offset: intParam(url, 'offset', { min: -1, max: 1_000_000, fallback: 0 }),
+      limit: intParam(url, 'limit', { min: 1, max: 400, fallback: 120 }),
+    });
+    if (!page) throw new HttpError('session not found', 404);
+    return page;
+  },
+  { tag: 'volta sessions' },
+);

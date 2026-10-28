@@ -1,7 +1,8 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import { randomBytes } from 'node:crypto';
 import type { GenRequest, ImageRequest, MediaProvider, Quote, ShotBatchRequest, ShotItem, VideoModelInfo, VideoRequest, VoiceRequest } from '@/types/media';
-import { MAX_REQUEST_USD, MediaError, QUOTE_TTL_MS } from './config';
+import { MAX_REQUEST_USD, QUOTE_TTL_MS } from './config';
 import { assertWithinDailyCap } from './budget';
 import { elevenUsdPerCredit, round6 } from './pricing';
 import { requireStorage, todayDir } from './storage';
@@ -51,7 +52,7 @@ export const registry: Registry = (g.__voltaMedia ??= { quotes: new Map(), recen
 export function rateLimit(events: number[], max: number, windowMs: number, what: string): void {
   const now = Date.now();
   while (events.length && now - events[0] > windowMs) events.shift();
-  if (events.length >= max) throw new MediaError(`Too many ${what} requests; wait a few seconds.`, 429);
+  if (events.length >= max) throw new HttpError(`Too many ${what} requests; wait a few seconds.`, 429);
   events.push(now);
 }
 
@@ -61,22 +62,22 @@ function prune() {
 }
 
 const str = (v: unknown, max: number, field: string): string => {
-  if (typeof v !== 'string' || !v.trim()) throw new MediaError(`${field} is required.`, 400);
-  if (v.length > max) throw new MediaError(`${field} is too long (max ${max} characters).`, 400);
+  if (typeof v !== 'string' || !v.trim()) throw new HttpError(`${field} is required.`, 400);
+  if (v.length > max) throw new HttpError(`${field} is too long (max ${max} characters).`, 400);
   return v.trim();
 };
 const int = (v: unknown, lo: number, hi: number, field: string): number => {
-  if (typeof v !== 'number' || !Number.isInteger(v) || v < lo || v > hi) throw new MediaError(`${field} must be a whole number from ${lo} to ${hi}.`, 400);
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < lo || v > hi) throw new HttpError(`${field} must be a whole number from ${lo} to ${hi}.`, 400);
   return v;
 };
 const unit = (v: unknown, field: string): number => {
-  if (typeof v !== 'number' || !(v >= 0 && v <= 1)) throw new MediaError(`${field} must be between 0 and 1.`, 400);
+  if (typeof v !== 'number' || !(v >= 0 && v <= 1)) throw new HttpError(`${field} must be between 0 and 1.`, 400);
   return Math.round(v * 100) / 100;
 };
 
 export async function createQuote(raw: unknown): Promise<Quote> {
   rateLimit(registry.recentQuotes, 30, 60_000, 'quote');
-  if (!raw || typeof raw !== 'object') throw new MediaError('Body must be a JSON object.', 400);
+  if (!raw || typeof raw !== 'object') throw new HttpError('Body must be a JSON object.', 400);
   const b = raw as Record<string, unknown>;
   const storage = await requireStorage(); // refuse early: no point quoting what can't be saved
 
@@ -94,7 +95,7 @@ export async function createQuote(raw: unknown): Promise<Quote> {
     provider = 'xai';
     const models = await listImageModels();
     const m = models.find((x) => x.id === b.model);
-    if (!m) throw new MediaError(`Unknown image model "${String(b.model)}". Available: ${models.map((x) => x.id).join(', ') || 'none'}.`, 400);
+    if (!m) throw new HttpError(`Unknown image model "${String(b.model)}". Available: ${models.map((x) => x.id).join(', ') || 'none'}.`, 400);
     const r: ImageRequest = {
       kind: 'image',
       model: m.id,
@@ -106,7 +107,7 @@ export async function createQuote(raw: unknown): Promise<Quote> {
     if (m.tiers) {
       if (typeof b.quality === 'string' || typeof b.resolution === 'string') {
         const tier = m.tiers.find((t) => t.quality === b.quality && t.resolution === b.resolution);
-        if (!tier) throw new MediaError(`No "${String(b.quality)}" / "${String(b.resolution)}" price tier for ${m.id}.`, 400);
+        if (!tier) throw new HttpError(`No "${String(b.quality)}" / "${String(b.resolution)}" price tier for ${m.id}.`, 400);
         r.quality = tier.quality as ImageRequest['quality'];
         r.resolution = tier.resolution;
         unitUsd = tier.priceUsd;
@@ -122,10 +123,10 @@ export async function createQuote(raw: unknown): Promise<Quote> {
   } else if (b.kind === 'video') {
     const models = await videoModels();
     const m = models.find((x) => x.id === b.model);
-    if (!m) throw new MediaError(`Unknown video model "${String(b.model)}". Available: ${models.map((x) => x.id).join(', ') || 'none'}.`, 400);
+    if (!m) throw new HttpError(`Unknown video model "${String(b.model)}". Available: ${models.map((x) => x.id).join(', ') || 'none'}.`, 400);
     provider = m.provider;
     const resolution = typeof b.resolution === 'string' && m.resolutions.includes(b.resolution) ? b.resolution : null;
-    if (!resolution) throw new MediaError(`Resolution must be one of ${m.resolutions.join(', ')} for ${m.id}.`, 400);
+    if (!resolution) throw new HttpError(`Resolution must be one of ${m.resolutions.join(', ')} for ${m.id}.`, 400);
     const r: VideoRequest = {
       kind: 'video',
       model: m.id,
@@ -144,8 +145,8 @@ export async function createQuote(raw: unknown): Promise<Quote> {
     breakdown = `${count} clip${count > 1 ? 's' : ''} x ${secs}s${m.maxAutoSeconds ? ' max' : ''} x $${perSec.toFixed(2)}/s (${resolution})`;
     if (m.maxAutoSeconds) warnings.push(`${m.id} picks the clip length itself (3-${m.maxAutoSeconds}s); the estimate assumes the maximum.`);
   } else if (b.kind === 'shots') {
-    if (!Array.isArray(b.items) || !b.items.length) throw new MediaError('items must be a non-empty list of shots.', 400);
-    if (b.items.length > MAX_SHOTS_PER_BATCH) throw new MediaError(`At most ${MAX_SHOTS_PER_BATCH} shots per request; generate the rest in another batch.`, 400);
+    if (!Array.isArray(b.items) || !b.items.length) throw new HttpError('items must be a non-empty list of shots.', 400);
+    if (b.items.length > MAX_SHOTS_PER_BATCH) throw new HttpError(`At most ${MAX_SHOTS_PER_BATCH} shots per request; generate the rest in another batch.`, 400);
     const models = await videoModels();
     const aspect = VIDEO_ASPECTS.includes(b.aspect as never) ? (b.aspect as string) : '16:9';
     const items: ShotItem[] = [];
@@ -154,12 +155,12 @@ export async function createQuote(raw: unknown): Promise<Quote> {
       const it = (raw ?? {}) as Record<string, unknown>;
       const label = `Shot ${i + 1}`;
       const m = models.find((x) => x.id === it.model);
-      if (!m) throw new MediaError(`${label}: unknown video model "${String(it.model)}".`, 400);
-      if (m.aspects && !m.aspects.includes(aspect)) throw new MediaError(`${label}: ${m.id} only supports ${m.aspects.join(' / ')} (batch aspect is ${aspect}).`, 400);
+      if (!m) throw new HttpError(`${label}: unknown video model "${String(it.model)}".`, 400);
+      if (m.aspects && !m.aspects.includes(aspect)) throw new HttpError(`${label}: ${m.id} only supports ${m.aspects.join(' / ')} (batch aspect is ${aspect}).`, 400);
       const resolution = typeof it.resolution === 'string' && m.resolutions.includes(it.resolution) ? it.resolution : null;
-      if (!resolution) throw new MediaError(`${label}: resolution must be one of ${m.resolutions.join(', ')} for ${m.id}.`, 400);
+      if (!resolution) throw new HttpError(`${label}: resolution must be one of ${m.resolutions.join(', ')} for ${m.id}.`, 400);
       const shotId = str(it.shotId, 40, `${label} id`);
-      if (!/^[\w-]+$/.test(shotId)) throw new MediaError(`${label}: bad shot id.`, 400);
+      if (!/^[\w-]+$/.test(shotId)) throw new HttpError(`${label}: bad shot id.`, 400);
       const item: ShotItem = {
         shotId,
         tier: int(it.tier, 0, 4, `${label} tier`),
@@ -190,9 +191,9 @@ export async function createQuote(raw: unknown): Promise<Quote> {
     provider = 'elevenlabs';
     const [models, voices, quota] = await Promise.all([listTtsModels(), listVoices(), getQuota()]);
     const m = models.find((x) => x.id === b.model);
-    if (!m) throw new MediaError(`Unknown voice model "${String(b.model)}".`, 400);
+    if (!m) throw new HttpError(`Unknown voice model "${String(b.model)}".`, 400);
     const voice = voices.find((v) => v.id === b.voiceId);
-    if (!voice) throw new MediaError('Unknown voice.', 400);
+    if (!voice) throw new HttpError('Unknown voice.', 400);
     const text = str(b.text, m.maxChars, 'Text');
     let stability = unit(b.stability, 'Stability');
     if (m.id.startsWith('eleven_v3')) {
@@ -203,7 +204,7 @@ export async function createQuote(raw: unknown): Promise<Quote> {
     const r: VoiceRequest = { kind: 'voice', model: m.id, voiceId: voice.id, text, stability, similarity: unit(b.similarity, 'Similarity') };
     credits = Math.ceil(text.length * m.creditMultiplier);
     if (credits > quota.remaining) {
-      throw new MediaError(`Needs ${credits.toLocaleString()} credits but only ${quota.remaining.toLocaleString()} remain this period.`, 422);
+      throw new HttpError(`Needs ${credits.toLocaleString()} credits but only ${quota.remaining.toLocaleString()} remain this period.`, 422);
     }
     creditsRemainingAfter = quota.remaining - credits;
     req = r;
@@ -211,12 +212,12 @@ export async function createQuote(raw: unknown): Promise<Quote> {
     estUsd = credits * elevenUsdPerCredit(quota.tier);
     breakdown = `${text.length.toLocaleString()} chars x ${m.creditMultiplier} = ${credits.toLocaleString()} credits of ${quota.remaining.toLocaleString()} left (${quota.tier} plan${estUsd === 0 ? ', no overage' : ''})`;
   } else {
-    throw new MediaError('kind must be image, video, shots or voice.', 400);
+    throw new HttpError('kind must be image, video, shots or voice.', 400);
   }
 
   estUsd = round6(estUsd);
   if (estUsd > MAX_REQUEST_USD) {
-    throw new MediaError(`Estimated $${estUsd.toFixed(2)} is over the $${MAX_REQUEST_USD} per-request safety cap. Reduce count, duration or resolution${b.kind === 'shots' ? ', or split the shots into smaller batches' : ''}.`, 422);
+    throw new HttpError(`Estimated $${estUsd.toFixed(2)} is over the $${MAX_REQUEST_USD} per-request safety cap. Reduce count, duration or resolution${b.kind === 'shots' ? ', or split the shots into smaller batches' : ''}.`, 422);
   }
   const spend = await assertWithinDailyCap(estUsd);
   if (estUsd > 0 && spend.totalUsd + estUsd > spend.capUsd * 0.8) {

@@ -1,9 +1,9 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { TrackMeta } from '@/components/music/types';
 import { loadConfig } from './config';
-import { MusicError } from './errors';
 
 // Per-track notes: lyrics, credits, Suno link, mood tags, BPM, key. One JSON file on the Windsor drive:
 //   { version: 1, updatedAt, tracks: { "<rootId>/<relative path>": TrackMeta } }
@@ -68,29 +68,29 @@ export async function readMeta(): Promise<MetaStore> {
 
 function cleanStrings(v: unknown, field: string, maxItems: number, maxLen: number): string[] {
   if (v === undefined || v === null) return [];
-  if (!Array.isArray(v)) throw new MusicError(`${field} must be a list.`, 400);
+  if (!Array.isArray(v)) throw new HttpError(`${field} must be a list.`, 400);
   const out: string[] = [];
   for (const item of v) {
-    if (typeof item !== 'string') throw new MusicError(`${field} must be a list of text.`, 400);
+    if (typeof item !== 'string') throw new HttpError(`${field} must be a list of text.`, 400);
     const t = item.trim().replace(/\s+/g, ' ');
     if (!t) continue;
-    if (t.length > maxLen) throw new MusicError(`A ${field} entry is longer than ${maxLen} characters.`, 400);
+    if (t.length > maxLen) throw new HttpError(`A ${field} entry is longer than ${maxLen} characters.`, 400);
     if (!out.some((o) => o.toLowerCase() === t.toLowerCase())) out.push(t);
   }
-  if (out.length > maxItems) throw new MusicError(`At most ${maxItems} ${field} entries.`, 400);
+  if (out.length > maxItems) throw new HttpError(`At most ${maxItems} ${field} entries.`, 400);
   return out;
 }
 
 function text(v: unknown, field: string, max: number, trim = true): string {
   if (v === undefined || v === null) return '';
-  if (typeof v !== 'string') throw new MusicError(`${field} must be text.`, 400);
-  if (v.length > max) throw new MusicError(`${field} is too long (max ${max} characters).`, 400);
+  if (typeof v !== 'string') throw new HttpError(`${field} must be text.`, 400);
+  if (v.length > max) throw new HttpError(`${field} is too long (max ${max} characters).`, 400);
   return trim ? v.trim() : v.replace(/\s+$/, '');
 }
 
 /** Validates a client-supplied meta object; returns a clean one (empty fields dropped). */
 export function sanitizeMeta(raw: unknown): TrackMeta {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new MusicError('meta must be an object.', 400);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new HttpError('meta must be an object.', 400);
   const r = raw as Record<string, unknown>;
   const out: TrackMeta = {};
   const title = text(r.title, 'title', LIMITS.title);
@@ -112,14 +112,14 @@ export function sanitizeMeta(raw: unknown): TrackMeta {
     } catch {
       ok = false;
     }
-    if (!ok) throw new MusicError('The Suno link must be a full http(s) URL.', 400);
+    if (!ok) throw new HttpError('The Suno link must be a full http(s) URL.', 400);
     out.sunoUrl = url;
   }
   const key = text(r.key, 'key', LIMITS.key);
   if (key) out.key = key;
   if (r.bpm !== undefined && r.bpm !== null && r.bpm !== '') {
     const n = typeof r.bpm === 'number' ? r.bpm : Number(r.bpm);
-    if (!Number.isFinite(n) || n < 20 || n > 400) throw new MusicError('BPM must be a number between 20 and 400.', 400);
+    if (!Number.isFinite(n) || n < 20 || n > 400) throw new HttpError('BPM must be a number between 20 and 400.', 400);
     out.bpm = Math.round(n * 10) / 10;
   }
   return out;
@@ -129,13 +129,13 @@ export function sanitizeMeta(raw: unknown): TrackMeta {
 export async function writeTrackMeta(metaKey: string, meta: TrackMeta): Promise<TrackMeta | null> {
   const file = loadConfig().metaPath;
   const run = async (): Promise<TrackMeta | null> => {
-    if (needsWindsor(file) && !(await windsorMounted())) throw new MusicError(`${MOUNT} is not mounted, so notes cannot be saved. Plug in the Windsor drive.`, 507);
+    if (needsWindsor(file) && !(await windsorMounted())) throw new HttpError(`${MOUNT} is not mounted, so notes cannot be saved. Plug in the Windsor drive.`, 507);
     let tracks: Record<string, TrackMeta> = {};
     try {
       tracks = await readFromDisk(file);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw new MusicError(`${file} is unreadable (${(err as Error).message}); refusing to overwrite it.`, 500);
+        throw new HttpError(`${file} is unreadable (${(err as Error).message}); refusing to overwrite it.`, 500);
       }
     }
     const empty = Object.keys(meta).length === 0;

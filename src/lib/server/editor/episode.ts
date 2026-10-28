@@ -1,7 +1,7 @@
 import 'server-only';
 import type { EditorEpisodeRef, EditorEpisodeTag } from '@/types/editor';
+import { HttpError } from '../http-error';
 import { getCatalog } from '../notion/catalog';
-import { StudioError } from '../studio/storage';
 
 /**
  * Turn the browser's tag ({ key, section }) into the ref stored with the pins: title and Notion links come from the
@@ -10,7 +10,7 @@ import { StudioError } from '../studio/storage';
 export async function resolveEpisode(tag: EditorEpisodeTag, existing: EditorEpisodeRef | null): Promise<EditorEpisodeRef> {
   try {
     const ep = (await getCatalog()).episodes.find((e) => e.key === tag.key);
-    if (!ep) throw new StudioError(`Episode ${tag.key} is not in the Video Production index.`, 422);
+    if (!ep) throw new HttpError(`Episode ${tag.key} is not in the Video Production index.`, 422);
     return {
       key: ep.key,
       number: ep.number,
@@ -23,8 +23,8 @@ export async function resolveEpisode(tag: EditorEpisodeTag, existing: EditorEpis
       taggedAt: existing?.key === ep.key ? existing.taggedAt : new Date().toISOString(),
     };
   } catch (err) {
-    if (err instanceof StudioError) throw err;
+    if (err instanceof HttpError) throw err;
     if (existing && existing.key === tag.key) return { ...existing, section: tag.section };
-    throw new StudioError(`Could not read the Video Production index to tag this file: ${(err as Error).message}`, 502);
+    throw new HttpError(`Could not read the Video Production index to tag this file: ${(err as Error).message}`, 502);
   }
 }

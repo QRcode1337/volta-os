@@ -1,9 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { NextResponse } from 'next/server';
+import { HttpError, route } from '@/lib/server/route-helpers';
 import { resolveFrame } from '@/lib/server/ltm';
-import { rejectNonLocalRead } from '@/lib/server/local-only';
-import { intParam, ltmError } from '../../_shared';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,14 +10,12 @@ export const dynamic = 'force-dynamic';
 const MIME: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 // Streams the screenshot for a capture. Only files inside the LTM frames dir are served.
-export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const denied = rejectNonLocalRead(req);
-  if (denied) return denied;
-  const id = intParam((await params).id);
-  if (id == null) return NextResponse.json({ error: 'invalid id' }, { status: 400 });
-  try {
+export const GET = route<{ id: string }>(
+  async ({ params }) => {
+    const id = Number(params.id);
+    if (!Number.isInteger(id) || id < 0) throw new HttpError('invalid id', 400);
     const abs = resolveFrame(id);
-    if (!abs) return NextResponse.json({ error: 'frame not available (pruned or missing)' }, { status: 404 });
+    if (!abs) throw new HttpError('frame not available (pruned or missing)', 404);
     const buf = await fs.readFile(abs);
     return new NextResponse(new Uint8Array(buf), {
       headers: {
@@ -28,7 +25,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         'X-Content-Type-Options': 'nosniff',
       },
     });
-  } catch (err) {
-    return ltmError(err);
-  }
-}
+  },
+  { tag: 'ltm' },
+);

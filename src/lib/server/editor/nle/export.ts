@@ -5,10 +5,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { NleExportJob, NleExportRequest } from '@/types/nle';
 import { sequenceDuration } from '@/lib/nle/model';
+import { HttpError } from '../../http-error';
 import { redact } from '../../systems/run';
 import { resolveAsset, type NleAsset } from './assets';
 import { buildExportGraph } from './filtergraph';
-import { CACHE_DIR, FFMPEG, LOCAL_EXPORTS_DIR, NleError, WINDSOR_EXPORTS_DIR, ensureDir, exportsDir, requireSpace, writeAtomic } from './paths';
+import { CACHE_DIR, FFMPEG, LOCAL_EXPORTS_DIR, WINDSOR_EXPORTS_DIR, ensureDir, exportsDir, requireSpace, writeAtomic } from './paths';
 import { validateSequence } from './projects';
 
 // Export jobs: one ffmpeg at a time, the rest queued. The registry lives on globalThis (survives HMR) and finished
@@ -73,18 +74,18 @@ export async function listJobs(): Promise<NleExportJob[]> {
 
 export async function getJob(id: string): Promise<NleExportJob> {
   await load();
-  if (!JOB_ID.test(id)) throw new NleError('Bad job id.', 400);
+  if (!JOB_ID.test(id)) throw new HttpError('Bad job id.', 400);
   const j = R.jobs.get(id);
-  if (!j) throw new NleError('Export job not found.', 404);
+  if (!j) throw new HttpError('Export job not found.', 404);
   return clone(j);
 }
 
 /** Finished export file for /api/editor/nle/file?id=x_<jobId> (must sit inside an exports folder). */
 export async function exportFile(id: string): Promise<{ path: string; name: string }> {
   const j = await getJob(id);
-  if (j.status !== 'done' || !j.outputPath) throw new NleError('Export is not finished.', 404);
+  if (j.status !== 'done' || !j.outputPath) throw new HttpError('Export is not finished.', 404);
   const dir = path.dirname(j.outputPath);
-  if (dir !== WINDSOR_EXPORTS_DIR && dir !== LOCAL_EXPORTS_DIR) throw new NleError('Export path is outside the exports folder.', 403);
+  if (dir !== WINDSOR_EXPORTS_DIR && dir !== LOCAL_EXPORTS_DIR) throw new HttpError('Export path is outside the exports folder.', 403);
   return { path: j.outputPath, name: path.basename(j.outputPath) };
 }
 
@@ -108,13 +109,13 @@ function sanitizeName(raw: unknown): string {
 function validateRequest(body: Record<string, unknown>): NleExportRequest {
   const sequence = validateSequence(body.sequence);
   const height = body.height == null ? null : Number(body.height);
-  if (height !== null && !(Number.isFinite(height) && height >= 64 && height <= 4320)) throw new NleError('height must be null or 64..4320.', 400);
+  if (height !== null && !(Number.isFinite(height) && height >= 64 && height <= 4320)) throw new HttpError('height must be null or 64..4320.', 400);
   const fps = body.fps == null ? null : Number(body.fps);
-  if (fps !== null && !(Number.isFinite(fps) && fps >= 1 && fps <= 120)) throw new NleError('fps must be null or 1..120.', 400);
+  if (fps !== null && !(Number.isFinite(fps) && fps >= 1 && fps <= 120)) throw new HttpError('fps must be null or 1..120.', 400);
   const quality = body.quality ?? 'standard';
-  if (quality !== 'draft' && quality !== 'standard' && quality !== 'high') throw new NleError('quality must be draft, standard or high.', 400);
-  if (sequenceDuration(sequence) <= 0.01) throw new NleError('The sequence is empty.', 400);
-  if (sequenceDuration(sequence) > 6 * 3600) throw new NleError('The sequence is longer than 6 hours.', 400);
+  if (quality !== 'draft' && quality !== 'standard' && quality !== 'high') throw new HttpError('quality must be draft, standard or high.', 400);
+  if (sequenceDuration(sequence) <= 0.01) throw new HttpError('The sequence is empty.', 400);
+  if (sequenceDuration(sequence) > 6 * 3600) throw new HttpError('The sequence is longer than 6 hours.', 400);
   return { sequence, height, fps, quality, fileName: sanitizeName(body.fileName ?? sequence.name) };
 }
 
@@ -180,7 +181,7 @@ async function uniqueOutput(dir: string, base: string): Promise<string> {
     );
     if (!taken && !partTaken) return file;
   }
-  throw new NleError('Too many exports with this name.', 409);
+  throw new HttpError('Too many exports with this name.', 409);
 }
 
 async function pump(): Promise<void> {
@@ -208,7 +209,7 @@ async function pump(): Promise<void> {
     const tBuild = Date.now();
     const plan = await buildExportGraph({ seq: req.sequence, height: req.height, fps: req.fps, assets });
     for (const n of plan.notes) pushLog(`note: ${n}`);
-    if (cancelled()) throw new NleError('cancelled', 499);
+    if (cancelled()) throw new HttpError('cancelled', 499);
     const dir = await exportsDir();
     await ensureDir(dir);
     await requireSpace(dir, estimateBytes(req), 'this export');
@@ -293,10 +294,10 @@ async function pump(): Promise<void> {
     });
     R.proc = null;
     pushLog(`graph ${((tRun - tBuild) / 1000).toFixed(1)} s, ffmpeg ${((Date.now() - tRun) / 1000).toFixed(1)} s (exit ${code})`);
-    if (cancelled()) throw new NleError('cancelled', 499);
+    if (cancelled()) throw new HttpError('cancelled', 499);
     if (code !== 0) {
       const cause = [...logLines].reverse().find((l) => /error|invalid|failed|no such|cannot|unable|not found|denied/i.test(l) && !l.startsWith('note:')) ?? logLines[logLines.length - 1] ?? `exit ${code}`;
-      throw new NleError(`ffmpeg failed (exit ${code}): ${cause}`, 500);
+      throw new HttpError(`ffmpeg failed (exit ${code}): ${cause}`, 500);
     }
     await fs.rename(partial, out);
     partial = null;

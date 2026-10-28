@@ -1,6 +1,7 @@
 import 'server-only';
 import type { Deck } from '@/components/media/data';
 import type { NotionNoAccess } from '@/types/notion';
+import { HttpError } from '../http-error';
 import { cached } from '../sources/cache';
 import { getCatalog } from '../notion/catalog';
 import { NotionError, pageUrl } from '../notion/client';
@@ -34,7 +35,7 @@ async function load(): Promise<DecksPayload> {
     ids = cat.groups.filter((g) => g.kind === 'shorts').flatMap((g) => g.items.map((i) => ({ id: i.id, title: i.title })));
     inaccessible.push(...cat.inaccessible.filter((n) => /short|tiktok|reel/i.test(n.title)));
   } catch (err) {
-    if (err instanceof NotionError && err.code === 'not_configured') throw err;
+    if (err instanceof NotionError && err.code === 'not_configured') throw new HttpError(err.message, 503, { notConfigured: true });
     errors.push(`Video Production index: ${(err as Error).message}`);
   }
   for (const id of FALLBACK_SHORTS) if (!ids.some((i) => i.id === id)) ids.push({ id, title: 'Shorts Batch 1' });

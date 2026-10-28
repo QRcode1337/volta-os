@@ -6,6 +6,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { JobStatus, JobsResponse, LogEvent, StudioJob } from '@/types/studio';
+import { HttpError } from '../http-error';
 import { redactSecrets } from '../redact';
 import { buildJob } from './args';
 import { JOB_PATH, datalessReason, getPreset, isDataless, getProject, resolveExecutable, type Project, type ProgressKind } from './config';
@@ -14,7 +15,6 @@ import {
   JOBS_FILE,
   LOGS_DIR,
   STUDIO_ROOT,
-  StudioError,
   checkStudioStorage,
   ensureStudioDirs,
   isInside,
@@ -226,7 +226,7 @@ function newRuntime(project: Project, fields: Partial<Runtime> & Pick<Runtime, '
 }
 
 function push(rt: Runtime) {
-  if (S.queue.length + (S.running ? 1 : 0) >= MAX_QUEUE) throw new StudioError(`The queue is full (${MAX_QUEUE} jobs). Cancel or wait for some to finish.`, 429);
+  if (S.queue.length + (S.running ? 1 : 0) >= MAX_QUEUE) throw new HttpError(`The queue is full (${MAX_QUEUE} jobs). Cancel or wait for some to finish.`, 429);
   S.queue.push(rt);
   S.runtimes.set(rt.job.id, rt);
   void pump();
@@ -234,20 +234,20 @@ function push(rt: Runtime) {
 
 /** POST /api/studio/jobs: preset id + validated args only. */
 export async function createJob(projectId: unknown, presetId: unknown, args: unknown): Promise<StudioJob> {
-  if (typeof projectId !== 'string' || typeof presetId !== 'string') throw new StudioError('projectId and presetId are required.', 400);
+  if (typeof projectId !== 'string' || typeof presetId !== 'string') throw new HttpError('projectId and presetId are required.', 400);
   const project = getProject(projectId);
-  if (!project) throw new StudioError('Unknown project.', 404);
+  if (!project) throw new HttpError('Unknown project.', 404);
   const preset = getPreset(project, presetId);
-  if (!preset) throw new StudioError('Unknown preset for this project.', 404);
-  if (!fs.existsSync(project.path) && !project.path.startsWith(STUDIO_ROOT)) throw new StudioError(`Project folder is missing: ${project.path}`, 400);
+  if (!preset) throw new HttpError('Unknown preset for this project.', 404);
+  if (!fs.existsSync(project.path) && !project.path.startsWith(STUDIO_ROOT)) throw new HttpError(`Project folder is missing: ${project.path}`, 400);
 
   const built = await buildJob(project, preset, args);
   const icloud = datalessReason(project, preset, built.exe);
-  if (icloud) throw new StudioError(icloud, 409);
+  if (icloud) throw new HttpError(icloud, 409);
   if (built.usesWindsor) await requireStudioStorage();
   if (project.path.startsWith(STUDIO_ROOT) || built.usesWindsor) await ensureStudioDirs(built.usesWindsor ? project.id : undefined);
   if (built.outPath && !built.usesWindsor) await fsp.mkdir(path.dirname(built.outPath), { recursive: true });
-  if (!fs.existsSync(built.cwd)) throw new StudioError(`Working folder is missing: ${built.cwd}`, 400);
+  if (!fs.existsSync(built.cwd)) throw new HttpError(`Working folder is missing: ${built.cwd}`, 400);
 
   const rt = newRuntime(
     project,
@@ -275,15 +275,15 @@ export async function createJob(projectId: unknown, presetId: unknown, args: unk
 
 /** On-demand `remotion compositions` (slow: it bundles the project), run through the same one-at-a-time queue. */
 export async function createCompositionsJob(projectId: unknown): Promise<StudioJob> {
-  if (typeof projectId !== 'string') throw new StudioError('projectId is required.', 400);
+  if (typeof projectId !== 'string') throw new HttpError('projectId is required.', 400);
   const project = getProject(projectId);
-  if (!project?.compositionsArgv) throw new StudioError('This project has no compositions command configured.', 404);
+  if (!project?.compositionsArgv) throw new HttpError('This project has no compositions command configured.', 404);
   const existing = [...S.runtimes.values()].find((r) => r.job.projectId === project.id && r.job.presetId === '__compositions' && !isFinal(r.job.status));
   if (existing) return existing.job;
   const exe = resolveExecutable(project.compositionsArgv[0], project);
-  if (!exe) throw new StudioError(`${project.compositionsArgv[0]} is not installed in this project.`, 400);
-  if (!fs.existsSync(project.path)) throw new StudioError(`Project folder is missing: ${project.path}`, 400);
-  if (isDataless(exe)) throw new StudioError(`${path.basename(exe)} is an iCloud placeholder (evicted from this Mac) and the Studio server cannot download it. Open ${project.path} in Finder, or run brctl download on it, then retry.`, 409);
+  if (!exe) throw new HttpError(`${project.compositionsArgv[0]} is not installed in this project.`, 400);
+  if (!fs.existsSync(project.path)) throw new HttpError(`Project folder is missing: ${project.path}`, 400);
+  if (isDataless(exe)) throw new HttpError(`${path.basename(exe)} is an iCloud placeholder (evicted from this Mac) and the Studio server cannot download it. Open ${project.path} in Finder, or run brctl download on it, then retry.`, 409);
   const argv = project.compositionsArgv.slice(1);
   const rt = newRuntime(
     project,
@@ -565,7 +565,7 @@ async function finish(rt: Runtime, code: number | null, signal: NodeJS.Signals |
 /** Cancel: queued jobs are dropped; a running job gets SIGTERM, then SIGKILL after 8 s. */
 export async function cancelJob(id: string): Promise<StudioJob> {
   const rt = S.runtimes.get(id);
-  if (!rt) throw new StudioError('Job not found (only queued or running jobs can be canceled).', 404);
+  if (!rt) throw new HttpError('Job not found (only queued or running jobs can be canceled).', 404);
   if (rt.job.status === 'queued') {
     S.queue = S.queue.filter((r) => r !== rt);
     rt.job.status = 'canceled';
@@ -581,5 +581,5 @@ export async function cancelJob(id: string): Promise<StudioJob> {
     killJob(rt);
     return rt.job;
   }
-  throw new StudioError(`Job already ${rt.job.status}.`, 409);
+  throw new HttpError(`Job already ${rt.job.status}.`, 409);
 }

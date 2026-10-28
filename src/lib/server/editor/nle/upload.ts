@@ -4,9 +4,10 @@ import { createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { NleUploadResult } from '@/types/nle';
+import { HttpError } from '../../http-error';
 import { probeFile } from '../../studio/index-projects';
 import { MEDIA_BY_EXT, type NleMedia, type UploadMeta } from './assets';
-import { GiB, MIN_REMAIN_BYTES, NleError, UPLOADS_DIR, ensureDir, freeBytes, requireSpace, writeAtomic } from './paths';
+import { GiB, MIN_REMAIN_BYTES, UPLOADS_DIR, ensureDir, freeBytes, requireSpace, writeAtomic } from './paths';
 
 // Raw-body upload (not multipart): streamed to uploads/u_<16 hex>.<ext>, capped at 4 GB, then ffprobed.
 
@@ -52,14 +53,14 @@ function cleanName(raw: string | null): string {
 export async function receiveUpload(req: Request): Promise<NleUploadResult> {
   const type = (req.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
   const major = type.split('/')[0] as NleMedia;
-  if (!['video', 'audio', 'image'].includes(major)) throw new NleError('Content-Type must be video/*, audio/* or image/*.', 415);
+  if (!['video', 'audio', 'image'].includes(major)) throw new HttpError('Content-Type must be video/*, audio/* or image/*.', 415);
   const name = cleanName(req.headers.get('x-file-name'));
   const nameExt = path.extname(name).slice(1).toLowerCase();
   const ext = MEDIA_BY_EXT[nameExt] === major ? nameExt : EXT_BY_TYPE[type];
-  if (!ext || MEDIA_BY_EXT[ext] !== major) throw new NleError(`Unsupported ${major} type (${type}${nameExt ? `, .${nameExt}` : ''}).`, 415);
+  if (!ext || MEDIA_BY_EXT[ext] !== major) throw new HttpError(`Unsupported ${major} type (${type}${nameExt ? `, .${nameExt}` : ''}).`, 415);
   const declared = Number(req.headers.get('content-length') ?? NaN);
-  if (Number.isFinite(declared) && declared > MAX_UPLOAD_BYTES) throw new NleError('Uploads are limited to 4 GB.', 413);
-  if (!req.body) throw new NleError('Empty upload.', 400);
+  if (Number.isFinite(declared) && declared > MAX_UPLOAD_BYTES) throw new HttpError('Uploads are limited to 4 GB.', 413);
+  if (!req.body) throw new HttpError('Empty upload.', 400);
 
   await ensureDir(UPLOADS_DIR);
   await requireSpace(UPLOADS_DIR, Number.isFinite(declared) ? declared : 0, 'this upload');
@@ -76,15 +77,15 @@ export async function receiveUpload(req: Request): Promise<NleUploadResult> {
       const { value, done } = await reader.read();
       if (done) break;
       written += value.byteLength;
-      if (written > MAX_UPLOAD_BYTES) throw new NleError('Uploads are limited to 4 GB.', 413);
+      if (written > MAX_UPLOAD_BYTES) throw new HttpError('Uploads are limited to 4 GB.', 413);
       if (written >= nextCheck) {
         nextCheck += SPACE_CHECK_EVERY;
-        if ((await freeBytes(UPLOADS_DIR)) < MIN_REMAIN_BYTES) throw new NleError(`Upload stopped: fewer than ${MIN_REMAIN_BYTES / GiB} GiB would remain free.`, 507);
+        if ((await freeBytes(UPLOADS_DIR)) < MIN_REMAIN_BYTES) throw new HttpError(`Upload stopped: fewer than ${MIN_REMAIN_BYTES / GiB} GiB would remain free.`, 507);
       }
       if (!out.write(value)) await new Promise<void>((r) => out.once('drain', () => r()));
     }
     await new Promise<void>((resolve, reject) => out.end((err?: Error | null) => (err ? reject(err) : resolve())));
-    if (written === 0) throw new NleError('Empty upload.', 400);
+    if (written === 0) throw new HttpError('Empty upload.', 400);
   } catch (err) {
     reader.cancel().catch(() => undefined);
     out.destroy();
@@ -98,7 +99,7 @@ export async function receiveUpload(req: Request): Promise<NleUploadResult> {
   const playable = major === 'audio' ? pr.hasAudio || (pr.durationSec ?? 0) > 0 : !!pr.width && !!pr.height;
   if (!playable) {
     await fs.rm(final, { force: true });
-    throw new NleError(`"${name}" could not be read as ${major === 'image' ? 'an image' : major}.`, 415);
+    throw new HttpError(`"${name}" could not be read as ${major === 'image' ? 'an image' : major}.`, 415);
   }
   const meta: UploadMeta = { name, media: major, ext, createdAt: new Date().toISOString() };
   await writeAtomic(path.join(UPLOADS_DIR, `${id}.json`), JSON.stringify(meta));

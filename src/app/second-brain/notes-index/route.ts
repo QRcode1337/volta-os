@@ -1,4 +1,4 @@
-import { localJson } from '@/lib/server/route-helpers';
+import { route } from '@/lib/server/route-helpers';
 import { getRecentNotes } from '@/lib/server/sources/notes';
 
 // Compact index of every note across the registered Obsidian vaults (title/path/mtime only, no bodies),
@@ -7,7 +7,7 @@ import { getRecentNotes } from '@/lib/server/sources/notes';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export const GET = localJson(async () => {
+export const GET = route(async () => {
   const notes = await getRecentNotes(1_000_000);
   const vaultIds: string[] = [];
   const vaultIndex = new Map<string, number>();

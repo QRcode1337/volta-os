@@ -1,4 +1,5 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import { chat, chatStream } from './client';
 import { chainFor, LOCAL_TARGET, loadRoutes } from './config';
 import { logUsage } from './usage-log';
@@ -29,6 +30,20 @@ export class TaskError extends Error {
     super(message);
     this.name = 'TaskError';
   }
+}
+
+/**
+ * The one TaskError -> HTTP mapping, thrown so a route can write `complete(req).catch(llmHttp)`: 400 for an unknown
+ * task / bad request, 502 when every target failed, both with `code` and `attempts`. Anything else is logged and
+ * answered as a message-free 500 (provider text is never echoed).
+ */
+export function llmHttp(err: unknown): never {
+  if (err instanceof TaskError) {
+    const status = err.code === 'unknown_task' || err.code === 'bad_request' ? 400 : 502;
+    throw new HttpError(err.message, status, { code: err.code, attempts: err.attempts });
+  }
+  console.error('[volta llm]', err instanceof Error ? err.message : 'failed');
+  throw new HttpError('LLM request failed', 500, { code: 'internal' });
 }
 
 function gatewayBase(cfg: RoutesConfig): string {

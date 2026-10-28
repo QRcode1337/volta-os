@@ -1,11 +1,15 @@
 // GET /api/research/synthesis?id=v:<file stem>|e:<file stem>  one synthesis as cleaned markdown (leaked "Thinking..." removed, secrets masked).
-import { researchJson, notFound } from '@/lib/server/research/route';
+import { HttpError, route } from '@/lib/server/route-helpers';
 import { getSynthesis } from '@/lib/server/research/vault';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export const GET = researchJson(async (req) => {
-  const s = await getSynthesis(new URL(req.url).searchParams.get('id') ?? '');
-  return s ?? notFound('Unknown synthesis.');
-});
+export const GET = route(
+  async ({ url }) => {
+    const s = await getSynthesis(url.searchParams.get('id') ?? '');
+    if (!s) throw new HttpError('Unknown synthesis.', 404);
+    return s;
+  },
+  { tag: 'research api' },
+);

@@ -2,7 +2,8 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { StudioError, windsorMounted } from '../studio/storage';
+import { HttpError } from '../http-error';
+import { windsorMounted } from '../studio/storage';
 
 // Review state (approvals, comment pins, copy edits, layout switches) lives on the Windsor drive only:
 //   /Volumes/Windsor/VOLTA/carousels/state.json
@@ -46,7 +47,7 @@ const text = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, ma
 /** Strict validation: the browser is never trusted to shape what lands on disk. */
 export function validateDeckState(raw: unknown): Omit<StoredDeckState, 'updatedAt'> {
   const r = (raw ?? {}) as Record<string, unknown>;
-  if (typeof raw !== 'object' || raw === null) throw new StudioError('`state` must be an object.', 400);
+  if (typeof raw !== 'object' || raw === null) throw new HttpError('`state` must be an object.', 400);
   const status = typeof r.status === 'string' && STATUSES.has(r.status) ? (r.status as DeckStatus) : 'DRAFT';
   const edits: StoredDeckState['edits'] = {};
   for (const [slideId, e] of Object.entries((r.edits ?? {}) as Record<string, unknown>)) {
@@ -58,7 +59,7 @@ export function validateDeckState(raw: unknown): Omit<StoredDeckState, 'updatedA
   const wildcard: Record<string, boolean> = {};
   for (const [slideId, v] of Object.entries((r.wildcard ?? {}) as Record<string, unknown>)) if (ID.test(slideId) && v === true) wildcard[slideId] = true;
   const rawPins = Array.isArray(r.pins) ? r.pins : [];
-  if (rawPins.length > MAX_PINS) throw new StudioError(`Too many pins (max ${MAX_PINS}).`, 413);
+  if (rawPins.length > MAX_PINS) throw new HttpError(`Too many pins (max ${MAX_PINS}).`, 413);
   const pins: StoredPin[] = [];
   for (const p of rawPins as Record<string, unknown>[]) {
     const x = clamp(p?.x, 0, 1);
@@ -83,7 +84,7 @@ export async function readState(): Promise<{ doc: StateDoc | null; available: bo
     return { doc: { v: 1, savedAt: j.savedAt, decks }, available: true, reason: null };
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { doc: null, available: true, reason: null };
-    throw new StudioError(`Saved carousel state is unreadable: ${(err as Error).message}`, 500);
+    throw new HttpError(`Saved carousel state is unreadable: ${(err as Error).message}`, 500);
   }
 }
 
@@ -91,10 +92,10 @@ let chain: Promise<unknown> = Promise.resolve();
 
 /** Merge one deck's state into the file (read-modify-write, serialised so two quick saves cannot clobber each other). */
 export function writeDeckState(deckId: string, raw: unknown): Promise<{ savedAt: string }> {
-  if (!ID.test(deckId)) throw new StudioError('Bad deck id.', 400);
+  if (!ID.test(deckId)) throw new HttpError('Bad deck id.', 400);
   const state = validateDeckState(raw);
   const run = async () => {
-    if (!(await windsorMounted())) throw new StudioError(unmounted, 507);
+    if (!(await windsorMounted())) throw new HttpError(unmounted, 507);
     const cur = (await readState()).doc ?? { v: 1 as const, savedAt: new Date().toISOString(), decks: {} };
     const savedAt = new Date().toISOString();
     cur.decks[deckId] = { ...state, updatedAt: savedAt };
@@ -106,7 +107,7 @@ export function writeDeckState(deckId: string, raw: unknown): Promise<{ savedAt:
       await fs.rename(tmp, STATE_FILE);
     } catch (err) {
       await fs.rm(tmp, { force: true }).catch(() => undefined);
-      throw new StudioError(`Could not save: ${(err as Error).message}`, 500);
+      throw new HttpError(`Could not save: ${(err as Error).message}`, 500);
     }
     return { savedAt };
   };

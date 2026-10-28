@@ -4,13 +4,13 @@ import path from 'node:path';
 import type { StudioOutput } from '@/types/studio';
 import type { EditorMediaGroup, EditorMediaItem, EditorMediaKind, EditorMediaList } from '@/types/editor';
 import type { GenItemRecord } from '@/types/media';
-import { MediaError } from '../media/config';
-import { MusicError, getLibrary, loadConfig as musicLoadConfig, resolveTrack, type RawTrack } from '../music';
+import { HttpError } from '../http-error';
+import { getLibrary, loadConfig as musicLoadConfig, resolveTrack, type RawTrack } from '../music';
 import { readManifest, resolveFile } from '../media/storage';
 import { getProject, loadConfig, projectExists, type Project } from '../studio/config';
 import { OUTPUT_SCAN_LIMIT, probeFile, projectOutputs, resolveOutputFile } from '../studio/index-projects';
 import { FEEDBACK_DIR } from './feedback';
-import { StudioError, windsorMounted } from '../studio/storage';
+import { windsorMounted } from '../studio/storage';
 import { isEvicted } from '@/lib/server/icloud';
 
 // The Editor media bin: every real Studio output (per configured project, incl. the Windsor renders folder) plus the
@@ -175,7 +175,7 @@ export async function describeEditorMedia(id: string): Promise<EditorMediaItem> 
   if (/^o_[0-9a-f]{16}$/.test(id)) {
     const f = await resolveOutputFile(id);
     const project = f.projectId ? getProject(f.projectId) : null;
-    if (!project) throw new StudioError('This file no longer belongs to a configured Studio project.', 404);
+    if (!project) throw new HttpError('This file no longer belongs to a configured Studio project.', 404);
     const pr = f.offline ? null : await probeFile(f.path, f.size, f.mtimeMs);
     const out: StudioOutput = {
       id,
@@ -196,24 +196,13 @@ export async function describeEditorMedia(id: string): Promise<EditorMediaItem> 
     return studioItem(project, out, !!pr?.hasAudio);
   }
   if (/^g_[a-z0-9-]{6,40}$/i.test(id)) {
-    let rec: GenItemRecord;
-    try {
-      rec = (await resolveFile(id.slice(2))).rec;
-    } catch (err) {
-      if (err instanceof MediaError) throw new StudioError(err.message, err.status);
-      throw err;
-    }
+    const { rec } = await resolveFile(id.slice(2));
     const item = await genItem(rec);
-    if (!item) throw new StudioError('File is missing (is the Windsor drive mounted?).', 404);
+    if (!item) throw new HttpError('File is missing (is the Windsor drive mounted?).', 404);
     return item;
   }
   if (/^m_[0-9a-f]{16}$/.test(id)) {
-    try {
-      return musicItem(musicLoadConfig().band, (await resolveTrack(id)).track);
-    } catch (err) {
-      if (err instanceof MusicError) throw new StudioError(err.message, err.status);
-      throw err;
-    }
+    return musicItem(musicLoadConfig().band, (await resolveTrack(id)).track);
   }
-  throw new StudioError('Bad file id.', 400);
+  throw new HttpError('Bad file id.', 400);
 }

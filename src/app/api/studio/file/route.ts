@@ -3,8 +3,7 @@
 import fs from 'node:fs';
 import { Readable } from 'node:stream';
 import { NextResponse } from 'next/server';
-import { rejectNonLocalRead } from '@/lib/server/local-only';
-import { fail } from '@/lib/server/studio/http';
+import { HttpError, route } from '@/lib/server/route-helpers';
 import { resolveOutputFile } from '@/lib/server/studio/index-projects';
 
 export const runtime = 'nodejs';
@@ -27,33 +26,27 @@ function parseRange(header: string, size: number): { start: number; end: number 
   return { start, end };
 }
 
-export async function GET(req: Request) {
-  const denied = rejectNonLocalRead(req);
-  if (denied) return denied;
-  try {
-    const f = await resolveOutputFile(new URL(req.url).searchParams.get('id') ?? '');
-    if (f.offline) return NextResponse.json({ error: `${f.name} is an iCloud placeholder (not downloaded). Open it in Finder first.` }, { status: 409 });
-    const base = {
-      'Content-Type': f.mime,
-      'Accept-Ranges': 'bytes',
-      // outputs can be overwritten in place, so revalidate instead of caching immutably
-      'Cache-Control': 'private, no-cache',
-      ETag: `"${f.size}-${Math.round(f.mtimeMs)}"`,
-      'X-Content-Type-Options': 'nosniff',
-      'Content-Disposition': `inline; filename="${f.name.replace(/[^\w.-]+/g, '_')}"`,
-    };
-    const rangeHeader = req.headers.get('range');
-    const range = rangeHeader ? parseRange(rangeHeader, f.size) : null;
-    if (range === 'invalid') return new NextResponse(null, { status: 416, headers: { ...base, 'Content-Range': `bytes */${f.size}` } });
-    if (f.size === 0) return new NextResponse(null, { status: 200, headers: { ...base, 'Content-Length': '0' } });
-    const [start, end] = range ? [range.start, range.end] : [0, f.size - 1];
-    const nodeStream = fs.createReadStream(f.path, { start, end });
-    req.signal.addEventListener('abort', () => nodeStream.destroy());
-    return new NextResponse(Readable.toWeb(nodeStream) as ReadableStream, {
-      status: range ? 206 : 200,
-      headers: { ...base, 'Content-Length': String(end - start + 1), ...(range ? { 'Content-Range': `bytes ${start}-${end}/${f.size}` } : {}) },
-    });
-  } catch (err) {
-    return fail(err);
-  }
-}
+export const GET = route(async ({ req, url }) => {
+  const f = await resolveOutputFile(url.searchParams.get('id') ?? '');
+  if (f.offline) throw new HttpError(`${f.name} is an iCloud placeholder (not downloaded). Open it in Finder first.`, 409);
+  const base = {
+    'Content-Type': f.mime,
+    'Accept-Ranges': 'bytes',
+    // outputs can be overwritten in place, so revalidate instead of caching immutably
+    'Cache-Control': 'private, no-cache',
+    ETag: `"${f.size}-${Math.round(f.mtimeMs)}"`,
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Disposition': `inline; filename="${f.name.replace(/[^\w.-]+/g, '_')}"`,
+  };
+  const rangeHeader = req.headers.get('range');
+  const range = rangeHeader ? parseRange(rangeHeader, f.size) : null;
+  if (range === 'invalid') return new NextResponse(null, { status: 416, headers: { ...base, 'Content-Range': `bytes */${f.size}` } });
+  if (f.size === 0) return new NextResponse(null, { status: 200, headers: { ...base, 'Content-Length': '0' } });
+  const [start, end] = range ? [range.start, range.end] : [0, f.size - 1];
+  const nodeStream = fs.createReadStream(f.path, { start, end });
+  req.signal.addEventListener('abort', () => nodeStream.destroy());
+  return new NextResponse(Readable.toWeb(nodeStream) as ReadableStream, {
+    status: range ? 206 : 200,
+    headers: { ...base, 'Content-Length': String(end - start + 1), ...(range ? { 'Content-Range': `bytes ${start}-${end}/${f.size}` } : {}) },
+  });
+});

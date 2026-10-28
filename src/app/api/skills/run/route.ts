@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { execFile } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
@@ -6,7 +5,7 @@ import type { EffortLevel, ModelTier, SkillRunRequest, SkillRunResult } from '@/
 import type { RealSkill } from '@/types/sources';
 import { EFFORT_LEVELS, MODEL_TIERS } from '@/lib/mock-data';
 import { WORKSPACE_DIR } from '@/lib/server/workspace';
-import { rejectNonLocalMutation } from '@/lib/server/local-only';
+import { HttpError, route } from '@/lib/server/route-helpers';
 import { getSkills } from '@/lib/server/sources/skills';
 import { skillCommand } from '@/components/dashboard/widgets/right-skills';
 import { hashString, resolveRoutedModel, routeAndRecord } from '../../jev-router/jev';
@@ -26,10 +25,6 @@ const LIVE_DISALLOWED_TOOLS = ['Bash', 'Write', 'Edit', 'MultiEdit', 'NotebookEd
 /** Blended estimate $/MTok (mirrored in right-skills.ts RUN_RATE). Estimates, not metered spend. */
 const RATE: Record<ModelTier, number> = { HAIKU: 0.55, SONNET: 4.6, OPUS: 12.5, FABLE: 21 };
 const EFFORT_MULT: Record<EffortLevel, number> = { LOW: 0.55, MEDIUM: 0.8, HIGH: 1, XHIGH: 1.35, MAX: 1.8 };
-
-function bad(message: string) {
-  return NextResponse.json({ error: message }, { status: 400 });
-}
 
 function parseBody(body: unknown): SkillRunRequest | string {
   if (!body || typeof body !== 'object') return 'Body must be an object';
@@ -159,18 +154,10 @@ const sleep = (ms: number, signal: AbortSignal) =>
   });
 
 /** POST /api/skills/run  body SkillRunRequest → SkillRunResult */
-export async function POST(req: Request) {
-  const denied = rejectNonLocalMutation(req);
-  if (denied) return denied;
+export const POST = route(async ({ req, body: raw }) => {
   const started = Date.now();
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return bad('Body must be valid JSON: { command, model, effort, customPrompt? }');
-  }
   const parsed = parseBody(raw);
-  if (typeof parsed === 'string') return bad(parsed);
+  if (typeof parsed === 'string') throw new HttpError(parsed, 400);
   const body = parsed;
 
   // 1. Jev classifies the job (recorded in telemetry) and may reroute the requested tier.
@@ -211,7 +198,7 @@ export async function POST(req: Request) {
         costUsd: costOf(tokensIn + tokensOut, routed), // estimate from the token estimates above
         markdown: `${header('live')}${out}\n`,
       };
-      return NextResponse.json(result);
+      return result;
     } catch (e) {
       liveError = (e as Error).message;
     }
@@ -249,5 +236,5 @@ export async function POST(req: Request) {
     markdown,
     ...(liveError ? { error: `Live mode failed, fell back to mock: ${liveError}` } : {}),
   };
-  return NextResponse.json(result);
-}
+  return result;
+}, { json: true });

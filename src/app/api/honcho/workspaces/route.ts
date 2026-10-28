@@ -1,11 +1,8 @@
+import { intParam, route } from '@/lib/server/route-helpers';
 import { listWorkspaces } from '@/lib/server/honcho';
-import { handle, intOf, json } from '@/app/api/honcho/_shared';
+import { fromHoncho } from '@/app/api/honcho/_shared';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export const GET = handle(async (req: Request) => {
-  const sp = new URL(req.url).searchParams;
-  const page = intOf(sp.get('page'), 'page', 1, 1, 10_000);
-  return json(await listWorkspaces(page, 100));
-});
+export const GET = route(({ url }) => fromHoncho(listWorkspaces(intParam(url, 'page', { min: 1, max: 10_000, fallback: 1 })!, 100)), { tag: 'honcho' });

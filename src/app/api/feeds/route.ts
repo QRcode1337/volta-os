@@ -1,12 +1,12 @@
-import { localJson } from '@/lib/server/route-helpers';
+import { route } from '@/lib/server/route-helpers';
 import { listFeeds } from '@/lib/server/feeds';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /** GET /api/feeds?source=&q=&needsAction=1&unread=1&cursor=&limit=&refresh=1  (localhost only; every string is secret-masked) */
-export const GET = localJson(async (req) => {
-  const p = new URL(req.url).searchParams;
+export const GET = route(async ({ url }) => {
+  const p = url.searchParams;
   const limit = Number(p.get('limit'));
   return listFeeds({
     source: p.get('source') || undefined,

@@ -1,9 +1,10 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import fs from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ImageModelInfo, VideoModelInfo } from '@/types/media';
-import { MediaError, maskSecrets, xaiKey } from './config';
+import { maskSecrets, xaiKey } from './config';
 import { TICKS_PER_USD, VIDEO_PRICES, round6 } from './pricing';
 
 const BASE = 'https://api.x.ai/v1';
@@ -11,7 +12,7 @@ const CATALOG_TTL_MS = 10 * 60 * 1000;
 
 async function xai(path: string, init: RequestInit = {}, timeoutMs = 30_000): Promise<Response> {
   const key = xaiKey();
-  if (!key) throw new MediaError('Add XAI_API_KEY to ~/Volta-OS/.env.local (then restart VOLTA OS).', 412);
+  if (!key) throw new HttpError('Add XAI_API_KEY to ~/Volta-OS/.env.local (then restart VOLTA OS).', 412);
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', ...(init.headers ?? {}) },
@@ -32,12 +33,12 @@ async function xaiJson<T>(path: string, init?: RequestInit, timeoutMs?: number):
     } catch {
       // keep raw text
     }
-    throw new MediaError(`xAI ${res.status}: ${maskSecrets(detail).slice(0, 400)}`, res.status === 401 || res.status === 403 ? 502 : res.status >= 500 ? 502 : 422);
+    throw new HttpError(`xAI ${res.status}: ${maskSecrets(detail).slice(0, 400)}`, res.status === 401 || res.status === 403 ? 502 : res.status >= 500 ? 502 : 422);
   }
   try {
     return JSON.parse(text) as T;
   } catch {
-    throw new MediaError('xAI returned a non-JSON response.', 502);
+    throw new HttpError('xAI returned a non-JSON response.', 502);
   }
 }
 
@@ -107,21 +108,21 @@ export async function generateImages(p: {
   if (p.resolution) body.resolution = p.resolution;
   const j = await xaiJson<{ data?: { b64_json?: string; url?: string }[] }>('/images/generations', { method: 'POST', body: JSON.stringify(body) }, 180_000);
   const rows = j.data ?? [];
-  if (!rows.length) throw new MediaError('xAI returned no images (the prompt may have been moderated).', 502);
+  if (!rows.length) throw new HttpError('xAI returned no images (the prompt may have been moderated).', 502);
   const out: GeneratedImage[] = [];
   for (const r of rows) {
     if (r.b64_json) out.push({ data: Buffer.from(r.b64_json, 'base64') });
     else if (r.url) out.push({ data: await downloadBuffer(r.url) });
   }
-  if (!out.length) throw new MediaError('xAI returned images in an unexpected format.', 502);
+  if (!out.length) throw new HttpError('xAI returned images in an unexpected format.', 502);
   return out;
 }
 
 async function downloadBuffer(url: string): Promise<Buffer> {
   const u = new URL(url);
-  if (u.protocol !== 'https:') throw new MediaError('Refusing a non-https download URL.', 502);
+  if (u.protocol !== 'https:') throw new HttpError('Refusing a non-https download URL.', 502);
   const res = await fetch(u, { signal: AbortSignal.timeout(120_000) }); // no Authorization header to third-party hosts
-  if (!res.ok) throw new MediaError(`Download failed (${res.status}).`, 502);
+  if (!res.ok) throw new HttpError(`Download failed (${res.status}).`, 502);
   return Buffer.from(await res.arrayBuffer());
 }
 
@@ -132,14 +133,14 @@ export async function submitVideo(p: { model: string; prompt: string; duration: 
     method: 'POST',
     body: JSON.stringify({ model: p.model, prompt: p.prompt, duration: p.duration, aspect_ratio: p.aspect, resolution: p.resolution }),
   });
-  if (!j.request_id) throw new MediaError('xAI did not return a video request id.', 502);
+  if (!j.request_id) throw new HttpError('xAI did not return a video request id.', 502);
   return j.request_id;
 }
 
 export type VideoPoll = { status: 'pending' } | { status: 'done'; url: string } | { status: 'failed'; reason: string };
 
 export async function pollVideo(requestId: string): Promise<VideoPoll> {
-  if (!/^[\w-]{4,128}$/.test(requestId)) throw new MediaError('Bad video request id.', 400);
+  if (!/^[\w-]{4,128}$/.test(requestId)) throw new HttpError('Bad video request id.', 400);
   const j = await xaiJson<{ status?: string; video?: { url?: string }; error?: unknown }>(`/videos/${requestId}`);
   if (j.status === 'done') {
     if (!j.video?.url) return { status: 'failed', reason: 'finished without a video URL' };
@@ -154,8 +155,8 @@ export async function pollVideo(requestId: string): Promise<VideoPoll> {
 /** Stream a finished video to `file` (xAI serves temporary public URLs; our key is not sent). */
 export async function downloadVideoTo(url: string, file: string): Promise<void> {
   const u = new URL(url);
-  if (u.protocol !== 'https:') throw new MediaError('Refusing a non-https download URL.', 502);
+  if (u.protocol !== 'https:') throw new HttpError('Refusing a non-https download URL.', 502);
   const res = await fetch(u, { signal: AbortSignal.timeout(300_000) });
-  if (!res.ok || !res.body) throw new MediaError(`Video download failed (${res.status}).`, 502);
+  if (!res.ok || !res.body) throw new HttpError(`Video download failed (${res.status}).`, 502);
   await pipeline(Readable.fromWeb(res.body as import('node:stream/web').ReadableStream), fs.createWriteStream(file));
 }

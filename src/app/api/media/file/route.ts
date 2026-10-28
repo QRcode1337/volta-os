@@ -2,8 +2,8 @@
 import fs from 'node:fs';
 import { Readable } from 'node:stream';
 import { NextResponse } from 'next/server';
-import { rejectNonLocalRead } from '@/lib/server/local-only';
-import { errorMessage, errorStatus } from '@/lib/server/media/config';
+import { route } from '@/lib/server/route-helpers';
+import { toHttpError } from '@/lib/server/media/config';
 import { resolveFile } from '@/lib/server/media/storage';
 
 export const runtime = 'nodejs';
@@ -27,11 +27,9 @@ function parseRange(header: string, size: number): { start: number; end: number 
   return { start, end };
 }
 
-export async function GET(req: Request) {
-  const denied = rejectNonLocalRead(req);
-  if (denied) return denied;
+export const GET = route(async ({ req, url }) => {
   try {
-    const id = new URL(req.url).searchParams.get('id') ?? '';
+    const id = url.searchParams.get('id') ?? '';
     const { rec, file, size } = await resolveFile(id);
     const base = {
       'Content-Type': rec.mime || 'application/octet-stream',
@@ -51,6 +49,6 @@ export async function GET(req: Request) {
       headers: { ...base, 'Content-Length': String(end - start + 1), ...(range ? { 'Content-Range': `bytes ${start}-${end}/${size}` } : {}) },
     });
   } catch (err) {
-    return NextResponse.json({ error: errorMessage(err) }, { status: errorStatus(err) });
+    throw toHttpError(err);
   }
-}
+});

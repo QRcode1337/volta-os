@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { redactSecrets } from '@/app/api/honcho/_shared';
+import { redactSecrets } from '@/lib/server/redact';
 import type {
   ClaudeMemObservation,
   ClaudeMemSummary,

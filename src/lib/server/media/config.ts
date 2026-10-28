@@ -1,4 +1,5 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import { redactSecrets } from '../redact';
 
 /** Everything generated lands here (external drive). Nothing is ever written to the boot disk. */
@@ -22,17 +23,6 @@ export const xaiKey = () => (process.env.XAI_API_KEY ?? '').trim();
 export const elevenKey = () => (process.env.ELEVENLABS_API_KEY ?? '').trim();
 export const geminiKey = () => (process.env.GEMINI_API_KEY ?? '').trim();
 
-/** Error with an HTTP status that route handlers pass straight to the client (text is already masked). */
-export class MediaError extends Error {
-  constructor(
-    message: string,
-    public status = 500,
-  ) {
-    super(message);
-    this.name = 'MediaError';
-  }
-}
-
 /** Mask the live API keys plus anything the shared secret masker recognises. Use on ALL upstream error text. */
 export function maskSecrets(text: string): string {
   let out = text;
@@ -40,13 +30,15 @@ export function maskSecrets(text: string): string {
   return redactSecrets(out);
 }
 
+/** Safe text for any error: HttpError text as-is (already masked), timeouts named, anything else secret-masked. */
 export function errorMessage(err: unknown): string {
-  if (err instanceof MediaError) return err.message;
+  if (err instanceof HttpError) return err.message;
   const e = err as { name?: string; message?: string };
   if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return 'Upstream request timed out.';
   return maskSecrets(e?.message || 'failed');
 }
 
-export function errorStatus(err: unknown): number {
-  return err instanceof MediaError ? err.status : 500;
+/** The media area's one mapping to HttpError: HttpError passes through, anything else is a 500 with masked text. */
+export function toHttpError(err: unknown): HttpError {
+  return err instanceof HttpError ? err : new HttpError(errorMessage(err), 500);
 }

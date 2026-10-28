@@ -1,4 +1,4 @@
-import { localJson } from '@/lib/server/route-helpers';
+import { route } from '@/lib/server/route-helpers';
 import { loadConfig, feedToken, geminiKey } from '@/lib/server/podcast/config';
 import { claudeBin } from '@/lib/server/podcast/llm';
 import { currentJob } from '@/lib/server/podcast/pipeline';
@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /** GET /api/podcast/status  (localhost only) */
-export const GET = localJson(async (): Promise<PodcastStatus> => {
+export const GET = route(async (): Promise<PodcastStatus> => {
   const config = loadConfig();
   const today = localDate();
   const [storage, ffmpeg, ep] = await Promise.all([checkStorage(), ffmpegAvailable(), getEpisode(today).catch(() => null)]);

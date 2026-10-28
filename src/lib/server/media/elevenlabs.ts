@@ -1,13 +1,14 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import type { ElevenQuota, VoiceInfo, VoiceModelInfo } from '@/types/media';
-import { MediaError, elevenKey, maskSecrets } from './config';
+import { elevenKey, maskSecrets } from './config';
 
 const BASE = 'https://api.elevenlabs.io/v1';
 const CATALOG_TTL_MS = 10 * 60 * 1000;
 
 async function eleven(path: string, init: RequestInit = {}, timeoutMs = 30_000): Promise<Response> {
   const key = elevenKey();
-  if (!key) throw new MediaError('Add ELEVENLABS_API_KEY to ~/Volta-OS/.env.local (then restart VOLTA OS).', 412);
+  if (!key) throw new HttpError('Add ELEVENLABS_API_KEY to ~/Volta-OS/.env.local (then restart VOLTA OS).', 412);
   return fetch(`${BASE}${path}`, {
     ...init,
     headers: { 'xi-api-key': key, ...(init.headers ?? {}) },
@@ -26,7 +27,7 @@ async function failFrom(res: Response): Promise<never> {
   } catch {
     // raw text
   }
-  throw new MediaError(`ElevenLabs ${res.status}: ${maskSecrets(String(detail)).slice(0, 400)}`, res.status >= 500 || res.status === 401 ? 502 : 422);
+  throw new HttpError(`ElevenLabs ${res.status}: ${maskSecrets(String(detail)).slice(0, 400)}`, res.status >= 500 || res.status === 401 ? 502 : 422);
 }
 
 async function elevenJson<T>(path: string): Promise<T> {
@@ -90,7 +91,7 @@ export async function synthesize(p: {
   stability: number;
   similarity: number;
 }): Promise<Buffer> {
-  if (!/^[A-Za-z0-9]{8,40}$/.test(p.voiceId)) throw new MediaError('Bad voice id.', 400);
+  if (!/^[A-Za-z0-9]{8,40}$/.test(p.voiceId)) throw new HttpError('Bad voice id.', 400);
   const res = await eleven(
     `/text-to-speech/${p.voiceId}?output_format=mp3_44100_128`,
     {
@@ -102,6 +103,6 @@ export async function synthesize(p: {
   );
   if (!res.ok) await failFrom(res);
   const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length < 100) throw new MediaError('ElevenLabs returned an empty audio file.', 502);
+  if (buf.length < 100) throw new HttpError('ElevenLabs returned an empty audio file.', 502);
   return buf;
 }

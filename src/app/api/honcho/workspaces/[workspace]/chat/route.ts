@@ -1,18 +1,8 @@
 import { NextResponse } from 'next/server';
+import { HttpError, NO_STORE, route } from '@/lib/server/route-helpers';
 import { peerChat, peerChatStream, workspaceChat, workspaceChatStream } from '@/lib/server/honcho';
-import {
-  BadRequest,
-  handle,
-  honchoError,
-  idOf,
-  json,
-  noStore,
-  optId,
-  readBody,
-  redactSecrets,
-  textOf,
-  type Params,
-} from '@/app/api/honcho/_shared';
+import { redactSecrets } from '@/lib/server/redact';
+import { fromHoncho, idOf, optId, textOf } from '@/app/api/honcho/_shared';
 import { HONCHO_REASONING_LEVELS, type HonchoChatResponse, type HonchoReasoningLevel } from '@/types/honcho';
 
 export const runtime = 'nodejs';
@@ -119,7 +109,7 @@ function relayStream(upstream: Response, t0: number, signal: AbortSignal): NextR
   });
   return new NextResponse(stream, {
     headers: {
-      ...noStore,
+      ...NO_STORE,
       'Content-Type': 'text/event-stream; charset=utf-8',
       'X-Accel-Buffering': 'no',
       Connection: 'keep-alive',
@@ -127,57 +117,38 @@ function relayStream(upstream: Response, t0: number, signal: AbortSignal): NextR
   });
 }
 
-export const POST = handle(async (req: Request, { params }: Params<{ workspace: string }>) => {
-  const w = idOf((await params).workspace, 'workspace');
-  const b = await readBody(req);
-  const query = textOf(b.query, 'query', 10_000)!;
-  const peer = optId(b.peer as string | undefined, 'peer');
-  const target = optId(b.target as string | undefined, 'target');
-  const session = optId(b.session as string | undefined, 'session');
-  const level = (b.reasoning_level ?? 'low') as HonchoReasoningLevel;
-  if (!HONCHO_REASONING_LEVELS.includes(level)) throw new BadRequest('invalid reasoning_level');
-  if (target && !peer) throw new BadRequest('target requires peer');
+export const POST = route<{ workspace: string }>(
+  async ({ req, params, body: b }) => {
+    const w = idOf(params.workspace, 'workspace');
+    const query = textOf(b.query, 'query', 10_000)!;
+    const peer = optId(b.peer as string | undefined, 'peer');
+    const target = optId(b.target as string | undefined, 'target');
+    const session = optId(b.session as string | undefined, 'session');
+    const level = (b.reasoning_level ?? 'low') as HonchoReasoningLevel;
+    if (!HONCHO_REASONING_LEVELS.includes(level)) throw new HttpError('invalid reasoning_level', 400);
+    if (target && !peer) throw new HttpError('target requires peer', 400);
 
-  const t0 = performance.now();
-  if (b.stream === true) {
-    try {
-      const up = peer
-        ? await peerChatStream(w, peer, {
-            query,
-            target,
-            session,
-            reasoning_level: level,
-            signal: req.signal,
-          })
-        : await workspaceChatStream(w, {
-            query,
-            session,
-            reasoning_level: level,
-            signal: req.signal,
-          });
+    const t0 = performance.now();
+    if (b.stream === true) {
+      // fromHoncho maps open errors; the upstream Response itself passes through unmasked (relayStream masks it).
+      const up = await fromHoncho(
+        peer
+          ? peerChatStream(w, peer, { query, target, session, reasoning_level: level, signal: req.signal })
+          : workspaceChatStream(w, { query, session, reasoning_level: level, signal: req.signal }),
+      );
       return relayStream(up, t0, req.signal);
-    } catch (err) {
-      return honchoError(err);
     }
-  }
-  const res = peer
-    ? await peerChat(w, peer, {
-        query,
-        target,
-        session,
-        reasoning_level: level,
-        signal: req.signal,
-      })
-    : await workspaceChat(w, {
-        query,
-        session,
-        reasoning_level: level,
-        signal: req.signal,
-      });
-  const body: HonchoChatResponse = {
-    content: res.content,
-    mode: peer ? 'peer' : 'workspace',
-    elapsedMs: Math.round(performance.now() - t0),
-  };
-  return json(body);
-});
+    const res = await fromHoncho(
+      peer
+        ? peerChat(w, peer, { query, target, session, reasoning_level: level, signal: req.signal })
+        : workspaceChat(w, { query, session, reasoning_level: level, signal: req.signal }),
+    );
+    const body: HonchoChatResponse = {
+      content: res.content,
+      mode: peer ? 'peer' : 'workspace',
+      elapsedMs: Math.round(performance.now() - t0),
+    };
+    return body;
+  },
+  { json: true, maxBytes: 64 * 1024, tag: 'honcho' },
+);

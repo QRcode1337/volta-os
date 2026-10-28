@@ -1,7 +1,7 @@
 // GET  /api/editor/feedback?fileKey=<id>   saved pins for one file
 // POST /api/editor/feedback                { fileKey, pins, status, episode? } -> /Volumes/Windsor/VOLTA/editor/feedback/<fileKey>.json
-// Localhost-only, same-origin, application/json only (studioGet / studioPost). fileKey must match a known file.
-import { studioGet, studioPost } from '@/lib/server/studio/http';
+// Localhost-only, same-origin, application/json only (route guards). fileKey must match a known file.
+import { route } from '@/lib/server/route-helpers';
 import { describeEditorMedia } from '@/lib/server/editor/media';
 import { resolveEpisode } from '@/lib/server/editor/episode';
 import { readFeedback, requireFileKey, validateEpisodeTag, validatePins, validateStatus, writeFeedback } from '@/lib/server/editor/feedback';
@@ -9,10 +9,10 @@ import { readFeedback, requireFileKey, validateEpisodeTag, validatePins, validat
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export const GET = studioGet(async (req) => readFeedback(requireFileKey(new URL(req.url).searchParams.get('fileKey'))));
+export const GET = route(async ({ url }) => readFeedback(requireFileKey(url.searchParams.get('fileKey'))));
 
-export const POST = studioPost(
-  async (body) => {
+export const POST = route(
+  async ({ body }) => {
     const fileKey = requireFileKey(body.fileKey);
     const pins = validatePins(body.pins);
     const status = validateStatus(body.status);
@@ -23,5 +23,5 @@ export const POST = studioPost(
     const doc = await writeFeedback(item, pins, status, episode);
     return { ok: true, savedAt: doc.savedAt, pinCount: doc.pins.length, episode: doc.episode ?? null };
   },
-  { maxBytes: 512 * 1024 },
+  { json: true, maxBytes: 512 * 1024 },
 );

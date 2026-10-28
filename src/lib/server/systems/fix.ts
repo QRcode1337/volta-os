@@ -5,6 +5,7 @@ import type { AgentHandoff, AttentionItem, FixRunResult, SystemsReport } from '@
 import { getSystemsReport } from './index';
 import { HOME, redact } from './run';
 import { openClaudeInTerminal } from '../claude-terminal';
+import { HttpError } from '../http-error';
 
 // One-click fixes for the Systems "Needs attention" list. Commands are never taken from the client: the page sends
 // attention ids and everything is re-derived here from a fresh probe.
@@ -16,15 +17,6 @@ const RUN_TIMEOUT_MS = 90_000;
 const OUTPUT_TAIL = 4_000;
 const SHELL = fs.existsSync('/bin/zsh') ? '/bin/zsh' : '/bin/sh';
 
-export class FixError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
 const tail = (s: string, n: number) => (s.length > n ? `…${s.slice(-n)}` : s);
 /** Redact line by line so a long log keeps its shape (redact() also caps length). */
 const clean = (s: string) => tail(s.split('\n').map((l) => redact(l, 1_000)).join('\n'), OUTPUT_TAIL);
@@ -33,7 +25,7 @@ async function pick(ids: string[]): Promise<{ report: SystemsReport; items: Atte
   const report = await getSystemsReport(true);
   const items = ids.length ? report.attention.filter((a) => ids.includes(a.id)) : report.attention;
   if (!items.length) {
-    throw new FixError(404, ids.length ? 'No longer in the attention list — it may already be fixed.' : 'Nothing needs attention.');
+    throw new HttpError(ids.length ? 'No longer in the attention list — it may already be fixed.' : 'Nothing needs attention.', 404);
   }
   return { report, items };
 }
@@ -43,7 +35,7 @@ async function pick(ids: string[]): Promise<{ report: SystemsReport; items: Atte
 export async function runFixCommand(id: string): Promise<FixRunResult> {
   const { items } = await pick([id]);
   const item = items[0];
-  if (!item.command) throw new FixError(400, 'This item has no command to run — hand it to an agent instead.');
+  if (!item.command) throw new HttpError('This item has no command to run — hand it to an agent instead.', 400);
   const command = item.command.command;
   const t0 = Date.now();
   return new Promise((resolve) => {

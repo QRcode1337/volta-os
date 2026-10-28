@@ -1,9 +1,10 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { GenItemRecord, MediaKind } from '@/types/media';
-import { GEN_ROOT, MANIFEST_PATH, MIN_FREE_BYTES, MOUNT_POINT, MediaError } from './config';
+import { GEN_ROOT, MANIFEST_PATH, MIN_FREE_BYTES, MOUNT_POINT } from './config';
 
 const GiB = 1024 ** 3;
 
@@ -33,7 +34,7 @@ export async function checkStorage(): Promise<StorageState> {
 /** Throws a clear 507 when storage is unusable. */
 export async function requireStorage(): Promise<{ root: string; freeBytes: number }> {
   const s = await checkStorage();
-  if (!s.ok) throw new MediaError(s.reason, 507);
+  if (!s.ok) throw new HttpError(s.reason, 507);
   return s;
 }
 
@@ -101,19 +102,19 @@ export async function todaySpendUsd(): Promise<number> {
 
 /** Resolve a manifest id to a file that is verifiably inside GEN_ROOT (symlinks and `..` resolved). Never trusts client paths. */
 export async function resolveFile(id: string): Promise<{ rec: GenItemRecord; file: string; size: number }> {
-  if (!/^[a-z0-9-]{6,40}$/i.test(id)) throw new MediaError('Bad id.', 400);
+  if (!/^[a-z0-9-]{6,40}$/i.test(id)) throw new HttpError('Bad id.', 400);
   const rec = (await readManifest()).find((r) => r.id === id);
-  if (!rec) throw new MediaError('Not found.', 404);
+  if (!rec) throw new HttpError('Not found.', 404);
   let real: string;
   let root: string;
   try {
     [real, root] = await Promise.all([fs.realpath(rec.file), fs.realpath(GEN_ROOT)]);
   } catch {
-    throw new MediaError('File is missing (is the Windsor drive mounted?).', 404);
+    throw new HttpError('File is missing (is the Windsor drive mounted?).', 404);
   }
-  if (!real.startsWith(root + path.sep)) throw new MediaError('Path escapes the generations root.', 403);
+  if (!real.startsWith(root + path.sep)) throw new HttpError('Path escapes the generations root.', 403);
   const st = await fs.stat(real);
-  if (!st.isFile()) throw new MediaError('Not a file.', 404);
+  if (!st.isFile()) throw new HttpError('Not a file.', 404);
   return { rec, file: real, size: st.size };
 }
 

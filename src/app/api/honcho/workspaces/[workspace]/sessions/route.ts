@@ -1,14 +1,17 @@
+import { intParam, route } from '@/lib/server/route-helpers';
 import { listSessions } from '@/lib/server/honcho';
-import { handle, idOf, intOf, json, type Params } from '@/app/api/honcho/_shared';
+import { fromHoncho, idOf } from '@/app/api/honcho/_shared';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /** Workspace sessions, newest first. */
-export const GET = handle(async (req: Request, { params }: Params<{ workspace: string }>) => {
-  const w = idOf((await params).workspace, 'workspace');
-  const sp = new URL(req.url).searchParams;
-  const page = intOf(sp.get('page'), 'page', 1, 1, 10_000);
-  const size = intOf(sp.get('size'), 'size', 50, 1, 100);
-  return json(await listSessions(w, page, size));
-});
+export const GET = route<{ workspace: string }>(
+  ({ params, url }) => {
+    const w = idOf(params.workspace, 'workspace');
+    const page = intParam(url, 'page', { min: 1, max: 10_000, fallback: 1 })!;
+    const size = intParam(url, 'size', { min: 1, max: 100, fallback: 50 })!;
+    return fromHoncho(listSessions(w, page, size));
+  },
+  { tag: 'honcho' },
+);

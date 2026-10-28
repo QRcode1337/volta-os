@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { ActionStatus } from '@/components/tasks/types';
 import { openClaudeInTerminal } from '../claude-terminal';
+import { HttpError } from '../http-error';
 import { ACTIONS_DISPLAY_PATH, ACTIONS_FILE, getActions, parseActionsMarkdown } from './actions';
 
 const STATE_DIR = path.join(os.homedir(), 'Library', 'Application Support', 'VOLTA', 'tasks');
@@ -25,14 +26,6 @@ const ITEM_RE = /^- \[[ >xX!@]\]\s+/;
 const CREATED_RE = /\s*\[\[\d{4}-\d{2}-\d{2}\]\]\s*$/;
 const UPDATED_RE = /\s*\(\d{4}-\d{2}-\d{2}\)\s*$/;
 
-export class ActionWriteError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
 
 const today = () => {
   const d = new Date();
@@ -42,7 +35,7 @@ const stamp = () => new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/
 
 async function readFile() {
   const st = await fs.stat(ACTIONS_FILE).catch(() => null);
-  if (!st) throw new ActionWriteError(404, `${ACTIONS_DISPLAY_PATH} does not exist.`);
+  if (!st) throw new HttpError(`${ACTIONS_DISPLAY_PATH} does not exist.`, 404);
   const content = await fs.readFile(ACTIONS_FILE, 'utf8');
   return { content, mtimeMs: st.mtimeMs, mode: st.mode };
 }
@@ -52,7 +45,7 @@ function findItem(content: string, id: string, line?: number) {
   const { items } = parseActionsMarkdown(content);
   const hits = items.filter((i) => i.id === id);
   const item = hits.find((i) => i.line === line) ?? hits[0];
-  if (!item) throw new ActionWriteError(409, 'That item is no longer in actions.md (OpenClaw may have moved or reworded it). Refresh and try again.');
+  if (!item) throw new HttpError('That item is no longer in actions.md (OpenClaw may have moved or reworded it). Refresh and try again.', 409);
   return item;
 }
 
@@ -77,7 +70,7 @@ async function commit(before: { content: string; mtimeMs: number; mode: number }
   const now = await fs.stat(ACTIONS_FILE);
   if (now.mtimeMs !== before.mtimeMs) {
     await fs.unlink(tmp).catch(() => {});
-    throw new ActionWriteError(409, 'actions.md changed while saving (an OpenClaw run may be editing it). Refresh and try again.');
+    throw new HttpError('actions.md changed while saving (an OpenClaw run may be editing it). Refresh and try again.', 409);
   }
   await fs.rename(tmp, ACTIONS_FILE);
   await fs.appendFile(LOG_FILE, JSON.stringify({ at: new Date().toISOString(), ...log }) + '\n');
@@ -85,7 +78,7 @@ async function commit(before: { content: string; mtimeMs: number; mode: number }
 }
 
 export async function setActionStatus(id: string, line: number | undefined, status: ActionStatus): Promise<{ ok: true }> {
-  if (!(status in MARKER)) throw new ActionWriteError(400, 'Unknown status.');
+  if (!(status in MARKER)) throw new HttpError('Unknown status.', 400);
   const file = await readFile();
   const item = findItem(file.content, id, line);
   if (item.status === status) return { ok: true };
@@ -98,7 +91,7 @@ export async function setActionStatus(id: string, line: number | undefined, stat
 
 export async function addActionNote(id: string, line: number | undefined, note: string): Promise<{ ok: true }> {
   const text = note.replace(/\s+/g, ' ').replace(/^[-*]\s+/, '').trim().slice(0, MAX_NOTE);
-  if (!text) throw new ActionWriteError(400, 'Write a note first.');
+  if (!text) throw new HttpError('Write a note first.', 400);
   const file = await readFile();
   const item = findItem(file.content, id, line);
   const lines = file.content.split('\n');

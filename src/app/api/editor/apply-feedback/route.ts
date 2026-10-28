@@ -3,9 +3,8 @@
 // a dated entry under `## Learned Preferences (RL Log)` in skills/cut|animate/SKILL.md inside ./workspace.
 // NOTE: those are VOLTA's own WORKSPACE COPY, not the user's live skills in ~/.claude/skills. The compiled prompt
 // (Copy All Comments) carries the directive that targets the live skills; the response says so (`scope`).
-import { NextResponse } from 'next/server';
+import { HttpError, route } from '@/lib/server/route-helpers';
 import { readWorkspaceFile, writeWorkspaceFile } from '@/lib/server/workspace';
-import { rejectNonLocalMutation } from '@/lib/server/local-only';
 import { RL_HEADING, deriveLesson, insertUnderHeading, lessonMarkdown, type RlPinInput, type TeachSkill } from '@/components/editor/rl-rules';
 
 export const runtime = 'nodejs';
@@ -13,15 +12,13 @@ export const dynamic = 'force-dynamic';
 
 const SKILLS = new Set(['/animate', '/cut', 'audio', '/robo']);
 const MAX_PINS = 500;
+/** 500 pins × ≤ 2000-char comments plus JSON overhead. */
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
 interface ApplyBody {
   project: string;
   teach: { cut: boolean; animate: boolean };
   pins: RlPinInput[];
-}
-
-function bad(error: string, status = 400) {
-  return NextResponse.json({ error }, { status });
 }
 
 function validate(raw: unknown): ApplyBody | string {
@@ -70,19 +67,11 @@ function titleFor(skill: TeachSkill): string {
   return `# ${skill} — SKILL\n\nSkill file managed by VOLTA Agentic OS. VOLTA Editor appends learned preferences below.\n\n${RL_HEADING}\n`;
 }
 
-export async function POST(req: Request) {
-  const denied = rejectNonLocalMutation(req);
-  if (denied) return denied;
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return bad('Invalid JSON body.');
-  }
+export const POST = route(async ({ body: raw }) => {
   const body = validate(raw);
-  if (typeof body === 'string') return bad(body);
+  if (typeof body === 'string') throw new HttpError(body, 400);
   const wanted: TeachSkill[] = [...(body.teach.animate ? (['/animate'] as const) : []), ...(body.teach.cut ? (['/cut'] as const) : [])];
-  if (!wanted.length) return bad('Enable "Teach my /cut" or "Teach my /animate" first.');
+  if (!wanted.length) throw new HttpError('Enable "Teach my /cut" or "Teach my /animate" first.', 400);
 
   const date = new Date().toISOString().slice(0, 10);
   const files: { path: string; before: string; after: string }[] = [];
@@ -103,13 +92,13 @@ export async function POST(req: Request) {
       files.push({ path: `workspace/${lesson.file}`, before, after });
     }
   } catch (err) {
-    return bad(`Failed to write skill files: ${(err as Error).message}`, 500);
+    throw new HttpError(`Failed to write skill files: ${(err as Error).message}`, 500);
   }
-  if (!files.length) return bad(`No unresolved pins tagged ${skipped.join(' or ')} — nothing to teach.`, 422);
-  return NextResponse.json({
+  if (!files.length) throw new HttpError(`No unresolved pins tagged ${skipped.join(' or ')} — nothing to teach.`, 422);
+  return {
     files,
     skipped,
     scope: 'workspace-copy',
     note: "Written to VOLTA's ./workspace/skills (a local copy), not to your live ~/.claude/skills.",
-  });
-}
+  };
+}, { json: true, maxBytes: MAX_BODY_BYTES });

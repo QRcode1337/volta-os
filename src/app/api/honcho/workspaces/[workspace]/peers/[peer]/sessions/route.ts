@@ -1,16 +1,18 @@
+import { intParam, route } from '@/lib/server/route-helpers';
 import { peerSessions } from '@/lib/server/honcho';
-import { handle, idOf, intOf, json, type Params } from '@/app/api/honcho/_shared';
+import { fromHoncho, idOf } from '@/app/api/honcho/_shared';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /** Sessions a peer belongs to, newest first. */
-export const GET = handle(async (req: Request, { params }: Params<{ workspace: string; peer: string }>) => {
-  const p = await params;
-  const w = idOf(p.workspace, 'workspace');
-  const peer = idOf(p.peer, 'peer');
-  const sp = new URL(req.url).searchParams;
-  const page = intOf(sp.get('page'), 'page', 1, 1, 10_000);
-  const size = intOf(sp.get('size'), 'size', 50, 1, 100);
-  return json(await peerSessions(w, peer, page, size));
-});
+export const GET = route<{ workspace: string; peer: string }>(
+  ({ params, url }) => {
+    const w = idOf(params.workspace, 'workspace');
+    const peer = idOf(params.peer, 'peer');
+    const page = intParam(url, 'page', { min: 1, max: 10_000, fallback: 1 })!;
+    const size = intParam(url, 'size', { min: 1, max: 100, fallback: 50 })!;
+    return fromHoncho(peerSessions(w, peer, page, size));
+  },
+  { tag: 'honcho' },
+);

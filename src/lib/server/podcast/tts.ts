@@ -1,11 +1,11 @@
 import 'server-only';
+import { HttpError } from '../http-error';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { CostEstimate, PodcastConfig } from './types';
 import type { Turn } from './script';
 import { FFMPEG, FFPROBE, geminiKey } from './config';
-import { PodcastError } from './storage';
 import { errMsg, maskSecrets, round, sleep } from './util';
 
 // Stage 4: Gemini multi-speaker text-to-speech (generateContent, two prebuilt voices), then ffmpeg joins the chunks
@@ -126,8 +126,8 @@ interface InteractionResp {
 
 async function synthChunk(cfg: PodcastConfig, chunk: Turn[], expectedSec: number, label: string): Promise<{ pcm: Buffer; inTok: number; outTok: number }> {
   const key = geminiKey();
-  if (!key) throw new PodcastError('GEMINI_API_KEY is not set in .env.local (restart the dev server after adding it).', 503);
-  if (!cfg.tts.model.startsWith('gemini-3')) throw new PodcastError(`tts.model "${cfg.tts.model}" is not supported: use a gemini-3.x TTS model (Interactions API).`, 400);
+  if (!key) throw new HttpError('GEMINI_API_KEY is not set in .env.local (restart the dev server after adding it).', 503);
+  if (!cfg.tts.model.startsWith('gemini-3')) throw new HttpError(`tts.model "${cfg.tts.model}" is not supported: use a gemini-3.x TTS model (Interactions API).`, 400);
   const body = {
     model: cfg.tts.model,
     input: [
@@ -172,7 +172,7 @@ async function synthChunk(cfg: PodcastConfig, chunk: Turn[], expectedSec: number
         await sleep(3000 * attempt);
         continue;
       }
-      throw new PodcastError(`Gemini TTS rejected ${label}: ${lastErr}`, 502); // 400/401/403/404: retrying cannot help
+      throw new HttpError(`Gemini TTS rejected ${label}: ${lastErr}`, 502); // 400/401/403/404: retrying cannot help
     }
     const audio = (j.steps ?? []).flatMap((s) => s.content ?? []).filter((c) => c.type === 'audio' && c.data).pop();
     if (!audio?.data) {
@@ -193,7 +193,7 @@ async function synthChunk(cfg: PodcastConfig, chunk: Turn[], expectedSec: number
     const outTok = j.usage?.total_output_tokens ?? Math.round(sec * rateFor(cfg.tts.model, '2026-01-01').tokPerSec);
     return { pcm, inTok: j.usage?.total_input_tokens ?? 0, outTok };
   }
-  throw new PodcastError(`Gemini TTS failed for ${label} after retries: ${lastErr}`, 502);
+  throw new HttpError(`Gemini TTS failed for ${label} after retries: ${lastErr}`, 502);
 }
 
 function wav(pcm: Buffer): Buffer {
@@ -243,7 +243,7 @@ export async function synthesize(cfg: PodcastConfig, turns: Turn[], date: string
     const file = path.join(workDir, `c${String(i).padStart(3, '0')}.wav`);
     await fs.writeFile(file, wav(r.pcm));
     files.push(file);
-    if (spent > capUsd) throw new PodcastError(`Stopped: TTS spend $${spent.toFixed(3)} exceeded the $${capUsd.toFixed(2)} cap after ${i + 1}/${chunks.length} chunks.`, 402);
+    if (spent > capUsd) throw new HttpError(`Stopped: TTS spend $${spent.toFixed(3)} exceeded the $${capUsd.toFixed(2)} cap after ${i + 1}/${chunks.length} chunks.`, 402);
   }
   const gapFile = path.join(workDir, 'gap.wav');
   await fs.writeFile(gapFile, wav(Buffer.alloc(Math.round((SAMPLE_RATE * 2 * cfg.tts.gapMs) / 1000))));

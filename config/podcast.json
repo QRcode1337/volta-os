@@ -5,6 +5,9 @@
   "author": "VOLTA OS",
   "language": "en-us",
   "publicBaseUrl": "https://patricks-macbook-pro-1.tail6e6059.ts.net:8447",
+  "externalFeed": {
+    "url": "https://muse.ai/podcasts/feed/1261035840429864/bf5e984e-1fd3-4e47-802a-3738818c9f76"
+  },
   "hosts": [
     {
       "name": "Mira",

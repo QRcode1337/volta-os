@@ -81,8 +81,9 @@ export function PodcastApp() {
   const selectedEp = useMemo(() => episodes.find((e) => e.date === selected) ?? null, [episodes, selected]);
   const config: PodcastConfig | null = status?.config ?? null;
 
+  const external = !!status?.externalFeed;
   const blockers = useMemo(() => {
-    if (!status) return [] as string[];
+    if (!status || status.externalFeed) return [] as string[];
     const b: string[] = [];
     if (!status.storage.ok) b.push(status.storage.reason ?? 'Windsor is unavailable.');
     if (!status.keys.gemini) b.push('GEMINI_API_KEY is missing from .env.local (restart the dev server after adding it).');
@@ -120,7 +121,7 @@ export function PodcastApp() {
         subtitle="Daily two-host podcast · AI · UAP · quantum · physics"
         right={
           <>
-            {status && (
+            {status && !external && (
               <>
                 <span className="hud-label hidden md:inline" title={status.estimate.breakdown}>
                   per episode <span className="text-green">est. {fmtUsd(status.estimate.usd)}</span>
@@ -144,6 +145,7 @@ export function PodcastApp() {
             >
               <RefreshCw className="h-3 w-3" /> Refresh
             </button>
+            {!external && (
             <button
               type="button"
               disabled={!status || running || blockers.length > 0}
@@ -152,6 +154,7 @@ export function PodcastApp() {
             >
               <Mic className="h-3.5 w-3.5" /> {running ? 'Generating' : todayDone ? 'Regenerate today' : 'Generate today'}
             </button>
+            )}
           </>
         }
       />
@@ -174,7 +177,7 @@ export function PodcastApp() {
           {loaded && episodes.length === 0 && (
             <div className="mt-6 text-center">
               <p className="font-doto text-4xl text-orange">0</p>
-              <p className="mt-2 text-[12.5px] text-secondary">No episodes yet. Generate today&apos;s briefing, or load the LaunchAgent for 06:00 runs.</p>
+              <p className="mt-2 text-[12.5px] text-secondary">{external ? 'No episodes in the muse.ai feed yet.' : 'No episodes yet. Generate today&apos;s briefing, or load the LaunchAgent for 06:00 runs.'}</p>
             </div>
           )}
           <ul className="mt-3 space-y-1.5">
@@ -193,7 +196,7 @@ export function PodcastApp() {
                     </span>
                     <span className="mt-1 line-clamp-2 block text-[12.5px] leading-snug text-paper">{e.title}</span>
                     <span className="mt-1 block font-mono text-[10px] text-muted">
-                      {e.stories.length} stories · audio {fmtUsd(e.cost.ttsUsd)}
+                      {e.audioUrl ? 'muse.ai' : `${e.stories.length} stories · audio ${fmtUsd(e.cost.ttsUsd)}`}
                     </span>
                     {rh?.degraded && (
                       <span className="mt-1 flex items-center gap-1 font-mono text-[10px] text-amber" title="Web research mostly failed for this episode; open it for the reason.">
@@ -209,24 +212,24 @@ export function PodcastApp() {
 
         <main className="hud-scroll min-w-0 p-4 lg:overflow-y-auto">
           {selectedEp && config ? (
-            <EpisodeView episode={selectedEp} config={config} busy={running} onRegenerate={(d) => openDialog(d, true)} />
+            <EpisodeView episode={selectedEp} config={config} busy={running} external={external} onRegenerate={(d) => openDialog(d, true)} />
           ) : (
             <div className="flex h-full min-h-[240px] flex-col items-center justify-center gap-2 text-center">
               <p className="font-doto text-5xl text-orange">VOLTA</p>
-              <p className="max-w-md text-secondary">Your daily briefing: web-researched, cited and voiced by two hosts. Pick an episode, or generate today&apos;s.</p>
+              <p className="max-w-md text-secondary">Your daily briefing from muse.ai. Pick an episode to play.</p>
             </div>
           )}
         </main>
 
         <aside className="hud-scroll space-y-4 border-t border-subtle p-4 lg:overflow-y-auto lg:border-l lg:border-t-0">
           {job && <JobCard job={job} />}
-          {config && <TopicWeights config={config} onSaved={(c) => { setStatus((s) => (s ? { ...s, config: c } : s)); push('Weights saved. They apply from the next run.', { tone: 'success' }); }} onError={(m) => push(m, { tone: 'error' })} />}
-          {status && <SubscribeCard baseUrl={status.publicBaseUrl} tokenOk={status.keys.feedToken} onError={(m) => push(m, { tone: 'error' })} />}
-          {status && !status.keys.notion && <p className="text-[11.5px] text-muted">NOTION_TOKEN is not set, so Frontier Signal reports are skipped.</p>}
+          {config && !external && <TopicWeights config={config} onSaved={(c) => { setStatus((s) => (s ? { ...s, config: c } : s)); push('Weights saved. They apply from the next run.', { tone: 'success' }); }} onError={(m) => push(m, { tone: 'error' })} />}
+          {status && <SubscribeCard baseUrl={status.publicBaseUrl} tokenOk={status.keys.feedToken} externalUrl={status.externalFeed} onError={(m) => push(m, { tone: 'error' })} />}
+          {status && !external && !status.keys.notion && <p className="text-[11.5px] text-muted">NOTION_TOKEN is not set, so Frontier Signal reports are skipped.</p>}
         </aside>
       </div>
 
-      {status && <GenerateDialog choice={choice} estimate={status.estimate} busy={starting} onCancel={() => setChoice(null)} onConfirm={(c) => void start(c)} />}
+      {status && !external && <GenerateDialog choice={choice} estimate={status.estimate} busy={starting} onCancel={() => setChoice(null)} onConfirm={(c) => void start(c)} />}
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </div>
   );

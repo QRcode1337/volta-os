@@ -34,6 +34,8 @@ export interface PodcastConfig {
   author: string;
   language: string;
   publicBaseUrl: string;
+  /** When set, episodes come from this muse.ai RSS feed and local generation is disabled. */
+  externalFeed?: { url: string };
   hosts: [HostConfig, HostConfig];
   topics: TopicConfig[];
   storyCount: number;
@@ -147,6 +149,8 @@ export interface EpisodeRecord {
   warnings: string[];
   /** Research health. Absent on episodes made before 2026-10-27's fix. */
   research?: ResearchSummary;
+  /** Set for episodes hosted by the external feed: play this URL; there is no local file, script or notes. */
+  audioUrl?: string;
 }
 
 export interface Manifest {
@@ -195,4 +199,6 @@ export interface PodcastStatus {
   today: string;
   hasToday: boolean;
   publicBaseUrl: string;
+  /** muse.ai feed URL when episodes are external (generation disabled), else null. */
+  externalFeed: string | null;
 }

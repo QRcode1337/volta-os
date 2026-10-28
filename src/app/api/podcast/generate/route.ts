@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { HttpError, NO_STORE, route } from '@/lib/server/route-helpers';
+import { loadConfig } from '@/lib/server/podcast/config';
 import { startGeneration } from '@/lib/server/podcast/pipeline';
 import { errMsg } from '@/lib/server/podcast/util';
 
@@ -15,6 +16,7 @@ export const runtime = 'nodejs';
 export const POST = route(
   async ({ body }) => {
     try {
+      if (loadConfig().externalFeed) throw new HttpError('Episodes now come from the muse.ai feed; local generation is disabled (remove externalFeed from config/podcast.json to re-enable).', 410);
       const job = await startGeneration({
         date: typeof body.date === 'string' ? body.date : undefined,
         force: body.force === true,

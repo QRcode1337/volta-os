@@ -18,6 +18,7 @@ async function serve(req: Request) {
   if (!isDate(date)) return NextResponse.json({ error: 'Bad date' }, { status: 400 });
   const ep = await getEpisode(date).catch(() => null);
   if (!ep) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (ep.audioUrl) return NextResponse.redirect(ep.audioUrl, 302);
   if (!(await fs.promises.stat(ep.file).catch(() => null))) {
     return NextResponse.json({ error: 'Audio file is not available (is the Windsor drive mounted?)' }, { status: 503 });
   }

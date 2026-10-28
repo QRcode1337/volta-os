@@ -29,7 +29,7 @@ interface Detail {
   script: string;
 }
 
-export function EpisodeView({ episode, config, busy, onRegenerate }: { episode: EpisodeRecord; config: PodcastConfig; busy: boolean; onRegenerate: (date: string) => void }) {
+export function EpisodeView({ episode, config, busy, external, onRegenerate }: { episode: EpisodeRecord; config: PodcastConfig; busy: boolean; external: boolean; onRegenerate: (date: string) => void }) {
   const [tab, setTab] = useState<Tab>('notes');
   const [detail, setDetail] = useState<Detail | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -51,11 +51,11 @@ export function EpisodeView({ episode, config, busy, onRegenerate }: { episode: 
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
-      <Player src={fileUrl(episode.date)} title={episode.title} durationHint={episode.durationSec} />
+      <Player src={episode.audioUrl ?? fileUrl(episode.date)} title={episode.title} durationHint={episode.durationSec} />
       {research?.degraded && <ResearchNotice health={research} labelOf={labelOf} />}
       <div className="flex flex-wrap items-center gap-2">
         <nav className="flex flex-wrap gap-1" aria-label="Episode sections">
-          {TABS.map((t) => (
+          {(external ? TABS.slice(0, 1) : TABS).map((t) => (
             <button
               key={t.id}
               type="button"
@@ -67,16 +67,16 @@ export function EpisodeView({ episode, config, busy, onRegenerate }: { episode: 
           ))}
         </nav>
         <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.05em] text-muted">
-          {fmtDay(episode.date)} · {Math.round(episode.durationSec / 60)} min · {fmtBytes(episode.bytes)} · {episode.stories.length} stories
+          {fmtDay(episode.date)} · {Math.round(episode.durationSec / 60)} min · {fmtBytes(episode.bytes)}{external ? '' : ` · ${episode.stories.length} stories`}
         </span>
-        <button
+        {!external && <button
           type="button"
           disabled={busy}
           onClick={() => onRegenerate(episode.date)}
           className="inline-flex h-8 items-center gap-1.5 rounded-full border border-subtle px-3 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary hover:border-highlight hover:text-paper disabled:opacity-40"
         >
           <RefreshCw className="h-3 w-3" /> Regenerate
-        </button>
+        </button>}
       </div>
 
       <div className="rounded-lg border border-subtle bg-panel p-5">

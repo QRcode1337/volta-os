@@ -11,6 +11,7 @@ export const GET = route(async ({ url }) => {
   if (!isDate(date)) throw new HttpError('`date` must be YYYY-MM-DD.', 400);
   const episode = await getEpisode(date);
   if (!episode) throw new HttpError(`No episode for ${date}.`, 404);
+  if (episode.audioUrl) return { episode, notes: episode.description, script: '' };
   const [notes, script] = await Promise.all([readText(episode.notesFile), readText(episode.scriptFile)]);
   return { episode, notes: notes ?? '', script: script ?? '' };
 });

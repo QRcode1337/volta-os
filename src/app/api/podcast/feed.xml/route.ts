@@ -1,3 +1,4 @@
+import { NextResponse } from 'next/server';
 import { authorizeFeedRequest, PRIVATE_HEADERS } from '@/lib/server/podcast/auth';
 import { feedToken, loadConfig } from '@/lib/server/podcast/config';
 import { buildFeedXml } from '@/lib/server/podcast/feed';
@@ -14,6 +15,7 @@ export async function GET(req: Request) {
   const denied = authorizeFeedRequest(req);
   if (denied) return denied;
   const cfg = loadConfig();
+  if (cfg.externalFeed) return NextResponse.redirect(cfg.externalFeed.url, 302);
   const token = feedToken();
   if (token.length < 32) return new Response('PODCAST_FEED_TOKEN is not configured', { status: 503 });
   const episodes = await listEpisodes().catch(() => []);

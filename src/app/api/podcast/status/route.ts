@@ -28,5 +28,6 @@ export const GET = route(async (): Promise<PodcastStatus> => {
     today,
     hasToday: !!ep,
     publicBaseUrl: config.publicBaseUrl,
+    externalFeed: config.externalFeed?.url ?? null,
   };
 });

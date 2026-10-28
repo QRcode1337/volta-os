@@ -7,6 +7,8 @@ export const runtime = 'nodejs';
 
 /** GET /api/podcast/subscribe → the full private feed URL incl. token (localhost only; used by the Copy button) */
 export const GET = route(async () => {
+  const ext = loadConfig().externalFeed?.url;
+  if (ext) return { configured: true, url: ext };
   const token = feedToken();
   if (token.length < 32) return { configured: false, url: null };
   return { configured: true, url: feedUrl(loadConfig().publicBaseUrl, token) };

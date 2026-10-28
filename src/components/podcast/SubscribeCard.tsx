@@ -5,7 +5,7 @@ import { copyText } from '@/components/elements/kit/clipboard';
 import { api } from './podcast-client';
 
 /** Shows the private feed URL with the token masked; the Copy button fetches the real URL from the local-only route. */
-export function SubscribeCard({ baseUrl, tokenOk, onError }: { baseUrl: string; tokenOk: boolean; onError: (m: string) => void }) {
+export function SubscribeCard({ baseUrl, tokenOk, externalUrl, onError }: { baseUrl: string; tokenOk: boolean; externalUrl?: string | null; onError: (m: string) => void }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
@@ -25,11 +25,11 @@ export function SubscribeCard({ baseUrl, tokenOk, onError }: { baseUrl: string; 
         <Rss className="h-3 w-3" /> Subscribe on iPhone
       </h2>
       <p className="mt-2 break-all rounded-md border border-subtle/60 bg-obsidian px-2.5 py-2 font-mono text-[10.5px] text-secondary">
-        {baseUrl}/api/podcast/feed.xml?token=<span className="text-orange">{tokenOk ? '••••••••' : 'NOT SET'}</span>
+        {externalUrl ?? <>{baseUrl}/api/podcast/feed.xml?token=<span className="text-orange">{tokenOk ? '••••••••' : 'NOT SET'}</span></>}
       </p>
       <button
         type="button"
-        disabled={!tokenOk}
+        disabled={!tokenOk && !externalUrl}
         onClick={() => void copy()}
         className="mt-2.5 inline-flex h-8 items-center gap-1.5 rounded-full border border-subtle px-3 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary transition-colors hover:border-highlight hover:text-paper disabled:opacity-40"
       >

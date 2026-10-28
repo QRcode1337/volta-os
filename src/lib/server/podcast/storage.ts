@@ -4,7 +4,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { WINDSOR_ROOT, assertFreeSpace, isWindsorMounted, writeAtomic } from '../storage';
 import type { EpisodeRecord, Manifest } from './types';
-import { PODCAST_ROOT } from './config';
+import { PODCAST_ROOT, loadConfig } from './config';
+import { museEpisodes } from './muse';
 import { isDate } from './util';
 
 export type StorageState = { ok: true; root: string; freeBytes: number } | { ok: false; root: string; reason: string };
@@ -48,11 +49,15 @@ export async function readManifest(): Promise<Manifest> {
 
 /** Newest first. */
 export async function listEpisodes(): Promise<EpisodeRecord[]> {
+  const ext = loadConfig().externalFeed?.url;
+  if (ext) return museEpisodes(ext);
   return (await readManifest()).episodes.sort((a, b) => b.date.localeCompare(a.date));
 }
 
 export async function getEpisode(date: string): Promise<EpisodeRecord | null> {
   if (!isDate(date)) return null;
+  const ext = loadConfig().externalFeed?.url;
+  if (ext) return (await museEpisodes(ext)).find((e) => e.date === date) ?? null;
   return (await readManifest()).episodes.find((e) => e.date === date) ?? null;
 }
 

@@ -4,9 +4,8 @@ import type { RealSkill } from '@/types/sources';
 import { EFFORT_LEVELS, MODEL_TIERS } from '@/lib/mock-data';
 import { WORKSPACE_DIR } from '@/lib/server/workspace';
 import { HttpError, route } from '@/lib/server/route-helpers';
-import { getSkills } from '@/lib/server/sources/skills';
-import { skillCommand } from '@/components/dashboard/widgets/right-skills';
 import { JEV_OVERRIDE_THRESHOLD, hashString, resolveRoutedModel, routeAndRecord } from '@/lib/server/jev';
+import { recordSkillRoute, resolveSkill } from '@/lib/server/jev/skill-routing';
 import { buildMockReport } from './reports';
 import { tilde } from '@/lib/server/storage';
 import { ClaudeCliError, runClaudeCli } from '@/lib/server/claude';
@@ -49,25 +48,6 @@ function parseBody(body: unknown): SkillRunRequest | string {
     customPrompt: typeof customPrompt === 'string' && customPrompt.trim() ? customPrompt.trim() : undefined,
   };
 }
-
-/**
- * Resolve "/name" against the real skill catalog (~/.claude/skills + installed plugins + transcript-only),
- * with the same derivation the Skills Deck uses: when several skills strip to one "/name", only a single
- * bare (un-namespaced) skill owns it.
- */
-async function resolveSkill(command: string): Promise<{ skill: RealSkill | null; peers: string[] }> {
-  let skills: RealSkill[] = [];
-  try {
-    skills = await getSkills();
-  } catch {
-    // catalog unreadable — treat as unknown
-  }
-  const matches = skills.filter((s) => skillCommand(s) === command);
-  if (matches.length <= 1) return { skill: matches[0] ?? null, peers: [] };
-  const bare = matches.filter((s) => !s.id.includes(':'));
-  return { skill: bare.length === 1 ? bare[0] : null, peers: matches.map((s) => s.id) };
-}
-
 
 function skillNote(command: string, skill: RealSkill | null, peers: string[]): string {
   if (skill?.path) return `**SKILL.md:** \`${tilde(skill.path)}\`\n\n`;
@@ -154,6 +134,17 @@ export const POST = route(async ({ req, body: raw }) => {
   const { routed, overridden } = resolveRoutedModel(body.model, jev);
   const seed = hashString(`${body.command}|${routed}|${body.effort}|${body.customPrompt ?? ''}`);
   const { skill, peers } = await resolveSkill(body.command);
+  recordSkillRoute({
+    at: new Date().toISOString(),
+    command: body.command,
+    skillId: skill?.id ?? null,
+    requested: body.model,
+    picked: jev.model,
+    confidence: jev.confidence,
+    routed,
+    overridden,
+    source: jev.source,
+  });
 
   const routeLine = overridden
     ? `Jev rerouted **${body.model} → ${routed}** (${jev.confidence.toFixed(2)} confidence · ${jev.reason})`

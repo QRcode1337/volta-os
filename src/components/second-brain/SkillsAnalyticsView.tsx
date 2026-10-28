@@ -19,6 +19,8 @@ import { cn } from '@/lib/cn';
 import { easeInOutCubic } from './shared';
 import { HeaderStat, USER_SKILL_COLOR, ViewState, apiGate, matchesQuery, originColor, relTime, useApi, useNow } from './analytics-shared';
 import { fitBubbleLabel } from './analytics-bubble-label';
+import { JevRoutingBoard, type SkillRoutingBoard } from './JevRoutingBoard';
+import { ModelEffortBadge } from '@/components/robo-ui';
 
 interface Props {
   /** Legacy props from SecondBrainApp — accepted, ignored (skills are now read from /api/skills-real). */
@@ -28,11 +30,12 @@ interface Props {
   onRoute?: (id: string, model: ModelTier) => void;
 }
 
-type Mode = 'most' | 'recent' | 'all';
+type Mode = 'most' | 'recent' | 'all' | 'jev';
 const MODES: { id: Mode; label: string }[] = [
   { id: 'most', label: 'Most used' },
   { id: 'recent', label: 'Recently used' },
   { id: 'all', label: 'All skills' },
+  { id: 'jev', label: 'JEV routed' },
 ];
 const ROW_H = 58;
 /** Skills seen in transcripts with no SKILL.md on disk (built-ins, removed plugins, names several skills share). */
@@ -84,6 +87,7 @@ function useTweenedLayout(target: Record<string, Circle>, duration = 800): Recor
 
 export function SkillsAnalyticsView({ query = '' }: Props) {
   const api = useApi<{ skills: RealSkill[]; installedCount?: number }>('/api/skills-real');
+  const jevApi = useApi<SkillRoutingBoard>('/api/jev-router/skills', 60_000);
   const now = useNow();
   const [mode, setMode] = useState<Mode>('most');
   const [search, setSearch] = useState('');
@@ -92,6 +96,11 @@ export function SkillsAnalyticsView({ query = '' }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
 
   const skills = useMemo(() => api.data?.skills ?? [], [api.data]);
+  /** skill id → JEV's most common pick, for skills JEV has overridden at least once (the JEV ROUTED badge). */
+  const jevRouted = useMemo(
+    () => new Map((jevApi.data?.rows ?? []).filter((r) => r.skillId && r.routedDown + r.routedUp > 0).map((r) => [r.skillId!, r.jevPick])),
+    [jevApi.data],
+  );
 
   const usage = useMemo(() => {
     const uses = new Map(skills.map((s) => [s.id, Math.max(0, s.uses30d)]));
@@ -256,10 +265,12 @@ export function SkillsAnalyticsView({ query = '' }: Props) {
                 </button>
               )}
             </label>
-            <span className="shrink-0 font-mono text-[9.5px] text-muted">{list.length}</span>
+            <span className="shrink-0 font-mono text-[9.5px] text-muted">{mode === 'jev' ? (jevApi.data?.rows.length ?? 0) : list.length}</span>
           </header>
           <div ref={listRef} className="hud-scroll min-h-0 flex-1 overflow-y-auto">
-            {list.length === 0 ? (
+            {mode === 'jev' ? (
+              <JevRoutingBoard api={jevApi} search={search} now={now} />
+            ) : list.length === 0 ? (
               <ViewState
                 kind="empty"
                 title={search ? 'NO MATCHING SKILLS' : mode === 'recent' ? 'NO RECENT SKILL CALLS' : 'NO SKILL CALLS IN 30 DAYS'}
@@ -292,6 +303,7 @@ export function SkillsAnalyticsView({ query = '' }: Props) {
                         <div className="flex items-center gap-2">
                           <span className="truncate font-mono text-[12px] font-semibold text-paper">{bareName(s)}</span>
                           <OriginBadge s={s} />
+                          {jevRouted.has(s.id) && <ModelEffortBadge model={jevRouted.get(s.id)!} label="JEV ROUTED" />}
                           <span className="ml-auto shrink-0 font-mono text-[10px] text-muted">
                             {s.lastUsedAt ? relTime(s.lastUsedAt, now) : 'never'}
                             {older && <span title="Calls found in scanned transcripts, all before the 30-day window"> · before 30d</span>}

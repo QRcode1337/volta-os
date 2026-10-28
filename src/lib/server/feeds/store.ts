@@ -9,7 +9,7 @@ import type { FeedTriage } from './types';
 // kept in memory for this server process and the API reports persisted:false.
 
 /** Bump when the triage labels/instructions change: older cached labels are ignored and items are classified again. */
-export const TRIAGE_VERSION = 2;
+export const TRIAGE_VERSION = 3; // 3 (2026-10-28): needs-action must clear NEEDS_ACTION_MIN (triage.ts)
 const KEEP_MS = 180 * 24 * 3600 * 1000;
 
 async function driveProblem(): Promise<string | null> {

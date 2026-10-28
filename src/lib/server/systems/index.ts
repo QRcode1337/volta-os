@@ -3,12 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { AttentionItem, ServiceCheck, StorageReport, SystemsReport, SystemsSummary } from '@/types/systems';
 import { cached } from '@/lib/server/sources/cache';
-import { HONCHO_URL } from '@/lib/server/honcho';
 import { getStatus as ltmStatus } from '@/lib/server/ltm';
 import { getHonchoLlmDeps } from './honcho-deps';
 import { launchdList, listeners, plistFacts, processes } from './host';
 import { getMemory } from './memory';
 import { probeLmStudio, probeOllama } from './models';
+import { HERMES_DEFAULT_PORT, healthUrl, service, withPort } from '@/lib/server/services';
 import { GiB } from '@/lib/server/storage';
 import { HOME, httpGet, type HttpResult } from './run';
 import { ALL_AGENT_LABELS, claudeMem, dockerHoncho, getMeta, hermes, hermesState, honcho, lmStudioService, ltmDaemon, ollama, omniroute, openclaw, volta, type Ctx } from './services';
@@ -18,7 +18,6 @@ import { getVolumes, peekSizes } from './storage';
 
 const CORE_TTL_MS = 15_000;
 const CORE_MAX_STALE_MS = 25_000;
-const HERMES_A2A_DEFAULT = 9900;
 const VOLTA_PORT = Number(process.env.PORT) || 50000;
 /** The user's documented disk-cleanup playbook script (dry-run unless --apply). */
 const CLEANUP_SCRIPT = path.join(HOME, 'bin', 'disk-cleanup.sh');
@@ -34,10 +33,10 @@ async function loadCore(): Promise<Core> {
     plistFacts(ALL_AGENT_LABELS),
     getMeta(),
     httpGet(`http://127.0.0.1:${VOLTA_PORT}/api/systems/ping`, 5_000),
-    httpGet('http://127.0.0.1:18789/health'),
-    httpGet('http://127.0.0.1:20128/api/health'),
-    httpGet('http://127.0.0.1:37777/api/health'),
-    httpGet(`${HONCHO_URL}/health`),
+    httpGet(healthUrl('openclaw')),
+    httpGet(healthUrl('omniroute')),
+    httpGet(healthUrl('claude-mem')),
+    httpGet(healthUrl('honcho')),
     dockerHoncho(),
     hermesState(),
     probeOllama(),
@@ -50,9 +49,9 @@ async function loadCore(): Promise<Core> {
 
   // Phase 2 — the Hermes A2A port (a listener owned by the gateway pid, else the default) + one `ps` for every PID.
   const hermesPorts = hst.pid ? [...ls.entries()].filter(([, l]) => l.pid === hst.pid).map(([p]) => p) : [];
-  const hermesPort = hermesPorts.includes(HERMES_A2A_DEFAULT) || !hermesPorts.length ? HERMES_A2A_DEFAULT : Math.min(...hermesPorts);
+  const hermesPort = hermesPorts.includes(HERMES_DEFAULT_PORT) || !hermesPorts.length ? HERMES_DEFAULT_PORT : Math.min(...hermesPorts);
   const pids = [...[...ls.values()].map((l) => l.pid), ...(ld ? [...ld.values()].map((e) => e.pid ?? 0) : []), hst.pid ?? 0, Number((cmem.json as { pid?: unknown } | null)?.pid) || 0];
-  const [hermesHttp, procs] = await Promise.all([httpGet(`http://127.0.0.1:${hermesPort}/health`) as Promise<HttpResult>, processes(pids)]);
+  const [hermesHttp, procs] = await Promise.all([httpGet(`${withPort(service('hermes').baseUrl, hermesPort)}${service('hermes').healthPath}`) as Promise<HttpResult>, processes(pids)]);
 
   const ltm = ltmStatus(); // synchronous SQLite read (~20 ms) — after the HTTP probes so it can't skew their latency
   const ctx: Ctx = { listeners: ls, launchd: ld, plists, procs, meta, now: Date.now() };

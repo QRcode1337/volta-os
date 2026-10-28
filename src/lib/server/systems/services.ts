@@ -11,6 +11,7 @@ import { agentState, bindOf, type AgentOpts, type LaunchdEntry, type Listener, t
 import type { HonchoLlmDeps, HonchoLlmTarget } from './honcho-deps';
 import type { RuntimeProbe } from './models';
 import { redactSecrets } from '../redact';
+import { HERMES_DEFAULT_PORT, portOf, service } from '@/lib/server/services';
 import { GiB, tilde } from '@/lib/server/storage';
 import { BIN, run } from '../proc';
 import { HOME, arr, num, obj, str, type HttpResult } from './run';
@@ -259,7 +260,7 @@ export function volta(ctx: Ctx, r: HttpResult, port: number): ServiceCheck {
 export function openclaw(ctx: Ctx, r: HttpResult): ServiceCheck {
   const s = base('openclaw', 'OpenClaw gateway', 'agent gateway', true);
   s.launchAgents = agents(ctx, 'openclaw');
-  http(s, ctx, 18789, '/health', r);
+  http(s, ctx, portOf('openclaw'), service('openclaw').healthPath, r);
   const j = obj(r.json);
   if (r.ok && j.ok === true) {
     s.status = 'up';
@@ -277,7 +278,7 @@ export function openclaw(ctx: Ctx, r: HttpResult): ServiceCheck {
   s.command = {
     label: 'Restart command',
     command: 'openclaw gateway restart',
-    note: `If it refuses (state lock) or the process is alive with nothing on :18789, kill it, then ${KICK('ai.openclaw.gateway')}`,
+    note: `If it refuses (state lock) or the process is alive with nothing on :${portOf('openclaw')}, kill it, then ${KICK('ai.openclaw.gateway')}`,
   };
   return s;
 }
@@ -285,7 +286,7 @@ export function openclaw(ctx: Ctx, r: HttpResult): ServiceCheck {
 export function omniroute(ctx: Ctx, r: HttpResult): ServiceCheck {
   const s = base('omniroute', 'OmniRoute', 'model router', true);
   s.launchAgents = agents(ctx, 'omniroute');
-  http(s, ctx, 20128, '/api/health', r);
+  http(s, ctx, portOf('omniroute'), service('omniroute').healthPath, r);
   const j = obj(r.json);
   if (r.ok && str(j.status) === 'ok') {
     s.status = 'up';
@@ -318,7 +319,7 @@ export function omniroute(ctx: Ctx, r: HttpResult): ServiceCheck {
 
 export function claudeMem(ctx: Ctx, r: HttpResult): ServiceCheck {
   const s = base('claude-mem', 'claude-mem worker', 'memory', true);
-  http(s, ctx, 37777, '/api/health', r);
+  http(s, ctx, portOf('claude-mem'), service('claude-mem').healthPath, r);
   const j = obj(r.json);
   const deps = obj(j.dependencies);
   if (r.ok && str(j.status) === 'ok') {
@@ -357,7 +358,7 @@ export function claudeMem(ctx: Ctx, r: HttpResult): ServiceCheck {
   if (ctx.meta.claudeMemWorker) {
     s.command = {
       label: 'Start command',
-      command: `CLAUDE_MEM_WORKER_PORT=37777 nohup ${ctx.meta.bun} ${tilde(ctx.meta.claudeMemWorker)} >> ~/.claude-mem/worker.log 2>&1 < /dev/null &`,
+      command: `CLAUDE_MEM_WORKER_PORT=${portOf('claude-mem')} nohup ${ctx.meta.bun} ${tilde(ctx.meta.claudeMemWorker)} >> ~/.claude-mem/worker.log 2>&1 < /dev/null &`,
       note: 'Detached with nohup + stdin from /dev/null — the bundled `worker-cli.js start` dies when its parent shell exits.',
     };
   }
@@ -502,7 +503,7 @@ export function hermes(ctx: Ctx, st: HermesState, r: HttpResult | null, port: nu
     s.facts.push({ label: 'state file', value: age < 120 ? `${age}s old` : `${Math.round(age / 60)}m old`, tone: age > 15 * 60 ? 'warn' : undefined });
   }
   if (stale.length) s.notes.push(`Ignored ${stale.length} platform record${stale.length > 1 ? 's' : ''} from before this gateway started: ${stale.map((p) => `${p.id} (${p.state})`).join(', ')}.`);
-  s.notes.push(`Health from ~/.hermes/gateway_state.json + the A2A listener's /health (port ${port}${port === 9900 ? ', the A2A default' : ', owned by the gateway pid'}).`);
+  s.notes.push(`Health from ~/.hermes/gateway_state.json + the A2A listener's /health (port ${port}${port === HERMES_DEFAULT_PORT ? ', the A2A default' : ', owned by the gateway pid'}).`);
   s.command = { label: 'Restart command', command: KICK('ai.hermes.gateway') };
   return s;
 }

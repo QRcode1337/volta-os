@@ -4,9 +4,9 @@ import { cached } from '../sources/cache';
 import { probe } from './probe';
 import { safeMessage } from './safe';
 import type { ProbeResult, TailnetEntry } from './types';
+import { LOOPBACK_HOSTS } from '../local-only';
 
 const TAILSCALE = bin('tailscale', ['/usr/local/bin/tailscale', '/opt/homebrew/bin/tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale']);
-const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
 /** Local services we can name with confidence (from the user's own setup); everything else gets a neutral label. */
 const KNOWN_TARGET_PORTS: Record<number, string> = { 18790: 'OpenClaw control panel', 50000: 'VOLTA OS' };
 
@@ -51,7 +51,7 @@ function parse(cfg: ServeConfig): { host: string | null; entries: RawEntry[] } {
           const u = new URL(handler.Proxy);
           // Strip anything credential-shaped; only loopback targets are ever probed.
           target = `${u.protocol}//${u.host}${u.pathname === '/' ? '' : u.pathname}`;
-          if (LOOPBACK.has(u.hostname) && (u.protocol === 'http:' || u.protocol === 'https:')) {
+          if (LOOPBACK_HOSTS.has(u.hostname) && (u.protocol === 'http:' || u.protocol === 'https:')) {
             probeUrl = `${u.protocol}//${u.host}/`;
             targetPort = Number(u.port) || (u.protocol === 'https:' ? 443 : 80);
           }

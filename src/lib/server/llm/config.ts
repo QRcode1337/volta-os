@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { memoByFiles } from '../sources/cache';
 import type { RoutesConfig, TaskRoute } from './types';
+import { service } from '../services';
 
 // config/llm-routes.json: task -> OmniRoute combo chain, the local LM Studio fallback and the request limits.
 // Re-read when the file's mtime changes, so a routing edit needs no restart. A broken file never throws: the
@@ -12,7 +13,7 @@ export const CONFIG_PATH = path.join(process.cwd(), 'config', 'llm-routes.json')
 export const LOCAL_TARGET = 'local';
 
 const DEFAULTS: RoutesConfig = {
-  gateway: { baseUrl: 'http://127.0.0.1:20128/v1', keyEnv: 'OMNIROUTE_API_KEY', baseUrlEnv: 'OMNIROUTE_BASE_URL' },
+  gateway: { baseUrl: `${service('omniroute').baseUrl}/v1`, keyEnv: 'OMNIROUTE_API_KEY', baseUrlEnv: 'OMNIROUTE_BASE_URL' },
   local: { baseUrl: 'http://127.0.0.1:1234/v1', model: 'qwen/qwen3.5-9b', timeoutMs: 150_000, minMaxTokens: 1024 },
   limits: { maxMessages: 60, maxChars: 600_000, maxOutputTokens: 32_000, maxTimeoutMs: 600_000 },
   apiBilledProviders: ['xai', 'gemini', 'anthropic', 'openai', 'nous-research', 'openrouter'],

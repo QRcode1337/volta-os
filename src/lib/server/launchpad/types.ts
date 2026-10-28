@@ -1,11 +1,13 @@
 // Shared shapes for VOLTA Launchpad. Type-only: safe to `import type` from client components.
 
-export type ProbeState = 'up' | 'down' | 'unknown';
+export type ProbeState = 'up' | 'degraded' | 'down' | 'unknown';
 
 export interface ProbeResult {
   state: ProbeState;
   httpStatus?: number;
   ms?: number;
+  /** Systems' one-line verdict for an agent service ("serving", "health 503 …"). */
+  summary?: string;
 }
 
 export interface LinkItem {

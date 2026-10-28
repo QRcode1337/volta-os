@@ -3,6 +3,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { rejectNonLocalRead } from '../local-only';
 import { feedToken } from './config';
+import { LOOPBACK_HOSTS } from '../local-only';
 
 // Guard for the two routes podcast apps fetch directly (feed.xml, file, cover).
 //
@@ -11,7 +12,6 @@ import { feedToken } from './config';
 // (the in-app player). Either way the Host header must still be loopback or the configured tailnet host, which keeps
 // DNS-rebinding and stray LAN hosts out. The token is compared in constant time; repeated bad guesses are throttled.
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
 const TAILNET_HOST = (process.env.VOLTA_TAILNET_HOST ?? '').toLowerCase();
 
 const g = globalThis as unknown as { __podcastAuthFails?: { n: number; since: number } };
@@ -34,7 +34,7 @@ const deny = (status: number, msg: string) => NextResponse.json({ error: msg }, 
 /** Returns a response to send when the request is NOT allowed, or null when it is. */
 export function authorizeFeedRequest(req: Request): NextResponse | null {
   const host = hostnameOf(req);
-  if (!LOCAL_HOSTS.has(host) && !(TAILNET_HOST && host === TAILNET_HOST)) return deny(403, 'Forbidden');
+  if (!LOOPBACK_HOSTS.has(host) && !(TAILNET_HOST && host === TAILNET_HOST)) return deny(403, 'Forbidden');
   const supplied = new URL(req.url).searchParams.get('token');
   if (supplied && feedTokenOk(supplied)) return null;
   if (rejectNonLocalRead(req) === null) return null; // in-app request (loopback or tailnet login, same-origin)

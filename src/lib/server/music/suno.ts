@@ -9,6 +9,7 @@ import { WINDSOR_ROOT, WINDSOR_VOLTA, isWindsorMounted, writeAtomic } from '../s
 import { bustIndex } from './library';
 import { loadConfig, saveRoots } from './config';
 import { readMeta, sanitizeMeta, writeTrackMeta } from './meta';
+import { LOOPBACK_HOSTS } from '../local-only';
 
 // Bridge from VOLTA Music to the local gcui-art/suno-api service (a LaunchAgent on 127.0.0.1).
 //   status   -> GET  /api/get_limit            (credits left, and whether the service is configured)
@@ -27,7 +28,6 @@ const DEFAULT_URL = 'http://127.0.0.1:3010';
 
 const LIMITS = { title: 100, tags: 500, lyrics: 5000, clips: 6, maxBytes: 80 * 1024 * 1024, minBytes: 10 * 1024 };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]']);
 /** Suno serves finished audio from its own CDN; never fetch anything else. */
 const AUDIO_HOST_RE = /(^|\.)suno\.(ai|com)$/i;
 
@@ -41,7 +41,7 @@ function baseUrl(): string {
   } catch {
     throw new HttpError(`SUNO_API_URL is not a valid URL: ${raw}`, 500);
   }
-  if (!LOOPBACK.has(u.hostname)) throw new HttpError('SUNO_API_URL must point at this machine (127.0.0.1 or localhost).', 500);
+  if (!LOOPBACK_HOSTS.has(u.hostname)) throw new HttpError('SUNO_API_URL must point at this machine (127.0.0.1 or localhost).', 500);
   return raw;
 }
 

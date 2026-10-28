@@ -28,7 +28,7 @@ export type Tone = 'up' | 'warn' | 'down' | 'idle';
 const TONE_COLOR: Record<Tone, string> = { up: 'var(--accent-green)', warn: 'var(--accent-amber)', down: RED, idle: 'var(--text-muted)' };
 
 export function toneOfProbe(p: ProbeResult | undefined): Tone {
-  return p?.state === 'up' ? 'up' : p?.state === 'down' ? 'down' : 'idle';
+  return p?.state === 'up' ? 'up' : p?.state === 'degraded' ? 'warn' : p?.state === 'down' ? 'down' : 'idle';
 }
 
 export function StatusDot({ tone, label, pulse }: { tone: Tone; label: string; pulse?: boolean }) {
@@ -46,6 +46,7 @@ export function StatusDot({ tone, label, pulse }: { tone: Tone; label: string; p
 
 export function probeLabel(p: ProbeResult | undefined): string {
   if (!p || p.state === 'unknown') return 'not probed';
+  if (p.summary) return `${p.state} · ${p.summary}${p.ms != null ? ` · ${p.ms}ms` : ''}`; // agent services: the Systems verdict
   return p.state === 'up' ? `up${p.httpStatus ? ` · HTTP ${p.httpStatus}` : ''}${p.ms !== undefined ? ` · ${p.ms}ms` : ''}` : `down${p.httpStatus ? ` · HTTP ${p.httpStatus}` : ' · no answer'}`;
 }
 

@@ -1,7 +1,8 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+/** Hostnames that mean "this Mac" (URL.hostname gives IPv6 as [::1]; Host headers may carry bare ::1). */
+export const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
 
 // Optional Tailscale access (`tailscale serve` → 127.0.0.1:50000). The tailnet hostname is allowed only when
 // serve vouches for the caller: it sets Tailscale-User-Login for tailnet users, and that login must be listed.
@@ -14,7 +15,7 @@ const TAILNET_USERS = new Set(
 );
 
 function isAllowedHost(hostname: string, req: Request): boolean {
-  if (LOCAL_HOSTS.has(hostname)) return true;
+  if (LOOPBACK_HOSTS.has(hostname)) return true;
   if (!TAILNET_HOST || hostname !== TAILNET_HOST || TAILNET_USERS.size === 0) return false;
   const login = (req.headers.get('tailscale-user-login') ?? '').toLowerCase();
   return TAILNET_USERS.has(login);

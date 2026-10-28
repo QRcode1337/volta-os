@@ -1,6 +1,6 @@
 import { route } from '@/lib/server/route-helpers';
 import { loadConfig, feedToken, geminiKey } from '@/lib/server/podcast/config';
-import { claudeBin } from '@/lib/server/podcast/llm';
+import { claudeBin } from '@/lib/server/claude';
 import { currentJob } from '@/lib/server/podcast/pipeline';
 import { checkStorage, getEpisode } from '@/lib/server/podcast/storage';
 import { estimate, ffmpegAvailable } from '@/lib/server/podcast/tts';

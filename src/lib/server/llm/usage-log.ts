@@ -17,7 +17,7 @@ export interface UsageEntry {
   ts: string;
   task: string;
   target: string;
-  via: 'omniroute' | 'local';
+  via: 'omniroute' | 'local' | 'claude-cli';
   ok: boolean;
   stream: boolean;
   attempt: number;

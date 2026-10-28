@@ -9,7 +9,7 @@ import type { CostBreakdown, EpisodeRecord, JobState, PodcastConfig, Stage, Stag
 import { assertWithinDailyCap } from '../media/budget';
 import { PODCAST_ROOT, geminiKey, loadConfig } from './config';
 import { gatherFixedSources } from './gather';
-import { claudeBin } from './llm';
+import { claudeBin } from '../claude';
 import { buildNotes } from './notes';
 import { rankAndSelect } from './rank';
 import { researchTopics, researchWarnings, runResearch, summarizeResearch, type ResearchOutcome } from './research';
@@ -141,7 +141,7 @@ async function run(job: JobState, cfg: PodcastConfig, opts: StartOptions): Promi
     // 2. deep research (claude -p + web tools), cached per day
     begin('research', 'starting web research');
     let research: ResearchOutcome = { candidates: [], results: [], wallMs: 0, callMs: 0, listCostUsd: 0 };
-    const skipped = claudeBin() ? undefined : 'the claude CLI was not found; set PODCAST_CLAUDE_BIN';
+    const skipped = claudeBin() ? undefined : 'the claude CLI was not found; set VOLTA_CLAUDE_BIN';
     if (!skipped) research = await runResearch(cfg, date, { fresh: !!opts.freshResearch }, detail);
     // Degraded research does not stop the run: the episode still ships (the feed has no draft state and the 06:00 run is
     // unattended), but it is flagged everywhere it is seen: the headline warning, the episode record, show notes and the RSS item.

@@ -1,4 +1,3 @@
-import { execFile } from 'node:child_process';
 import path from 'node:path';
 import type { EffortLevel, ModelTier, SkillRunRequest, SkillRunResult } from '@/types/os';
 import type { RealSkill } from '@/types/sources';
@@ -10,6 +9,7 @@ import { skillCommand } from '@/components/dashboard/widgets/right-skills';
 import { hashString, resolveRoutedModel, routeAndRecord } from '../../jev-router/jev';
 import { buildMockReport } from './reports';
 import { tilde } from '@/lib/server/storage';
+import { ClaudeCliError, runClaudeCli } from '@/lib/server/claude';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -106,11 +106,9 @@ function buildLivePrompt(req: SkillRunRequest, skill: RealSkill | null): string 
  * Live run: read-only plan mode, no shell/write/web tools and no MCP servers, regardless of the user's
  * default permission mode. The SKILL.md's folder is the only extra readable directory.
  */
-function runClaude(prompt: string, model: ModelTier, skillDir: string | null): Promise<string> {
+async function runClaude(prompt: string, model: ModelTier, skillDir: string | null): Promise<string> {
   const cliModel = (model === 'FABLE' ? 'OPUS' : model).toLowerCase();
   const args = [
-    '-p',
-    prompt,
     '--model',
     cliModel,
     '--permission-mode',
@@ -119,27 +117,18 @@ function runClaude(prompt: string, model: ModelTier, skillDir: string | null): P
     '--strict-mcp-config',
     ...(skillDir ? [`--add-dir=${skillDir}`] : []),
   ];
-  return new Promise((resolve, reject) => {
-    execFile(
-      'claude',
-      args,
-      { timeout: LIVE_TIMEOUT_MS, cwd: WORKSPACE_DIR, maxBuffer: 4 * 1024 * 1024, windowsHide: true },
-      (error, stdout, stderr) => {
-        if (error) {
-          const code = (error as NodeJS.ErrnoException).code;
-          const reason = error.killed ? `timed out after ${LIVE_TIMEOUT_MS / 1000}s` : code === 'ENOENT' ? '`claude` CLI not found on PATH' : (stderr || error.message).trim().slice(0, 300);
-          reject(new Error(reason));
-          return;
-        }
-        const out = stdout.trim();
-        if (!out) {
-          reject(new Error('`claude -p` returned empty output'));
-          return;
-        }
-        resolve(out);
-      },
-    );
-  });
+  let stdout: string;
+  try {
+    // Prompt on stdin (never argv); the resolved claude binary, Max-plan env and the LLM usage log come from runClaudeCli.
+    ({ stdout } = await runClaudeCli({ args, prompt, cwd: WORKSPACE_DIR, timeoutMs: LIVE_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, task: 'skills:run', model: cliModel }));
+  } catch (e) {
+    if (!(e instanceof ClaudeCliError)) throw e;
+    const d = e.detail;
+    throw new Error(d.killed ? `timed out after ${LIVE_TIMEOUT_MS / 1000}s` : d.notFound ? '`claude` CLI not found (set VOLTA_CLAUDE_BIN)' : e.message);
+  }
+  const out = stdout.trim();
+  if (!out) throw new Error('`claude -p` returned empty output');
+  return out;
 }
 
 const sleep = (ms: number, signal: AbortSignal) =>

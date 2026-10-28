@@ -1,9 +1,6 @@
 import 'server-only';
 import { redactSecrets } from '../redact';
-import { execFile, type ExecFileException } from 'node:child_process';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import { ClaudeCliError, runClaudeCli } from '../claude';
 import { complete as omniComplete } from '../llm';
 import { LLM_CWD, loadConfig } from './config';
 import { clip, errMsg } from './util';
@@ -45,33 +42,7 @@ export interface LlmResult {
 
 type Backend = (req: LlmRequest) => Promise<Omit<LlmResult, 'fallbackFrom'>>;
 
-// ───────────── backend: claude -p (Max plan) ─────────────
-
-let claudeBinMemo: string | null | undefined;
-
-/** Resolve the claude CLI even under launchd's minimal PATH (the mise node bin dir is not on it). */
-export function claudeBin(): string | null {
-  if (claudeBinMemo !== undefined) return claudeBinMemo;
-  const home = os.homedir();
-  const cands: string[] = [process.env.PODCAST_CLAUDE_BIN ?? '', path.join(home, '.local', 'bin', 'claude'), '/opt/homebrew/bin/claude', '/usr/local/bin/claude'];
-  try {
-    const base = path.join(home, '.local', 'share', 'mise', 'installs', 'node');
-    for (const v of fs.readdirSync(base).sort().reverse()) cands.push(path.join(base, v, 'bin', 'claude'));
-  } catch {
-    // no mise
-  }
-  claudeBinMemo = cands.find((c) => c && fs.existsSync(c)) ?? null;
-  return claudeBinMemo;
-}
-
-function childEnv(bin: string): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  // Max plan only: never let an API key flip the CLI to metered billing.
-  for (const k of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX']) delete env[k];
-  const extra = [path.dirname(bin), path.join(os.homedir(), '.local', 'bin'), '/opt/homebrew/bin', '/usr/local/bin'];
-  env.PATH = [...extra, ...(env.PATH ?? '').split(':')].filter(Boolean).join(':');
-  return env;
-}
+// ───────────── backend: claude -p (Max plan, via the shared runner in src/lib/server/claude.ts) ─────────────
 
 const claudeModel = (task: LlmTask): string => {
   const c = loadConfig();
@@ -126,9 +97,11 @@ function jsonReason(j: ClaudeJson): string {
  * `error.message` is just "Command failed: <the whole argv>", which carries the system prompt and no reason, so it is
  * never used. Secrets are masked; the result is capped so it fits in a warning.
  */
-export function describeClaudeFailure(error: ExecFileException | null, stdout: string, stderr: string, timeoutMs: number): string {
-  if (error?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') return 'output exceeded the 32 MB buffer';
-  if (error?.killed) return `timed out after ${Math.round(timeoutMs / 1000)}s`; // `killed` is only set when Node itself killed it (the timeout)
+export function describeClaudeFailure(error: ClaudeCliError | null, stdout: string, stderr: string, timeoutMs: number): string {
+  const d = error?.detail;
+  if (d?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') return 'output exceeded the 32 MB buffer';
+  if (d?.killed) return `timed out after ${Math.round(timeoutMs / 1000)}s`; // `killed` is only set when Node itself killed it (the timeout)
+  if (d?.notFound) return 'claude CLI not found (set VOLTA_CLAUDE_BIN)';
   const parts: string[] = [];
   const j = stdout.trim() ? parseClaudeJson(stdout) : null;
   if (j) {
@@ -138,23 +111,18 @@ export function describeClaudeFailure(error: ExecFileException | null, stdout: s
     parts.push(`stdout: ${oneLine(stdout).slice(-400)}`);
   }
   if (stderr.trim()) parts.push(`stderr: ${oneLine(stderr).slice(-400)}`);
-  if (error) {
-    const code = error.code;
-    if (typeof code === 'string') parts.push(`could not start the CLI (${code})`);
-    else if (typeof code === 'number') parts.push(`exit code ${code}`);
-    else if (error.signal) parts.push(`killed by ${error.signal}`);
+  if (d) {
+    if (typeof d.code === 'string') parts.push(`could not start the CLI (${d.code})`);
+    else if (typeof d.code === 'number') parts.push(`exit code ${d.code}`);
+    else parts.push('killed by a signal'); // no exit code and not our timeout
   }
   if (!parts.length) parts.push(error ? 'failed with no output' : 'empty result');
   return clip(redactSecrets(parts.join(' · ')), 600);
 }
 
-const claudeCli: Backend = (req) => {
-  const bin = claudeBin();
-  if (!bin) return Promise.reject(new Error('claude CLI not found (set PODCAST_CLAUDE_BIN)'));
-  fs.mkdirSync(LLM_CWD, { recursive: true });
+const claudeCli: Backend = async (req) => {
   const model = claudeModel(req.task);
   const args = [
-    '-p',
     '--model',
     model,
     '--output-format',
@@ -167,20 +135,20 @@ const claudeCli: Backend = (req) => {
     // Web tools only for research; everything else runs with no tools at all.
     req.web ? '--allowedTools=WebSearch,WebFetch' : '--tools=',
   ];
-  const started = Date.now();
-  return new Promise<Omit<LlmResult, 'fallbackFrom'>>((resolve, reject) => {
-    const child = execFile(bin, args, { cwd: LLM_CWD, env: childEnv(bin), timeout: req.timeoutMs, killSignal: 'SIGKILL', maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
-      if (error) return reject(new Error(`claude -p (${req.label}): ${describeClaudeFailure(error, stdout, stderr, req.timeoutMs)}`));
-      const j = parseClaudeJson(stdout);
-      if (!j) return reject(new Error(`claude -p (${req.label}): unparseable output${stdout.trim() ? ` — ${clip(redactSecrets(oneLine(stdout)), 300)}` : ' (stdout empty)'}`));
-      if (j.is_error || typeof j.result !== 'string' || !j.result.trim()) {
-        return reject(new Error(`claude -p (${req.label}): ${describeClaudeFailure(null, stdout, stderr, req.timeoutMs)}`));
-      }
-      resolve({ text: j.result.trim(), backend: 'claude-cli', model, durationMs: Date.now() - started, turns: j.num_turns, listCostUsd: j.total_cost_usd });
-    });
-    child.stdin?.on('error', () => {});
-    child.stdin?.end(req.prompt); // prompt via stdin: no argv length limits, no variadic-flag swallowing
-  });
+  let out: { stdout: string; stderr: string; ms: number };
+  try {
+    out = await runClaudeCli({ args, prompt: req.prompt, cwd: LLM_CWD, timeoutMs: req.timeoutMs, maxBuffer: 32 * 1024 * 1024, task: `podcast:${req.task}`, model });
+  } catch (e) {
+    if (e instanceof ClaudeCliError) throw new Error(`claude -p (${req.label}): ${describeClaudeFailure(e, e.detail.stdout, e.detail.stderr, req.timeoutMs)}`);
+    throw new Error(`claude -p (${req.label}): ${errMsg(e)}`);
+  }
+  const { stdout, stderr } = out;
+  const j = parseClaudeJson(stdout);
+  if (!j) throw new Error(`claude -p (${req.label}): unparseable output${stdout.trim() ? ` — ${clip(redactSecrets(oneLine(stdout)), 300)}` : ' (stdout empty)'}`);
+  if (j.is_error || typeof j.result !== 'string' || !j.result.trim()) {
+    throw new Error(`claude -p (${req.label}): ${describeClaudeFailure(null, stdout, stderr, req.timeoutMs)}`);
+  }
+  return { text: j.result.trim(), backend: 'claude-cli', model, durationMs: out.ms, turns: j.num_turns, listCostUsd: j.total_cost_usd };
 };
 
 // ───────────── backend: OmniRoute gateway (src/lib/server/llm, config/llm-routes.json) ─────────────

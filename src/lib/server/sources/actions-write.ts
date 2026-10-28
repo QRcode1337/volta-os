@@ -10,7 +10,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { ActionStatus } from '@/components/tasks/types';
-import { openClaudeInTerminal } from '../claude-terminal';
+import { handoffToClaude } from '../claude';
 import { HttpError } from '../http-error';
 import { isEvicted } from '../icloud';
 import { writeAtomic } from '../storage';
@@ -103,7 +103,7 @@ export async function addActionNote(id: string, line: number | undefined, note: 
 export async function actionAgentHandoff(id: string, line: number | undefined, open: boolean) {
   const file = await readFile();
   const item = findItem(file.content, id, line);
-  const prompt = [
+  const body = [
     `You're helping Patrick resolve an item from his OpenClaw action pipeline.`,
     '',
     `Item (${ACTIONS_DISPLAY_PATH}, line ${item.line}, section "## ${item.section || '(none)'}", status: ${LABEL[item.status]}):`,
@@ -116,12 +116,8 @@ export async function actionAgentHandoff(id: string, line: number | undefined, o
     item.status === 'awaiting'
       ? '2. This item is waiting on a decision or action from Patrick. Lay out the options and what you recommend, and wait for his answer before acting.'
       : '2. Propose a concrete plan before acting.',
-    '3. Ask before anything that changes files outside this task, sends messages, spends money or touches credentials. Carry out the work with Patrick approving each step.',
+    '3. Carry out the work with Patrick approving each step; change nothing outside this task.',
     `4. When it is resolved, update only this item inline in ${ACTIONS_DISPLAY_PATH}, following its status legend: change the marker ([x] done, [!] blocked, [>] in progress), set the trailing (YYYY-MM-DD) date to today, and add an indented "  - " note under it saying what was done.`,
   ].join('\n');
-  if (!open) return { prompt, opened: false, error: null as string | null };
-  const res = await openClaudeInTerminal(prompt, { cwd: path.join(os.homedir(), '.openclaw'), tag: 'task' });
-  await fs.mkdir(STATE_DIR, { recursive: true });
-  await fs.appendFile(LOG_FILE, JSON.stringify({ at: new Date().toISOString(), op: 'agent', id, text: item.text, opened: res.opened }) + '\n');
-  return { prompt, ...res };
+  return handoffToClaude({ tag: 'task', cwd: path.join(os.homedir(), '.openclaw'), body, open, log: { id, text: item.text } });
 }

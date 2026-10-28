@@ -1,5 +1,6 @@
 // Shared, framework-free helpers for VOLTA Recos (safe on client and server).
 import type { Reco, RecoBucket, RecoStatus } from '@/types/recos';
+import { AGENT_GROUND_RULES } from '@/lib/agent-guardrails';
 
 export type { RecoStatus };
 export type Bucket = RecoBucket;
@@ -81,6 +82,13 @@ export function cartSummary(items: Reco[]): { byBucket: { bucket: Bucket; count:
   };
 }
 
+/** Recos-only rules, on top of the shared AGENT_GROUND_RULES. */
+const RECOS_RULES: readonly string[] = [
+  'The Notion pages are read-only inputs: never write to Notion.',
+  'For any item with a command, run it and read the output before acting.',
+  'After each item, re-check the signal (re-run the command or reload the source) and say whether it cleared.',
+];
+
 /** One consolidated prompt for Claude Code covering every item in the cart. */
 export function buildAgentPrompt(items: Reco[], weekLabel: string, now: Date): string {
   const date = now.toISOString().slice(0, 10);
@@ -90,11 +98,7 @@ export function buildAgentPrompt(items: Reco[], weekLabel: string, now: Date): s
     `You are Claude Code on Patrick's Mac. Work through the ${items.length} item${items.length === 1 ? '' : 's'} below **in order**. Every item comes from a live signal (Notion, launchd/OpenClaw, VOLTA Systems, memory sources); its source link is given so you can re-check it.`,
     '',
     '## Ground rules',
-    '- Read first, then change. For any item with a command, run it and read the output before acting.',
-    '- The Notion pages are read-only inputs: never write to Notion.',
-    '- Disk space is tight: check `df -h /` before installing or generating anything bulky, and put bulky output under ~/Documents/PROJECTS/ErisMornCloud/.',
-    '- Do not delete data unless you have verified what it is; ask first when unsure.',
-    '- After each item, re-check the signal (re-run the command or reload the source) and say whether it cleared.',
+    ...[...AGENT_GROUND_RULES, ...RECOS_RULES].map((r) => `- ${r}`),
     '',
     '## Items',
   ];

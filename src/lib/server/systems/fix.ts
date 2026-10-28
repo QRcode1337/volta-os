@@ -4,7 +4,7 @@ import { getSystemsReport } from './index';
 import { redactSecrets } from '../redact';
 import { HOME } from './run';
 import { bin, run } from '../proc';
-import { openClaudeInTerminal } from '../claude-terminal';
+import { handoffToClaude } from '../claude';
 import { HttpError } from '../http-error';
 
 // One-click fixes for the Systems "Needs attention" list. Commands are never taken from the client: the page sends
@@ -45,12 +45,12 @@ export async function runFixCommand(id: string): Promise<FixRunResult> {
 
 // ── Hand items to an agent ───────────────────────────────────────────────────────────────────────────────────────
 
-const GUARDRAILS = `Ground rules (Patrick's Mac, zsh):
-- Read the relevant logs and configs first, find the root cause, apply the smallest fix (kickstart/reload a LaunchAgent, correct a config path, start an app, restart a container), then re-check the health endpoint / \`launchctl list\` / log to confirm it worked.
-- Ask before anything destructive: deleting or moving user data, sudo, system/security settings, credentials or .env secrets, git push, installing packages or pulling models/images.
-- The boot SSD is nearly full — check \`df -h /\` before writing anything large.
-- Disk-space items: don't free space yourself. Find what is large and safe to remove (~/bin/disk-cleanup.sh without --apply is fine) and recommend it.
-- Finish with one bullet per issue: **Fixed** / **Not fixed** / **Needs Patrick** — what you found, what you did, any command left for me.`;
+/** Systems-specific rules on top of the shared ground rules (lib/agent-guardrails.ts). */
+const FIX_RULES = [
+  'Typical fixes: kickstart/reload a LaunchAgent, correct a config path, start an app, restart a container; then re-check the health endpoint / `launchctl list` / log to confirm it worked.',
+  "Disk-space items: don't free space yourself. Find what is large and safe to remove (~/bin/disk-cleanup.sh without --apply is fine) and recommend it.",
+  'Finish with one bullet per issue: **Fixed** / **Not fixed** / **Needs Patrick** — what you found, what you did, any command left for me.',
+];
 
 function describe(item: AttentionItem, report: SystemsReport): string {
   const svcId = item.target.startsWith('svc-') ? item.target.slice(4) : null;
@@ -68,11 +68,10 @@ function describe(item: AttentionItem, report: SystemsReport): string {
   return lines.filter(Boolean).join('\n');
 }
 
-function buildPrompt(items: AttentionItem[], report: SystemsReport): string {
+function buildBody(items: AttentionItem[], report: SystemsReport): string {
   return [
-    `VOLTA Systems flagged ${items.length} issue${items.length === 1 ? '' : 's'} (probed ${report.generatedAt}). Diagnose and fix them.`,
+    `VOLTA Systems flagged ${items.length} issue${items.length === 1 ? '' : 's'} on Patrick's Mac (zsh; probed ${report.generatedAt}). Diagnose and fix them.`,
     ...items.map((i) => describe(i, report)),
-    GUARDRAILS,
   ].join('\n\n');
 }
 
@@ -83,10 +82,7 @@ function buildPrompt(items: AttentionItem[], report: SystemsReport): string {
  */
 export async function agentHandoff(ids: string[], open: boolean): Promise<AgentHandoff> {
   const { report, items } = await pick(ids);
-  const prompt = buildPrompt(items, report);
   const titles = items.map((i) => i.title);
-  if (!open) return { prompt, items: titles, opened: false, error: null };
-
-  const res = await openClaudeInTerminal(prompt, { cwd: process.cwd(), tag: 'fix' });
-  return { prompt, items: titles, ...res };
+  const h = await handoffToClaude({ tag: 'fix', cwd: process.cwd(), body: buildBody(items, report), rules: FIX_RULES, open, log: { items: titles } });
+  return { ...h, items: titles };
 }

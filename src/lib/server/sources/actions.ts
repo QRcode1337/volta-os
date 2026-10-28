@@ -1,5 +1,6 @@
 import 'server-only';
-// Reads the OpenClaw action pipeline (~/.openclaw/wiki/main/actions.md) READ-ONLY and turns it into board items.
+// Reads the OpenClaw action pipeline (~/.openclaw/wiki/main/actions.md) and turns it into board items. Writes (status
+// moves and notes, the same inline edits Tier 2 makes) live in actions-write.ts.
 // Ported from Orchestra OS (parseActionFile / actionCounts), extended with sections, line numbers, dates, links,
 // a stable item id and an mtime-keyed parse cache. Nothing in VOLTA writes to this file.
 //
@@ -21,6 +22,7 @@ import { ACTION_STATUSES } from '@/components/tasks/types';
 
 const DISPLAY_PATH = '~/.openclaw/wiki/main/actions.md';
 const FILE = path.join(os.homedir(), '.openclaw', 'wiki', 'main', 'actions.md');
+export { FILE as ACTIONS_FILE, DISPLAY_PATH as ACTIONS_DISPLAY_PATH };
 const OPENCLAW_ROOT = path.join(os.homedir(), '.openclaw');
 const MAX_BYTES = 2 * 1024 * 1024;
 /** Parse results are memoised per mtime; this only dedupes bursts of requests and re-stats the file. */

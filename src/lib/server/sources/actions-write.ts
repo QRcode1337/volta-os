@@ -1,0 +1,138 @@
+import 'server-only';
+// Acting on the OpenClaw action pipeline from VOLTA Tasks. actions.md's own legend says "Tier 2 updates status
+// inline", so VOLTA makes the same edits a person would: flip one item's [marker], bump its (YYYY-MM-DD) date, or add
+// an indented note under it. Nothing else in the file is touched.
+//
+// Safety: the item is re-found by its stable id (the client's line number is only a hint), the previous file is
+// copied to ~/Library/Application Support/VOLTA/tasks/backups first, the write is atomic (temp file + rename), and it
+// is refused when the file changed between read and write (OpenClaw's own runs edit it too).
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import type { ActionStatus } from '@/components/tasks/types';
+import { openClaudeInTerminal } from '../claude-terminal';
+import { ACTIONS_DISPLAY_PATH, ACTIONS_FILE, getActions, parseActionsMarkdown } from './actions';
+
+const STATE_DIR = path.join(os.homedir(), 'Library', 'Application Support', 'VOLTA', 'tasks');
+const BACKUP_DIR = path.join(STATE_DIR, 'backups');
+const LOG_FILE = path.join(STATE_DIR, 'decisions.jsonl');
+const KEEP_BACKUPS = 30;
+const MAX_NOTE = 1_000;
+
+const MARKER: Record<ActionStatus, string> = { todo: ' ', progress: '>', done: 'x', blocked: '!', awaiting: '@' };
+const LABEL: Record<ActionStatus, string> = { todo: 'open', progress: 'in progress', done: 'done', blocked: 'blocked', awaiting: 'awaiting Patrick' };
+const ITEM_RE = /^- \[[ >xX!@]\]\s+/;
+const CREATED_RE = /\s*\[\[\d{4}-\d{2}-\d{2}\]\]\s*$/;
+const UPDATED_RE = /\s*\(\d{4}-\d{2}-\d{2}\)\s*$/;
+
+export class ActionWriteError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const stamp = () => new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '').replace('T', '-');
+
+async function readFile() {
+  const st = await fs.stat(ACTIONS_FILE).catch(() => null);
+  if (!st) throw new ActionWriteError(404, `${ACTIONS_DISPLAY_PATH} does not exist.`);
+  const content = await fs.readFile(ACTIONS_FILE, 'utf8');
+  return { content, mtimeMs: st.mtimeMs, mode: st.mode };
+}
+
+/** The item with this id, preferring the one at `line` when ids repeat. */
+function findItem(content: string, id: string, line?: number) {
+  const { items } = parseActionsMarkdown(content);
+  const hits = items.filter((i) => i.id === id);
+  const item = hits.find((i) => i.line === line) ?? hits[0];
+  if (!item) throw new ActionWriteError(409, 'That item is no longer in actions.md (OpenClaw may have moved or reworded it). Refresh and try again.');
+  return item;
+}
+
+/** Replace the marker and set the trailing "(YYYY-MM-DD)" updated date to today, keeping the [[created]] link. */
+function restatus(line: string, status: ActionStatus): string {
+  let rest = line.replace(ITEM_RE, '');
+  const created = CREATED_RE.exec(rest);
+  const tailLink = created ? rest.slice(created.index) : '';
+  if (created) rest = rest.slice(0, created.index);
+  rest = rest.replace(UPDATED_RE, '');
+  return `- [${MARKER[status]}] ${rest.trimEnd()} (${today()})${tailLink}`;
+}
+
+async function commit(before: { content: string; mtimeMs: number; mode: number }, after: string, log: Record<string, unknown>) {
+  await fs.mkdir(BACKUP_DIR, { recursive: true });
+  await fs.writeFile(path.join(BACKUP_DIR, `actions-${stamp()}.md`), before.content);
+  const backups = (await fs.readdir(BACKUP_DIR)).filter((f) => f.startsWith('actions-')).sort();
+  await Promise.all(backups.slice(0, Math.max(0, backups.length - KEEP_BACKUPS)).map((f) => fs.unlink(path.join(BACKUP_DIR, f)).catch(() => {})));
+
+  const tmp = `${ACTIONS_FILE}.volta-${process.pid}.tmp`;
+  await fs.writeFile(tmp, after, { mode: before.mode & 0o777 });
+  const now = await fs.stat(ACTIONS_FILE);
+  if (now.mtimeMs !== before.mtimeMs) {
+    await fs.unlink(tmp).catch(() => {});
+    throw new ActionWriteError(409, 'actions.md changed while saving (an OpenClaw run may be editing it). Refresh and try again.');
+  }
+  await fs.rename(tmp, ACTIONS_FILE);
+  await fs.appendFile(LOG_FILE, JSON.stringify({ at: new Date().toISOString(), ...log }) + '\n');
+  await getActions({ refresh: true });
+}
+
+export async function setActionStatus(id: string, line: number | undefined, status: ActionStatus): Promise<{ ok: true }> {
+  if (!(status in MARKER)) throw new ActionWriteError(400, 'Unknown status.');
+  const file = await readFile();
+  const item = findItem(file.content, id, line);
+  if (item.status === status) return { ok: true };
+  const lines = file.content.split('\n');
+  const idx = item.line - 1;
+  lines[idx] = restatus(lines[idx].replace(/\r$/, ''), status) + (lines[idx].endsWith('\r') ? '\r' : '');
+  await commit(file, lines.join('\n'), { op: 'status', id, text: item.text, from: item.status, to: status });
+  return { ok: true };
+}
+
+export async function addActionNote(id: string, line: number | undefined, note: string): Promise<{ ok: true }> {
+  const text = note.replace(/\s+/g, ' ').replace(/^[-*]\s+/, '').trim().slice(0, MAX_NOTE);
+  if (!text) throw new ActionWriteError(400, 'Write a note first.');
+  const file = await readFile();
+  const item = findItem(file.content, id, line);
+  const lines = file.content.split('\n');
+  // after the item and the indented note lines that belong to it
+  let at = item.line;
+  while (at < lines.length && /^\s+\S/.test(lines[at])) at++;
+  lines.splice(at, 0, `  - Patrick (${today()}): ${text}`);
+  await commit(file, lines.join('\n'), { op: 'note', id, text: item.text, note: text });
+  return { ok: true };
+}
+
+/** A Claude Code prompt to work the item; with `open`, also started in Terminal on the Mac. */
+export async function actionAgentHandoff(id: string, line: number | undefined, open: boolean) {
+  const file = await readFile();
+  const item = findItem(file.content, id, line);
+  const prompt = [
+    `You're helping Patrick resolve an item from his OpenClaw action pipeline.`,
+    '',
+    `Item (${ACTIONS_DISPLAY_PATH}, line ${item.line}, section "## ${item.section || '(none)'}", status: ${LABEL[item.status]}):`,
+    `  ${item.text}`,
+    ...(item.notes.length ? ['Notes under it:', ...item.notes.map((n) => `  - ${n}`)] : []),
+    ...(item.links.length ? ['Links:', ...item.links.map((l) => `  - ${l.target}`)] : []),
+    '',
+    'What to do:',
+    '1. Read the item, its notes and any linked wiki notes (wiki paths are under ~/.openclaw/) to understand what is being asked.',
+    item.status === 'awaiting'
+      ? '2. This item is waiting on a decision or action from Patrick. Lay out the options and what you recommend, and wait for his answer before acting.'
+      : '2. Propose a concrete plan before acting.',
+    '3. Ask before anything that changes files outside this task, sends messages, spends money or touches credentials. Carry out the work with Patrick approving each step.',
+    `4. When it is resolved, update only this item inline in ${ACTIONS_DISPLAY_PATH}, following its status legend: change the marker ([x] done, [!] blocked, [>] in progress), set the trailing (YYYY-MM-DD) date to today, and add an indented "  - " note under it saying what was done.`,
+  ].join('\n');
+  if (!open) return { prompt, opened: false, error: null as string | null };
+  const res = await openClaudeInTerminal(prompt, { cwd: path.join(os.homedir(), '.openclaw'), tag: 'task' });
+  await fs.mkdir(STATE_DIR, { recursive: true });
+  await fs.appendFile(LOG_FILE, JSON.stringify({ at: new Date().toISOString(), op: 'agent', id, text: item.text, opened: res.opened }) + '\n');
+  return { prompt, ...res };
+}

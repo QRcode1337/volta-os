@@ -1,10 +1,10 @@
 import 'server-only';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
-import path from 'node:path';
 import type { AgentHandoff, AttentionItem, FixRunResult, SystemsReport } from '@/types/systems';
 import { getSystemsReport } from './index';
-import { HOME, redact, run } from './run';
+import { HOME, redact } from './run';
+import { openClaudeInTerminal } from '../claude-terminal';
 
 // One-click fixes for the Systems "Needs attention" list. Commands are never taken from the client: the page sends
 // attention ids and everything is re-derived here from a fresh probe.
@@ -14,10 +14,7 @@ import { HOME, redact, run } from './run';
 
 const RUN_TIMEOUT_MS = 90_000;
 const OUTPUT_TAIL = 4_000;
-/** Prompt files handed to Terminal (tiny; kept on the offload volume with the other VOLTA run artefacts). */
-const PROMPTS_DIR = path.join(HOME, 'Documents', 'PROJECTS', 'ErisMornCloud', 'volta', 'fix-prompts');
 const SHELL = fs.existsSync('/bin/zsh') ? '/bin/zsh' : '/bin/sh';
-const OSASCRIPT = '/usr/bin/osascript';
 
 export class FixError extends Error {
   constructor(
@@ -93,11 +90,6 @@ function buildPrompt(items: AttentionItem[], report: SystemsReport): string {
   ].join('\n\n');
 }
 
-const stamp = () => new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '').replace('T', '-');
-/** AppleScript string literal. */
-const asString = (s: string) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-/** Single-quoted shell word. */
-const shQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
 /**
  * Build the fix prompt for the given attention ids (all when empty). With `open`, also start an interactive
@@ -109,10 +101,6 @@ export async function agentHandoff(ids: string[], open: boolean): Promise<AgentH
   const titles = items.map((i) => i.title);
   if (!open) return { prompt, items: titles, opened: false, error: null };
 
-  fs.mkdirSync(PROMPTS_DIR, { recursive: true });
-  const file = path.join(PROMPTS_DIR, `fix-${stamp()}.md`);
-  fs.writeFileSync(file, prompt);
-  const shell = `cd ${shQuote(process.cwd())} && claude "$(cat ${shQuote(file)})"`;
-  const res = await run(OSASCRIPT, ['-e', `tell application "Terminal" to do script ${asString(shell)}`, '-e', 'tell application "Terminal" to activate'], 10_000);
-  return { prompt, items: titles, opened: !res.error, error: res.error };
+  const res = await openClaudeInTerminal(prompt, { cwd: process.cwd(), tag: 'fix' });
+  return { prompt, items: titles, ...res };
 }

@@ -7,7 +7,7 @@ import { cn } from '@/lib/cn';
 import { AppTopBar } from '@/components/elements/kit/AppTopBar';
 import { ToastStack, useToasts } from '@/components/elements/kit/toast';
 import { copyText } from '@/components/elements/kit/clipboard';
-import { NoteViewer, SOURCE_NOTE, TaskColumn, TaskDetail } from './TaskParts';
+import { NoteViewer, SOURCE_NOTE, STATUS_STYLE, TaskColumn, TaskDetail, type TaskActions, type TaskAgentResult } from './TaskParts';
 import { useRemoteClient } from '@/lib/remote-client';
 import { ACTION_STATUSES, DEFAULT_STALE_DAYS, isStale, type ActionItem, type ActionStatus, type ActionsResponse } from './types';
 
@@ -129,6 +129,48 @@ export function TasksApp() {
   const remote = useRemoteClient();
   const [notePath, setNotePath] = useState<string | null>(null);
   const closeNote = useCallback(() => setNotePath(null), []);
+
+  // Acting on an item: the server re-finds it by id in actions.md and edits it inline (see actions-write.ts).
+  const [busy, setBusy] = useState<string | null>(null);
+  const [agentResult, setAgentResult] = useState<TaskAgentResult | null>(null);
+  const post = useCallback(
+    async <T,>(key: string, body: object): Promise<T | null> => {
+      setBusy(key);
+      try {
+        const res = await fetch('/api/actions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+        const json = (await res.json()) as T & { error?: string };
+        if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+        return json;
+      } catch (err) {
+        push((err as Error).message, { tone: 'error', ttl: 7_000 });
+        return null;
+      } finally {
+        setBusy(null);
+      }
+    },
+    [push],
+  );
+  const act: TaskActions = {
+    busy,
+    agent: agentResult,
+    onStatus: async (item, status) => {
+      if (!(await post(`status:${status}`, { action: 'status', id: item.id, line: item.line, status }))) return;
+      push(`Moved to ${STATUS_STYLE[status].label}`, { tone: 'success' });
+      void load(true);
+    },
+    onNote: async (item, note) => {
+      if (!(await post('note', { action: 'note', id: item.id, line: item.line, note }))) return false;
+      push('Note saved under the item', { tone: 'success' });
+      void load(true);
+      return true;
+    },
+    onAgent: async (item, onMac) => {
+      const r = await post<Omit<TaskAgentResult, 'id'>>('agent', { action: 'agent', id: item.id, line: item.line, open: onMac });
+      if (!r) return;
+      setAgentResult({ id: item.id, ...r });
+      if (onMac) push(r.opened ? 'Claude Code opened in Terminal on the Mac' : `Couldn’t open Terminal: ${r.error}`, { tone: r.opened ? 'success' : 'error' });
+    },
+  };
 
   const onCopy = useCallback(
     async (text: string, what: string) => {
@@ -307,7 +349,7 @@ export function TasksApp() {
       </main>
 
       {selected && source && (
-        <TaskDetail item={selected} source={source} staleDays={staleDays} onClose={() => setSelectedId(null)} onCopy={(t, w) => void onCopy(t, w)} onOpenNote={setNotePath} remote={remote} />
+        <TaskDetail item={selected} source={source} staleDays={staleDays} onClose={() => setSelectedId(null)} onCopy={(t, w) => void onCopy(t, w)} onOpenNote={setNotePath} remote={remote} act={act} />
       )}
       {notePath && <NoteViewer rel={notePath} onClose={closeNote} onCopy={(t, w) => void onCopy(t, w)} remote={remote} />}
       <ToastStack toasts={toasts} onDismiss={dismiss} />

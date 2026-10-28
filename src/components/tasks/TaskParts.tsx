@@ -418,10 +418,7 @@ function ActPanel({ item, remote, act, onCopy }: { item: ActionItem; remote: boo
             type="button"
             disabled={!!busy}
             onClick={() => act.onStatus(item, s)}
-            className={cn(
-              actBtn,
-              s === 'done' ? 'border-green/50 bg-green/10 text-green hover:border-green' : 'border-subtle bg-panel-elevated text-secondary hover:text-paper',
-            )}
+            className={cn(actBtn, 'border-subtle bg-panel-elevated text-secondary hover:border-highlight hover:text-paper')}
           >
             {busy === `status:${s}` ? <RefreshCw className="h-3 w-3 robo-spin" /> : <span className={cn('h-1.5 w-1.5 rounded-full', STATUS_STYLE[s].dot)} />}
             {MOVE_LABEL[s]}
@@ -445,15 +442,21 @@ function ActPanel({ item, remote, act, onCopy }: { item: ActionItem; remote: boo
           className="w-full resize-y rounded-md border border-subtle bg-obsidian px-2.5 py-2 text-[13px] leading-snug text-paper placeholder:text-muted focus:border-orange/60 focus:outline-none max-md:text-[16px]"
         />
         <div className="flex flex-wrap items-center gap-1.5">
-          <button type="button" disabled={!!busy || !note.trim()} onClick={() => void save()} className={cn(actBtn, 'border-orange/50 bg-orange/10 text-orange hover:border-orange')}>
-            {busy === 'note' ? <RefreshCw className="h-3 w-3 robo-spin" /> : <Send className="h-3 w-3" />} Save note
+          {/* The one filled button: answering is the primary act once there is something to send. */}
+          <button
+            type="button"
+            disabled={!!busy || !note.trim()}
+            onClick={() => void save()}
+            className={cn(actBtn, note.trim() ? 'border-orange bg-orange text-obsidian hover:bg-orange/90' : 'border-subtle bg-panel-elevated text-muted')}
+          >
+            {busy === 'note' ? <RefreshCw className="h-3 w-3 robo-spin" /> : <Send className="h-3 w-3" />} {item.status === 'awaiting' ? 'Send answer' : 'Save note'}
           </button>
           <button
             type="button"
             disabled={!!busy}
             onClick={() => act.onAgent(item, !remote)}
             title={remote ? 'Get a Claude Code prompt for this item, to copy or start on the Mac' : 'Open Claude Code in Terminal with this item (you approve each step)'}
-            className={cn(actBtn, 'border-purple/50 bg-purple/10 text-purple hover:border-purple')}
+            className={cn(actBtn, 'border-teal/50 bg-teal/10 text-teal hover:border-teal')}
           >
             {busy === 'agent' ? <RefreshCw className="h-3 w-3 robo-spin" /> : <Bot className="h-3 w-3" />} Solve with agent
           </button>
@@ -462,7 +465,7 @@ function ActPanel({ item, remote, act, onCopy }: { item: ActionItem; remote: boo
       {agent && (
         <div className="flex flex-col gap-2 rounded-md border border-subtle bg-panel px-2.5 py-2">
           <div className="flex flex-wrap items-center gap-1.5 font-mono text-[10.5px] text-paper">
-            <Bot className="h-3.5 w-3.5 shrink-0 text-purple" />
+            <Bot className="h-3.5 w-3.5 shrink-0 text-teal" />
             <span className="min-w-0 flex-1">
               {agent.opened ? 'Claude Code opened in Terminal on the Mac — approve its steps there' : agent.error ? `Couldn’t open Terminal (${agent.error})` : 'Prompt ready — copy it into Claude, or start it on the Mac'}
             </span>

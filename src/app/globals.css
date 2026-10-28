@@ -14,7 +14,7 @@
   /* Text Hierarchy ("Paper") */
   --text-paper: #F5F2EB;
   --text-secondary: #A39E93;
-  --text-muted: #6E6A61;
+  --text-muted: #8C877C; /* ≥4.5:1 on obsidian/panel surfaces (was #6E6A61, ~3.3:1) */
 
   /* Brand Accents */
   --accent-orange: #FF5500;

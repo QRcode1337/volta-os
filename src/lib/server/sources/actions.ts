@@ -2,7 +2,7 @@ import 'server-only';
 // Reads the OpenClaw action pipeline (~/.openclaw/wiki/main/actions.md) and turns it into board items. Writes (status
 // moves and notes, the same inline edits Tier 2 makes) live in actions-write.ts.
 // Ported from Orchestra OS (parseActionFile / actionCounts), extended with sections, line numbers, dates, links,
-// a stable item id and an mtime-keyed parse cache. Nothing in VOLTA writes to this file.
+// a stable item id and an mtime-keyed parse cache. This module only reads; actions-write.ts makes the edits.
 //
 // File shape (verified against the live file):
 //   ## Open / ## Done                      sections that hold checkbox items

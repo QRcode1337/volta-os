@@ -1,8 +1,9 @@
 'use client';
 // VOLTA Tasks: live board over the OpenClaw action pipeline (~/.openclaw/wiki/main/actions.md).
-// Read-only: GET /api/actions parses the file; nothing here can change it. Polls every 60 s while the tab is visible.
+// GET /api/actions parses the file; the drawer's status moves and notes POST to /api/actions, which edits the item
+// inline (backup kept). Polls every 60 s while the tab is visible.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Copy, Lock, RefreshCw, Search, X } from 'lucide-react';
+import { AlertTriangle, Copy, RefreshCw, Search, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { AppTopBar } from '@/components/elements/kit/AppTopBar';
 import { ToastStack, useToasts } from '@/components/elements/kit/toast';
@@ -205,12 +206,9 @@ export function TasksApp() {
         subtitle="Agent action pipeline · OpenClaw"
         right={
           <>
-            <span className="hud-label hidden items-center gap-1 md:inline-flex" title="VOLTA never writes actions.md">
-              <Lock className="h-3 w-3" /> read-only
-            </span>
             {mtime && (
-              <span className="hud-label hidden lg:inline" title={source?.path}>
-                file updated {mtime}
+              <span className="hud-label hidden md:inline" title={`${source?.path ?? 'actions.md'} · status moves and notes edit it inline; a backup is kept`}>
+                actions.md · updated {mtime}
               </span>
             )}
             <button

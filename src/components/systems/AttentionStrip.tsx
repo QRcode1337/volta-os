@@ -51,7 +51,7 @@ export function AttentionStrip({ report, onCopy, onJump, fix }: { report: System
           onClick={() => fix.onAgent()}
           disabled={!!fix.busy}
           title={fix.remote ? 'One fix prompt for every item below, to copy into Claude or start on the Mac' : 'Open Claude Code in Terminal with every item below in one fix prompt (you approve each step)'}
-          className={cn(pill, 'ml-auto h-7 border-orange/60 bg-orange/10 px-3 text-orange hover:border-orange hover:bg-orange/20')}
+          className={cn(pill, 'ml-auto h-7 border-teal/60 bg-teal/10 px-3 text-teal hover:border-teal hover:bg-teal/20')}
         >
           {fix.busy === 'agent:*' ? <RefreshCw className="h-3 w-3 robo-spin" /> : <Sparkles className="h-3 w-3" />} Fix all with agent
         </button>
@@ -97,7 +97,7 @@ function Item({ a, onCopy, onJump, fix }: { a: AttentionItem; onCopy: OnCopy; on
             onClick={() => fix.onAgent(a)}
             disabled={!!fix.busy}
             title={fix.remote ? 'Fix prompt for this item, to copy into Claude or start on the Mac' : 'Open Claude Code in Terminal with a fix prompt for this item (you approve each step)'}
-            className={cn(pill, 'border-orange/50 bg-orange/[0.08] text-orange hover:border-orange hover:bg-orange/15')}
+            className={cn(pill, 'border-teal/50 bg-teal/[0.08] text-teal hover:border-teal hover:bg-teal/15')}
           >
             {fix.busy === `agent:${a.id}` ? <RefreshCw className="h-3 w-3 robo-spin" /> : <Bot className="h-3 w-3" />} Fix with agent
           </button>

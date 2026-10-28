@@ -1,16 +1,16 @@
-// Shared (client + server) shapes for the "Generate in Suno" panel. No runtime imports so both sides can use it.
+// Shared (client + server) shapes for the "Create in Suno" panel. No runtime imports so both sides can use it.
 
-/** Env vars the local suno-api service needs before it can generate. */
-export type SunoMissing = 'SUNO_COOKIE' | 'TWOCAPTCHA_KEY';
+/** Env vars the local suno-api service needs before it can read credits. */
+export type SunoMissing = 'SUNO_COOKIE';
 
 export type SunoState =
-  /** Service up, cookie + 2Captcha key set, credits readable. */
+  /** Service up, cookie set, credits readable. */
   | 'ready'
   /** Service not reachable (not running, still starting, or the Windsor drive is unplugged). */
   | 'down'
-  /** Service is up but SUNO_COOKIE and/or TWOCAPTCHA_KEY are still empty in its .env. */
+  /** Service is up but SUNO_COOKIE is still empty in its .env. */
   | 'needs_setup'
-  /** Keys are set but Suno refused the session (expired cookie) or the service errored. */
+  /** Cookie is set but Suno refused the session (expired cookie) or the service errored. */
   | 'auth_error';
 
 export interface SunoCredits {
@@ -21,8 +21,11 @@ export interface SunoCredits {
 }
 
 export interface SunoStatus {
+  /** State of the local suno-api service, which only reads credits now. */
   state: SunoState;
   ready: boolean;
+  /** Creating needs only the Windsor drive (finished files are imported there); the suno-api service is optional. */
+  canCreate: boolean;
   credits: SunoCredits | null;
   missing: SunoMissing[];
   /** Human-readable, safe to show. */
@@ -40,41 +43,50 @@ export interface SunoStatus {
 export type SunoCredit = 'Patrick' | 'Suno' | 'Seraphim of the Void';
 export const SUNO_CREDIT_CHOICES: SunoCredit[] = ['Patrick', 'Suno', 'Seraphim of the Void'];
 
-export interface SunoGenerateBody {
+/** Suno's Create page has a Songs tab and a Speech tab. */
+export type SunoMode = 'song' | 'speech';
+
+export interface SunoCreateBody {
+  mode: SunoMode;
   title: string;
-  /** Comma-separated style tags, e.g. "dark synthwave, 100 bpm, female vocals". */
+  /** Song: comma-separated style tags, e.g. "dark synthwave, 100 bpm, female vocals". */
   tags: string;
+  /** Song: lyrics (ignored when instrumental). */
   lyrics: string;
   instrumental: boolean;
-  /** Must be true: each generation spends Suno credits. */
+  /** Speech: the words to speak. */
+  script: string;
+  /** Speech: delivery, pacing, mood and setting. */
+  tone: string;
+  /** Must be true: each creation spends Suno credits. */
   confirm: boolean;
 }
 
-export type SunoClipStatus = 'submitted' | 'queued' | 'streaming' | 'complete' | 'error' | string;
-
-export interface SunoClip {
-  id: string;
-  status: SunoClipStatus;
-  title: string;
-  audioUrl: string | null;
-  imageUrl: string | null;
-  durationSec: number | null;
+export interface SunoHandoff {
+  opened: boolean;
   error: string | null;
+  /** The full brief, so the panel can offer to copy it when Terminal could not be opened. */
+  prompt: string;
+  /** Epoch ms when the handoff started; the import only picks up downloads newer than this. */
+  since: number;
 }
 
-/** Context the client sends when saving, so the notes written to meta.json match what was asked for. */
+/** Context the client sends when importing, so the notes written to meta.json match what was asked for. */
 export interface SunoSaveContext {
+  mode: SunoMode;
   title: string;
   tags: string;
+  /** Song lyrics, or the speech script. */
   lyrics: string;
   instrumental: boolean;
   credits: SunoCredit[];
 }
 
-export interface SunoSaveResult {
-  id: string;
-  state: 'saved' | 'exists' | 'pending' | 'error';
-  /** File name inside the Suno folder (saved / exists). */
+export interface SunoImportResult {
+  /** File name as it was in ~/Downloads. */
+  from: string;
+  state: 'saved' | 'duplicate' | 'error';
+  /** File name inside the Suno folder (saved / duplicate). */
   file?: string;
   message?: string;
 }

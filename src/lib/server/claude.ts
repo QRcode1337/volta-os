@@ -36,14 +36,15 @@ function prune() {
   }
 }
 
-function openClaudeInTerminal(prompt: string, opts: { cwd: string; tag: string }): Promise<{ opened: boolean; error: string | null }> {
+function openClaudeInTerminal(prompt: string, opts: { cwd: string; tag: string; flags?: readonly string[] }): Promise<{ opened: boolean; error: string | null }> {
   fs.mkdirSync(PROMPTS_DIR, { recursive: true });
   const file = path.join(PROMPTS_DIR, `${opts.tag}-${stamp()}.md`);
   fs.writeFileSync(file, prompt);
   prune();
   // The prompt travels as a file (`cat`), never in argv. osascript runs with the server's own locale, not LC_ALL=C,
   // so non-ASCII paths in the command survive.
-  const shell = `cd ${shQuote(opts.cwd)} && claude "$(cat ${shQuote(file)})"`;
+  const flags = (opts.flags ?? []).map((f) => `${shQuote(f)} `).join('');
+  const shell = `cd ${shQuote(opts.cwd)} && claude ${flags}"$(cat ${shQuote(file)})"`;
   const args = ['-e', `tell application "Terminal" to do script ${asString(shell)}`, '-e', 'tell application "Terminal" to activate'];
   return new Promise((resolve) => {
     execFile(OSASCRIPT, args, { timeout: 10_000 }, (err, _stdout, stderr) => {
@@ -68,12 +69,14 @@ export async function handoffToClaude(opts: {
   body: string;
   rules?: readonly string[];
   open: boolean;
+  /** Fixed CLI flags for the session (e.g. `--chrome`). Never built from user input. */
+  flags?: readonly string[];
   /** Extra fields for the handoff log (item ids, titles). */
   log?: Record<string, unknown>;
 }): Promise<Handoff> {
   const prompt = `${opts.body.trim()}\n\n${groundRules(opts.rules)}`;
   if (!opts.open) return { prompt, opened: false, error: null };
-  const res = await openClaudeInTerminal(prompt, { cwd: opts.cwd, tag: opts.tag });
+  const res = await openClaudeInTerminal(prompt, { cwd: opts.cwd, tag: opts.tag, flags: opts.flags });
   try {
     fs.mkdirSync(STATE_DIR, { recursive: true });
     fs.appendFileSync(HANDOFF_LOG, `${JSON.stringify({ at: new Date().toISOString(), tag: opts.tag, cwd: opts.cwd, ...opts.log, ...res })}\n`);

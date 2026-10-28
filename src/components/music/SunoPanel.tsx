@@ -1,36 +1,37 @@
 'use client';
-// "Generate in Suno": lyrics + style tags + title -> the local suno-api service -> mp3s in the Suno library folder on Windsor.
-// Every generation spends Suno credits, so it always goes through a confirm step. When the service is down or the cookie /
-// 2Captcha key are not set, the panel shows the setup state with the exact file to edit instead of the form.
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Check, Copy, Loader2, RefreshCw, Sparkles } from 'lucide-react';
+// "Create in Suno": a song (lyrics + style tags) or a speech clip (script + tone) -> an interactive `claude --chrome` session
+// that fills in suno.com/create in Patrick's own Chrome and downloads the MP3s -> "Import from Downloads" moves them into
+// the Suno library folder on Windsor. Every creation spends Suno credits, so it always goes through a confirm step.
+// The local suno-api service only shows credits now; when it is down or its cookie is stale, creating still works.
+import { useCallback, useEffect, useState } from 'react';
+import { AlertTriangle, Check, Copy, Download, Loader2, RefreshCw, Sparkles, Terminal } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { api } from './music-client';
 import { SUNO_CREDIT_CHOICES } from './suno-types';
-import type { SunoClip, SunoCredit, SunoGenerateBody, SunoSaveContext, SunoSaveResult, SunoStatus } from './suno-types';
+import type { SunoCreateBody, SunoCredit, SunoHandoff, SunoImportResult, SunoMode, SunoSaveContext, SunoStatus } from './suno-types';
 
 const DRAFT_KEY = 'volta:music:suno:draft';
-const PENDING_KEY = 'volta:music:suno:pending';
-const POLL_MS = 5000;
-const GIVE_UP_MS = 8 * 60_000;
+const PENDING_KEY = 'volta:music:suno:handoff';
 const CLAIM_AFTER_DAYS = 2;
 
 interface Draft {
+  mode: SunoMode;
   title: string;
   tags: string;
   lyrics: string;
   instrumental: boolean;
+  script: string;
+  tone: string;
   seraphim: boolean;
 }
-const EMPTY: Draft = { title: '', tags: '', lyrics: '', instrumental: false, seraphim: false };
+const EMPTY: Draft = { mode: 'song', title: '', tags: '', lyrics: '', instrumental: false, script: '', tone: '', seraphim: false };
 
 interface Pending {
-  ids: string[];
+  since: number;
   ctx: SunoSaveContext;
-  at: number;
 }
 
-type Phase = 'idle' | 'confirm' | 'submitting' | 'waiting' | 'saving' | 'done' | 'stalled';
+type Phase = 'idle' | 'confirm' | 'submitting' | 'handed_off' | 'importing' | 'done';
 
 const field = 'w-full rounded-md border border-subtle bg-obsidian px-2.5 py-1.5 text-[12.5px] text-paper placeholder:text-muted focus:border-orange/60 focus:outline-none disabled:opacity-50';
 const label = 'mb-1 block font-mono text-[9.5px] font-semibold uppercase tracking-[0.08em] text-muted';
@@ -56,12 +57,6 @@ const writeJson = (key: string, value: unknown) => {
   }
 };
 
-const sleep = (ms: number, signal: AbortSignal) =>
-  new Promise<void>((resolve) => {
-    const t = setTimeout(resolve, ms);
-    signal.addEventListener('abort', () => (clearTimeout(t), resolve()), { once: true });
-  });
-
 export interface SunoPanelProps {
   onSaved: () => void;
   onCopy: (text: string, what: string) => void;
@@ -74,10 +69,10 @@ export function SunoPanel({ onSaved, onCopy, onToast }: SunoPanelProps) {
   const [checking, setChecking] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [phase, setPhase] = useState<Phase>('idle');
-  const [clips, setClips] = useState<SunoClip[]>([]);
-  const [results, setResults] = useState<SunoSaveResult[]>([]);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [brief, setBrief] = useState<string | null>(null);
+  const [results, setResults] = useState<SunoImportResult[]>([]);
   const [note, setNote] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
   const patch = (x: Partial<Draft>) => setDraft((d) => ({ ...d, ...x }));
 
   const check = useCallback(async () => {
@@ -92,98 +87,65 @@ export function SunoPanel({ onSaved, onCopy, onToast }: SunoPanelProps) {
     }
   }, []);
 
-  // ── poll until every clip is finished, then save them to Windsor ──
-  const track = useCallback(
-    async (pending: Pending) => {
-      abortRef.current?.abort();
-      const ac = new AbortController();
-      abortRef.current = ac;
-      const { signal } = ac;
-      const deadline = Date.now() + GIVE_UP_MS;
-      let failures = 0;
-      setPhase('waiting');
-      setNote(null);
-      for (;;) {
-        try {
-          const r = await api<{ clips: SunoClip[] }>(`/api/music/suno/poll?ids=${pending.ids.join(',')}`, { signal });
-          failures = 0;
-          setClips(r.clips);
-          if (r.clips.length && r.clips.every((c) => c.status === 'complete' || c.status === 'error')) break;
-        } catch (err) {
-          if (signal.aborted) return;
-          if (++failures >= 5) {
-            setNote(`Could not reach Suno to check progress: ${(err as Error).message}`);
-            setPhase('stalled');
-            return;
-          }
-        }
-        if (Date.now() > deadline) {
-          setNote('Still not finished after 8 minutes. Suno keeps working; check again in a bit.');
-          setPhase('stalled');
-          return;
-        }
-        await sleep(POLL_MS, signal);
-        if (signal.aborted) return;
-      }
-      setPhase('saving');
-      try {
-        const out = await api<{ results: SunoSaveResult[]; rootEnabled: boolean; dir: string }>('/api/music/suno/save', {
-          method: 'POST',
-          body: { ids: pending.ids, ...pending.ctx },
-          signal,
-        });
-        setResults(out.results);
-        const ok = out.results.filter((r) => r.state === 'saved' || r.state === 'exists').length;
-        writeJson(PENDING_KEY, null);
-        setPhase('done');
-        if (ok) {
-          onSaved();
-          onToast(`${ok} song${ok === 1 ? '' : 's'} saved to ${out.dir}.${out.rootEnabled ? '' : ' The Suno folder is disabled under Folders.'}`, 'success');
-        } else onToast('No songs were saved. See the panel for details.', 'error');
-        void check();
-      } catch (err) {
-        if (signal.aborted) return;
-        setNote(`${(err as Error).message}`);
-        setPhase('stalled');
-      }
-    },
-    [check, onSaved, onToast],
-  );
-
   useEffect(() => {
     void check();
     const d = readJson<Partial<Draft>>(DRAFT_KEY);
     if (d) setDraft({ ...EMPTY, ...d });
     const p = readJson<Pending>(PENDING_KEY);
-    if (p && Array.isArray(p.ids) && p.ids.length && Date.now() - p.at < CLAIM_AFTER_DAYS * 86_400_000) void track(p);
-    return () => abortRef.current?.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (p && typeof p.since === 'number' && p.ctx && Date.now() - p.since < CLAIM_AFTER_DAYS * 86_400_000) {
+      setPending(p);
+      setPhase('handed_off');
+    } else writeJson(PENDING_KEY, null);
+  }, [check]);
 
   useEffect(() => {
     writeJson(DRAFT_KEY, draft);
   }, [draft]);
 
+  const isSong = draft.mode === 'song';
   const credits: SunoCredit[] = SUNO_CREDIT_CHOICES.filter((c) => c === 'Patrick' || c === 'Suno' || (c === 'Seraphim of the Void' && draft.seraphim));
-  const ctx: SunoSaveContext = { title: draft.title.trim(), tags: draft.tags.trim(), lyrics: draft.instrumental ? '' : draft.lyrics, instrumental: draft.instrumental, credits };
+  const ctx: SunoSaveContext = {
+    mode: draft.mode,
+    title: draft.title.trim(),
+    tags: isSong ? draft.tags.trim() : draft.tone.trim(),
+    lyrics: isSong ? (draft.instrumental ? '' : draft.lyrics) : draft.script,
+    instrumental: isSong && draft.instrumental,
+    credits,
+  };
 
-  const missingInput = !draft.title.trim() ? 'Add a title.' : !draft.tags.trim() ? 'Add style tags.' : !draft.instrumental && !draft.lyrics.trim() ? 'Add lyrics, or switch on Instrumental.' : null;
-  const busy = phase === 'submitting' || phase === 'waiting' || phase === 'saving';
-  const ready = !!status?.ready;
+  const missingInput = !draft.title.trim()
+    ? 'Add a title.'
+    : isSong
+      ? !draft.tags.trim()
+        ? 'Add style tags.'
+        : !draft.instrumental && !draft.lyrics.trim()
+          ? 'Add lyrics, or switch on Instrumental.'
+          : null
+      : !draft.script.trim()
+        ? 'Add the script to speak.'
+        : null;
+  const busy = phase === 'submitting' || phase === 'handed_off' || phase === 'importing';
+  const canCreate = !!status?.canCreate;
 
   const submit = async () => {
     setPhase('submitting');
     setNote(null);
     setResults([]);
-    setClips([]);
-    const body: SunoGenerateBody = { title: ctx.title, tags: ctx.tags, lyrics: ctx.lyrics, instrumental: ctx.instrumental, confirm: true };
+    setBrief(null);
+    const body: SunoCreateBody = { mode: draft.mode, title: ctx.title, tags: draft.tags.trim(), lyrics: draft.lyrics, instrumental: ctx.instrumental, script: draft.script, tone: draft.tone.trim(), confirm: true };
     try {
-      const r = await api<{ clips: SunoClip[]; credits: SunoStatus['credits'] }>('/api/music/suno/generate', { method: 'POST', body });
-      setClips(r.clips);
-      if (r.credits) setStatus((s) => (s ? { ...s, credits: r.credits } : s));
-      const pending: Pending = { ids: r.clips.map((c) => c.id), ctx, at: Date.now() };
-      writeJson(PENDING_KEY, pending);
-      void track(pending);
+      const h = await api<SunoHandoff>('/api/music/suno/generate', { method: 'POST', body });
+      const p: Pending = { since: h.since, ctx };
+      writeJson(PENDING_KEY, p);
+      setPending(p);
+      setPhase('handed_off');
+      if (h.opened) {
+        setNote(null);
+        onToast('Claude is creating it in your Chrome. Watch the Terminal window.', 'success');
+      } else {
+        setBrief(h.prompt);
+        setNote(`Could not open Terminal${h.error ? `: ${h.error}` : ''}. Copy the brief and run it with \`claude --chrome\` yourself.`);
+      }
     } catch (err) {
       setNote((err as Error).message);
       setPhase('idle');
@@ -192,22 +154,52 @@ export function SunoPanel({ onSaved, onCopy, onToast }: SunoPanelProps) {
     }
   };
 
-  const retry = () => {
-    const p = readJson<Pending>(PENDING_KEY);
-    if (p) void track(p);
+  const importNow = async () => {
+    if (!pending) return;
+    setPhase('importing');
+    setNote(null);
+    try {
+      const out = await api<{ results: SunoImportResult[]; rootEnabled: boolean; dir: string }>('/api/music/suno/import', { method: 'POST', body: { since: pending.since, ...pending.ctx } });
+      setResults(out.results);
+      const saved = out.results.filter((r) => r.state === 'saved').length;
+      const failed = out.results.filter((r) => r.state === 'error').length;
+      if (!out.results.length) {
+        setNote('No new .mp3 or .wav files in ~/Downloads yet. Wait for the downloads to finish, then import again.');
+        setPhase('handed_off');
+        return;
+      }
+      if (failed) {
+        setNote(`${failed} file${failed === 1 ? '' : 's'} could not be imported. They stay in ~/Downloads; import again once they finish downloading.`);
+        setPhase('handed_off');
+      } else {
+        writeJson(PENDING_KEY, null);
+        setPending(null);
+        setPhase('done');
+      }
+      if (saved) {
+        onSaved();
+        onToast(`${saved} file${saved === 1 ? '' : 's'} imported to ${out.dir}.${out.rootEnabled ? '' : ' The Suno folder is disabled under Folders.'}`, 'success');
+      }
+      void check();
+    } catch (err) {
+      setNote((err as Error).message);
+      setPhase('handed_off');
+    }
   };
+
   const forget = () => {
-    abortRef.current?.abort();
     writeJson(PENDING_KEY, null);
+    setPending(null);
     setPhase('idle');
     setNote(null);
+    setBrief(null);
   };
 
   return (
-    <section className="hud-scroll max-h-[70vh] shrink-0 overflow-y-auto border-b border-subtle bg-panel px-4 py-3" aria-label="Generate in Suno">
+    <section className="hud-scroll max-h-[70vh] shrink-0 overflow-y-auto border-b border-subtle bg-panel px-4 py-3" aria-label="Create in Suno">
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <p className="hud-label flex items-center gap-1.5">
-          <Sparkles className="h-3 w-3 text-orange" /> Generate in Suno · local suno-api
+          <Sparkles className="h-3 w-3 text-orange" /> Create in Suno · your Chrome
         </p>
         {status?.credits && (
           <span className="rounded-full border border-subtle bg-panel-elevated px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.05em] text-secondary" title="From Suno via the local service">
@@ -222,42 +214,87 @@ export function SunoPanel({ onSaved, onCopy, onToast }: SunoPanelProps) {
 
       {statusErr && <p className="mb-3 rounded-md border border-[#EF4444]/40 bg-[#EF4444]/5 px-3 py-2 font-mono text-[11px] text-[#EF4444]">Could not check the Suno service: {statusErr}</p>}
       {!status && !statusErr && <p className="font-mono text-[11px] uppercase tracking-[0.06em] text-muted">Checking the Suno service...</p>}
+      {status && !status.windsorMounted && (
+        <p className="mb-3 rounded-md border border-amber/40 bg-amber/5 px-3 py-2 text-[12.5px] text-paper">The Windsor drive is not mounted, so finished files have nowhere to go. Plug it in, then press Recheck.</p>
+      )}
+      {status && status.windsorMounted && !status.ready && <CreditsState status={status} onCopy={onCopy} />}
 
-      {status && !status.ready && <SetupState status={status} onCopy={onCopy} />}
+      <div className="mb-3 flex gap-1.5" role="tablist" aria-label="What to create">
+        {(['song', 'speech'] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="tab"
+            aria-selected={draft.mode === m}
+            disabled={busy}
+            className={cn(btn, 'h-7 px-3', draft.mode === m && 'border-orange/60 text-paper')}
+            onClick={() => patch({ mode: m })}
+          >
+            {m === 'song' ? 'Song' : 'Speech'}
+          </button>
+        ))}
+      </div>
 
-      <fieldset disabled={!ready || busy} className={cn('grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]', !ready && 'opacity-50')}>
+      <fieldset disabled={!canCreate || busy} className={cn('grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]', !canCreate && 'opacity-50')}>
         <div className="space-y-3">
           <div>
             <label className={label} htmlFor="suno-title">Title</label>
-            <input id="suno-title" className={field} value={draft.title} maxLength={100} onChange={(e) => patch({ title: e.target.value })} placeholder="Song title" />
+            <input id="suno-title" className={field} value={draft.title} maxLength={100} onChange={(e) => patch({ title: e.target.value })} placeholder={isSong ? 'Song title' : 'Clip title'} />
           </div>
-          <div>
-            <label className={label} htmlFor="suno-tags">Style tags</label>
-            <input id="suno-tags" className={field} value={draft.tags} maxLength={500} onChange={(e) => patch({ tags: e.target.value })} placeholder="dark synthwave, female vocals, 100 bpm" />
-            <p className="mt-1 font-mono text-[10px] text-muted">Comma-separated. These also become the track tags in the library.</p>
-          </div>
-          <label className="flex items-center gap-2 text-[12.5px] text-paper">
-            <input type="checkbox" className="h-3.5 w-3.5 accent-[#FF5500]" checked={draft.instrumental} onChange={(e) => patch({ instrumental: e.target.checked })} />
-            Instrumental (no vocals; lyrics are ignored)
-          </label>
+          {isSong ? (
+            <>
+              <div>
+                <label className={label} htmlFor="suno-tags">Style tags</label>
+                <input id="suno-tags" className={field} value={draft.tags} maxLength={500} onChange={(e) => patch({ tags: e.target.value })} placeholder="dark synthwave, female vocals, 100 bpm" />
+                <p className="mt-1 font-mono text-[10px] text-muted">Comma-separated. These also become the track tags in the library.</p>
+              </div>
+              <label className="flex items-center gap-2 text-[12.5px] text-paper">
+                <input type="checkbox" className="h-3.5 w-3.5 accent-[#FF5500]" checked={draft.instrumental} onChange={(e) => patch({ instrumental: e.target.checked })} />
+                Instrumental (no vocals; lyrics are ignored)
+              </label>
+            </>
+          ) : (
+            <div>
+              <label className={label} htmlFor="suno-tone">Tone</label>
+              <input id="suno-tone" className={field} value={draft.tone} maxLength={500} onChange={(e) => patch({ tone: e.target.value })} placeholder="calm, low voice, slow pacing, late-night radio" />
+              <p className="mt-1 font-mono text-[10px] text-muted">Optional: delivery, pacing, mood and setting.</p>
+            </div>
+          )}
           <label className="flex items-center gap-2 text-[12.5px] text-paper">
             <input type="checkbox" className="h-3.5 w-3.5 accent-[#FF5500]" checked={draft.seraphim} onChange={(e) => patch({ seraphim: e.target.checked })} />
-            Also credit "Seraphim of the Void"
+            Also credit &quot;Seraphim of the Void&quot;
           </label>
           <p className="font-mono text-[10px] text-muted">Credits recorded: {credits.join(', ')}</p>
         </div>
         <div>
-          <label className={label} htmlFor="suno-lyrics">Lyrics</label>
-          <textarea
-            id="suno-lyrics"
-            className={cn(field, 'min-h-[170px] resize-y font-mono leading-relaxed')}
-            value={draft.lyrics}
-            maxLength={5000}
-            disabled={draft.instrumental}
-            onChange={(e) => patch({ lyrics: e.target.value })}
-            placeholder={'[Verse]\nLines here...\n\n[Chorus]\n...'}
-          />
-          <p className="mt-1 font-mono text-[10px] text-muted">{draft.lyrics.length}/5000 · section tags like [Verse] and [Chorus] work.</p>
+          {isSong ? (
+            <>
+              <label className={label} htmlFor="suno-lyrics">Lyrics</label>
+              <textarea
+                id="suno-lyrics"
+                className={cn(field, 'min-h-[170px] resize-y font-mono leading-relaxed')}
+                value={draft.lyrics}
+                maxLength={5000}
+                disabled={draft.instrumental}
+                onChange={(e) => patch({ lyrics: e.target.value })}
+                placeholder={'[Verse]\nLines here...\n\n[Chorus]\n...'}
+              />
+              <p className="mt-1 font-mono text-[10px] text-muted">{draft.lyrics.length}/5000 · section tags like [Verse] and [Chorus] work.</p>
+            </>
+          ) : (
+            <>
+              <label className={label} htmlFor="suno-script">Script</label>
+              <textarea
+                id="suno-script"
+                className={cn(field, 'min-h-[170px] resize-y leading-relaxed')}
+                value={draft.script}
+                maxLength={5000}
+                onChange={(e) => patch({ script: e.target.value })}
+                placeholder="The words to speak..."
+              />
+              <p className="mt-1 font-mono text-[10px] text-muted">{draft.script.length}/5000</p>
+            </>
+          )}
         </div>
       </fieldset>
 
@@ -266,77 +303,69 @@ export function SunoPanel({ onSaved, onCopy, onToast }: SunoPanelProps) {
           <div className="flex flex-1 flex-wrap items-center gap-3 rounded-md border border-amber/50 bg-amber/5 px-3 py-2.5">
             <AlertTriangle className="h-4 w-4 shrink-0 text-amber" />
             <p className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-paper">
-              <strong>This spends Suno credits.</strong> Suno typically charges about 10 credits per generation and returns 2 clips.
-              {status?.credits ? ` You have ${status.credits.left} left.` : ''} Generate "{ctx.title}"{ctx.instrumental ? ' (instrumental)' : ''}?
+              <strong>This spends Suno credits.</strong> A song typically costs about 10 credits and returns 2 clips.
+              {status?.credits ? ` You have ${status.credits.left} left.` : ''} A Terminal window opens where Claude creates &quot;{ctx.title}&quot; in your Chrome and downloads it. If Cloudflare asks &quot;Verify you are human&quot;, tick it yourself.
             </p>
             <button type="button" className={primaryBtn} onClick={() => void submit()}>
-              <Sparkles className="h-3 w-3" /> Spend credits and generate
+              <Sparkles className="h-3 w-3" /> Spend credits and create
             </button>
             <button type="button" className={btn} onClick={() => setPhase('idle')}>
               Cancel
             </button>
           </div>
-        ) : (
+        ) : phase === 'idle' || phase === 'done' ? (
           <>
-            <button type="button" className={primaryBtn} disabled={!ready || busy || !!missingInput} onClick={() => setPhase('confirm')}>
-              <Sparkles className="h-3 w-3" /> Generate in Suno
+            <button type="button" className={primaryBtn} disabled={!canCreate || !!missingInput} onClick={() => (setResults([]), setPhase('confirm'))}>
+              <Sparkles className="h-3 w-3" /> Create in Suno
             </button>
-            {ready && missingInput && phase === 'idle' && <span className="font-mono text-[10.5px] text-muted">{missingInput}</span>}
+            {canCreate && missingInput && <span className="font-mono text-[10.5px] text-muted">{missingInput}</span>}
           </>
-        )}
+        ) : null}
         {phase === 'submitting' && (
           <span className="flex items-center gap-2 font-mono text-[11px] text-secondary">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Submitting to Suno (solving the captcha can take up to a minute)...
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Opening Claude in Terminal...
           </span>
         )}
       </div>
 
-      {note && <p className="mt-3 rounded-md border border-amber/40 bg-amber/5 px-3 py-2 text-[12.5px] text-paper">{note}</p>}
-
-      {clips.length > 0 && (
-        <ul className="mt-3 space-y-1.5" aria-label="Suno clips">
-          {clips.map((c) => {
-            const r = results.find((x) => x.id === c.id);
-            return (
-              <li key={c.id} className="flex flex-wrap items-center gap-3 rounded-md border border-subtle bg-obsidian px-3 py-2">
-                <span className="min-w-0 flex-1 truncate text-[12.5px] text-paper">{c.title || ctx.title || c.id}</span>
-                <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-muted">{c.id.slice(0, 8)}</span>
-                {r ? (
-                  <span className={cn('inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.05em]', r.state === 'error' ? 'text-[#EF4444]' : 'text-green')}>
-                    {r.state === 'error' ? null : <Check className="h-3 w-3" />}
-                    {r.state === 'saved' ? `saved · ${r.file}` : r.state === 'exists' ? `already saved · ${r.file}` : (r.message ?? r.state)}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.05em] text-secondary">
-                    {c.status !== 'complete' && c.status !== 'error' && <Loader2 className="h-3 w-3 animate-spin" />}
-                    {c.status}
-                    {c.error ? ` · ${c.error}` : ''}
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {phase === 'saving' && (
-        <p className="mt-2 flex items-center gap-2 font-mono text-[11px] text-secondary">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving the mp3s to Windsor...
-        </p>
-      )}
-      {phase === 'stalled' && (
-        <div className="mt-2 flex gap-2">
-          <button type="button" className={btn} onClick={retry}>
-            <RefreshCw className="h-3 w-3" /> Check again
-          </button>
-          <button type="button" className={btn} onClick={forget}>
-            Stop tracking
-          </button>
+      {(phase === 'handed_off' || phase === 'importing') && pending && (
+        <div className="mt-3 rounded-md border border-subtle bg-obsidian px-3 py-2.5">
+          <p className="flex items-start gap-2 text-[12.5px] leading-relaxed text-paper">
+            <Terminal className="mt-0.5 h-4 w-4 shrink-0 text-orange" />
+            <span>
+              Claude is creating &quot;{pending.ctx.title}&quot; ({pending.ctx.mode}) in your Chrome. When it says the MP3s are downloaded, import them from ~/Downloads into the Suno folder on Windsor.
+            </span>
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <button type="button" className={primaryBtn} disabled={phase === 'importing'} onClick={() => void importNow()}>
+              {phase === 'importing' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />} Import from Downloads
+            </button>
+            {brief && (
+              <button type="button" className={btn} onClick={() => onCopy(brief, 'Suno brief')}>
+                <Copy className="h-3 w-3" /> Copy brief
+              </button>
+            )}
+            <button type="button" className={btn} disabled={phase === 'importing'} onClick={forget}>
+              Stop tracking
+            </button>
+          </div>
         </div>
       )}
-      {phase === 'done' && (
-        <button type="button" className={cn(btn, 'mt-2')} onClick={() => (setPhase('idle'), setClips([]), setResults([]))}>
-          Done
-        </button>
+
+      {note && <p className="mt-3 rounded-md border border-amber/40 bg-amber/5 px-3 py-2 text-[12.5px] text-paper">{note}</p>}
+
+      {results.length > 0 && (
+        <ul className="mt-3 space-y-1.5" aria-label="Imported files">
+          {results.map((r) => (
+            <li key={r.from} className="flex flex-wrap items-center gap-3 rounded-md border border-subtle bg-obsidian px-3 py-2">
+              <span className="min-w-0 flex-1 truncate text-[12.5px] text-paper">{r.from}</span>
+              <span className={cn('inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.05em]', r.state === 'error' ? 'text-[#EF4444]' : 'text-green')}>
+                {r.state === 'error' ? null : <Check className="h-3 w-3" />}
+                {r.state === 'saved' ? `imported · ${r.file}` : r.state === 'duplicate' ? `already in library · ${r.file}` : (r.message ?? r.state)}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );
@@ -355,53 +384,29 @@ function CopyLine({ text, what, onCopy }: { text: string; what: string; onCopy: 
   );
 }
 
-function SetupState({ status, onCopy }: { status: SunoStatus; onCopy: SunoPanelProps['onCopy'] }) {
+/** The suno-api service only reads credits now, so this is informational: creating works without it. */
+function CreditsState({ status, onCopy }: { status: SunoStatus; onCopy: SunoPanelProps['onCopy'] }) {
   const needCookie = status.missing.includes('SUNO_COOKIE') || status.state === 'auth_error';
-  const needKey = status.missing.includes('TWOCAPTCHA_KEY');
   return (
-    <div className="mb-3 rounded-lg border border-amber/40 bg-amber/5 p-3.5" role="status">
-      <p className="flex items-start gap-2 text-[12.5px] leading-relaxed text-paper">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
-        <span>
-          <strong className="font-semibold">
-            {status.state === 'down' ? 'The Suno service is not running.' : status.state === 'auth_error' ? 'Suno rejected the saved session.' : 'Suno setup is not finished.'}
-          </strong>{' '}
-          {status.message}
-        </span>
-      </p>
+    <details className="mb-3 rounded-lg border border-amber/40 bg-amber/5 px-3.5 py-2.5" role="status">
+      <summary className="cursor-pointer text-[12.5px] text-paper">
+        <strong className="font-semibold">Credits unavailable.</strong> {status.message}
+      </summary>
       <div className="mt-3 space-y-3 text-[12.5px] text-secondary">
-        {status.state === 'down' ? (
+        {status.state !== 'down' && needCookie && (
           <div>
-            <p className="mb-1.5">Start (or restart) the service:</p>
-            <CopyLine text={status.restartCommand} what="Restart command" onCopy={onCopy} />
-            <p className="mt-1.5 font-mono text-[10px] text-muted">Log: {status.logPath}</p>
+            <p className="mb-1.5">
+              Put a fresh <code className="font-mono text-[11px]">SUNO_COOKIE</code> (the Cookie header of the <code className="font-mono text-[11px]">auth.suno.com/v1/client</code> request, signed in) in this file. It holds a secret, so do not share it:
+            </p>
+            <CopyLine text={status.envPath} what="Path" onCopy={onCopy} />
           </div>
-        ) : (
-          <>
-            <div>
-              <p className="mb-1.5">Edit this file (it holds your secrets, so do not share it):</p>
-              <CopyLine text={status.envPath} what="Path" onCopy={onCopy} />
-            </div>
-            {needCookie && (
-              <div>
-                <p className="font-semibold text-paper">SUNO_COOKIE</p>
-                <p>suno.com/create (logged in) → DevTools → Network → click the request whose URL contains <code className="font-mono text-[11px]">?__clerk_api_version</code> → Request Headers → copy the whole <code className="font-mono text-[11px]">Cookie</code> value → paste after <code className="font-mono text-[11px]">SUNO_COOKIE=</code>.</p>
-              </div>
-            )}
-            {needKey && (
-              <div>
-                <p className="font-semibold text-paper">TWOCAPTCHA_KEY</p>
-                <p>2captcha.com account → fund the balance → copy the API key → paste after <code className="font-mono text-[11px]">TWOCAPTCHA_KEY=</code>.</p>
-              </div>
-            )}
-            <div>
-              <p className="mb-1.5">Then restart the service and press Recheck:</p>
-              <CopyLine text={status.restartCommand} what="Restart command" onCopy={onCopy} />
-            </div>
-          </>
         )}
-        {!status.windsorMounted && <p className="font-mono text-[11px] text-amber">The Windsor drive is not mounted.</p>}
+        <div>
+          <p className="mb-1.5">{status.state === 'down' ? 'Start (or restart) the service:' : 'Then restart the service and press Recheck:'}</p>
+          <CopyLine text={status.restartCommand} what="Restart command" onCopy={onCopy} />
+          <p className="mt-1.5 font-mono text-[10px] text-muted">Log: {status.logPath}</p>
+        </div>
       </div>
-    </div>
+    </details>
   );
 }

@@ -73,6 +73,9 @@ export interface ActionsResponse {
 
 export const DEFAULT_STALE_DAYS = 14;
 
+/** Stale items at least this old get the loud (filled) badge; younger stale items an outline. */
+export const VERY_STALE_DAYS = 30;
+
 export function isStale(item: Pick<ActionItem, 'status' | 'ageDays'>, staleDays: number): boolean {
   return item.status !== 'done' && item.ageDays !== null && item.ageDays >= staleDays;
 }

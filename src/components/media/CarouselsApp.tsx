@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { pushToEditorInbox } from '@/lib/editor-inbox';
+import { makeInboxItem } from '@/lib/media-ids';
 import { cn } from '@/lib/cn';
 import type { Deck, Slide } from './data';
 import { PinMarker, SlideView, type EditableField, type SlidePin } from './SlideView';
@@ -351,16 +352,17 @@ function CarouselsBoard({ data, onReload }: { data: DecksResponse; onReload: () 
   };
 
   const sendToEditor = () => {
-    const waiting = pushToEditorInbox({
-      id: `carousel-${deck.id}-${Date.now().toString(36)}`,
-      title: `Short ${tagOf(deck)} — ${deck.title}`,
-      kind: 'ANIMATION',
-      durationSec: deckSeconds(deck, slides.length),
-      source: 'carousels',
-      cues: slides.map((s, i) => ({ atSec: Math.round((i * deckSeconds(deck, slides.length)) / slides.length), voiceover: s.body || s.headline, visualCue: `Slide ${pad2(i + 1)} · ${s.kicker} · ${s.headline}` })),
-      createdAt: new Date().toISOString(),
-      notion: { title: deck.pageTitle, url: deck.notionUrl },
-    });
+    const waiting = pushToEditorInbox(
+      makeInboxItem({
+        source: 'carousels',
+        ref: deck.id,
+        title: `Short ${tagOf(deck)} — ${deck.title}`,
+        kind: 'ANIMATION',
+        durationSec: deckSeconds(deck, slides.length),
+        cues: slides.map((s, i) => ({ atSec: Math.round((i * deckSeconds(deck, slides.length)) / slides.length), voiceover: s.body || s.headline, visualCue: `Slide ${pad2(i + 1)} · ${s.kicker} · ${s.headline}` })),
+        notion: { title: deck.pageTitle, url: deck.notionUrl },
+      }),
+    );
     push({ tone: 'ok', message: `${tagOf(deck)} sent to VOLTA Editor as a ${deckSeconds(deck, slides.length)}s hand-off (${waiting} waiting).`, href: '/apps/editor', hrefLabel: 'Open VOLTA Editor' });
   };
 

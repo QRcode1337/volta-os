@@ -12,7 +12,8 @@ import { Cover } from './Cover';
 import { PlayerBar, type PlayerHandle } from './PlayerBar';
 import { SunoPanel } from './SunoPanel';
 import { TrackPanel } from './TrackPanel';
-import { fmtBytes, fmtClock, trackStreamUrl } from './format';
+import { fmtBytes, fmtClock } from './format';
+import { makeInboxItem } from '@/lib/media-ids';
 import { api } from './music-client';
 import type { MusicLibrary, MusicRoot, MusicTrack, TrackMeta } from './types';
 
@@ -194,16 +195,9 @@ export function MusicApp() {
 
   const sendToEditor = useCallback(
     (t: MusicTrack) => {
-      const waiting = pushToEditorInbox({
-        id: `music-${t.id}-${Date.now().toString(36)}`,
-        title: t.title,
-        kind: 'A-ROLL CUT',
-        durationSec: t.durationSec ?? 0,
-        source: 'music',
-        createdAt: new Date().toISOString(),
-        file: t.path,
-        mediaUrl: trackStreamUrl(t.id),
-      });
+      const waiting = pushToEditorInbox(
+        makeInboxItem({ source: 'music', ref: t.id, title: t.title, kind: 'A-ROLL CUT', durationSec: t.durationSec ?? 0, media: { id: t.id, path: t.path } }),
+      );
       push(`Sent to the VOLTA Editor inbox (${waiting} waiting).`, { tone: 'success', href: '/apps/editor', linkLabel: 'Open VOLTA Editor' });
     },
     [push],

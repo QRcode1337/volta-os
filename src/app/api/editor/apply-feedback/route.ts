@@ -6,14 +6,13 @@
 import { HttpError, route } from '@/lib/server/route-helpers';
 import { serialised } from '@/lib/server/storage';
 import { readWorkspaceFile, resolveWorkspacePath, writeWorkspaceFile } from '@/lib/server/workspace';
+import { MAX_PINS_PER_APPLY, validatePin } from '@/lib/server/editor/feedback';
 import { RL_HEADING, deriveLesson, insertUnderHeading, lessonMarkdown, type RlPinInput, type TeachSkill } from '@/components/editor/rl-rules';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const SKILLS = new Set(['/animate', '/cut', 'audio', '/robo']);
-const MAX_PINS = 500;
-/** 500 pins × ≤ 2000-char comments plus JSON overhead. */
+/** MAX_PINS_PER_APPLY pins × ≤ 2000-char comments plus JSON overhead. */
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
 interface ApplyBody {
@@ -22,31 +21,27 @@ interface ApplyBody {
   pins: RlPinInput[];
 }
 
-function validate(raw: unknown): ApplyBody | string {
-  if (!raw || typeof raw !== 'object') return 'Body must be a JSON object.';
+/** Pins here span every open file (timestamps stay file-local), so the cap is the aggregate MAX_PINS_PER_APPLY, not the per-file MAX_PINS. */
+function validate(raw: unknown): ApplyBody {
+  if (!raw || typeof raw !== 'object') throw new HttpError('Body must be a JSON object.', 400);
   const o = raw as Record<string, unknown>;
   const project = typeof o.project === 'string' ? o.project.slice(0, 200) : 'VOLTA Editor';
   const teach = o.teach as Record<string, unknown> | undefined;
-  if (!teach || typeof teach.cut !== 'boolean' || typeof teach.animate !== 'boolean') return '`teach` must be { cut: boolean, animate: boolean }.';
-  if (!Array.isArray(o.pins)) return '`pins` must be an array.';
-  if (o.pins.length > MAX_PINS) return `Too many pins (max ${MAX_PINS}).`;
-  const pins: RlPinInput[] = [];
-  for (const [i, p] of (o.pins as unknown[]).entries()) {
-    const q = p as Record<string, unknown>;
-    if (!q || typeof q !== 'object') return `pins[${i}] must be an object.`;
-    if (typeof q.number !== 'number' || !Number.isFinite(q.number)) return `pins[${i}].number must be a number.`;
-    if (typeof q.timestampSec !== 'number' || !Number.isFinite(q.timestampSec) || q.timestampSec < 0) return `pins[${i}].timestampSec must be a non-negative number.`;
-    if (typeof q.skill !== 'string' || !SKILLS.has(q.skill)) return `pins[${i}].skill must be one of ${[...SKILLS].join(', ')}.`;
-    if (typeof q.commentText !== 'string' || !q.commentText.trim()) return `pins[${i}].commentText must be a non-empty string.`;
-    pins.push({
+  if (!teach || typeof teach.cut !== 'boolean' || typeof teach.animate !== 'boolean') throw new HttpError('`teach` must be { cut: boolean, animate: boolean }.', 400);
+  if (!Array.isArray(o.pins)) throw new HttpError('`pins` must be an array.', 400);
+  if (o.pins.length > MAX_PINS_PER_APPLY) throw new HttpError(`Too many pins (max ${MAX_PINS_PER_APPLY}).`, 400);
+  const pins = (o.pins as unknown[]).map((p, i): RlPinInput => {
+    const { q, timestampSec, skill, commentText } = validatePin(p, i);
+    if (typeof q.number !== 'number' || !Number.isFinite(q.number)) throw new HttpError(`pins[${i}].number must be a number.`, 400);
+    return {
       number: Math.round(q.number),
       clipNumber: typeof q.clipNumber === 'number' ? Math.round(q.clipNumber) : 0,
       clipTitle: typeof q.clipTitle === 'string' ? q.clipTitle.slice(0, 120).replace(/[\r\n]+/g, ' ') : 'Unknown clip',
-      timestampSec: q.timestampSec,
-      skill: q.skill,
-      commentText: q.commentText.slice(0, 2000).replace(/[\r\n]+/g, ' '),
-    });
-  }
+      timestampSec,
+      skill,
+      commentText: commentText.replace(/[\r\n]+/g, ' '),
+    };
+  });
   return { project: project.replace(/[\r\n]+/g, ' '), teach: { cut: teach.cut, animate: teach.animate }, pins };
 }
 
@@ -56,7 +51,6 @@ function titleFor(skill: TeachSkill): string {
 
 export const POST = route(async ({ body: raw }) => {
   const body = validate(raw);
-  if (typeof body === 'string') throw new HttpError(body, 400);
   const wanted: TeachSkill[] = [...(body.teach.animate ? (['/animate'] as const) : []), ...(body.teach.cut ? (['/cut'] as const) : [])];
   if (!wanted.length) throw new HttpError('Enable "Teach my /cut" or "Teach my /animate" first.', 400);
 

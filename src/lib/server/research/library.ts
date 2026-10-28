@@ -2,11 +2,12 @@ import 'server-only';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { mapLimit } from '../proc';
-import { bestLabel, brctlCommand, tagKey, type Facets, type FileKind, type LibraryRow } from '@/components/research/types';
+import { brctlCommand } from '@/lib/media-ids';
+import { bestLabel, tagKey, type Facets, type FileKind, type LibraryRow } from '@/components/research/types';
 import { loadConfig } from './config';
 import { getInventory, inventoryGen, kindOf, type InvEntry, type Inventory } from './inventory';
 import { getStageA, type StageAData, type StageARec } from './stagea';
-import { getVault, mentionsOf, norm, obsidianUrl, type Note, type VaultData } from './vault';
+import { getVault, mentionsOf, noteObsidianUrl, norm, type Note, type VaultData } from './vault';
 
 // The library: the file inventory joined to Voltamachine Stage A records, plus vault-note mentions.
 // Join rule: Stage A recorded /Volumes/Voltamachina/<root>/<rel>; the same relative path under ~/Documents/<root> is
@@ -214,7 +215,7 @@ function build(inv: Inventory, stageA: StageAData, vault: VaultData, key: string
     mentions.set(rec.sid, found);
     if (row) {
       row.vaultNotes = Math.max(row.vaultNotes, found.length);
-      row.obsidian ??= obsidianUrl(found.find((n) => n.source === 'vault') ?? found[0]);
+      row.obsidian ??= noteObsidianUrl(found.find((n) => n.source === 'vault') ?? found[0]);
     }
   }
 

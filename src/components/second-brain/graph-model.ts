@@ -1,7 +1,8 @@
 // Pure (framework-free) model for the Second Brain wikilink graph served by /api/brain/graph.
-// Clusters = vault/folder. Colours = per vault, tinted per folder. No value imports from '@/…'
+// Clusters = vault/folder. Colours = per vault, tinted per folder. No value imports from '@/…' (relative only)
 // so the layout code can be exercised outside Next.
 import type { BrainGraph, BrainGraphNode } from '@/types/sources';
+import { obsidianUrl } from '../../lib/text';
 
 export const VAULT_COLORS: Record<string, string> = {
   'Pieces-Vault': '#FF6B2B',
@@ -82,10 +83,6 @@ function mix(hex: string, t: number): string {
 
 export function vaultColor(name: string, index: number): string {
   return VAULT_COLORS[name] ?? VAULT_PALETTE[index % VAULT_PALETTE.length];
-}
-
-export function obsidianUrlFor(vaultId: string, relPath: string): string {
-  return `obsidian://open?vault=${encodeURIComponent(vaultId)}&file=${encodeURIComponent(relPath.replace(/\.md$/, ''))}`;
 }
 
 export const noteTitle = (relPath: string) => (relPath.split('/').pop() ?? relPath).replace(/\.md$/, '');
@@ -213,7 +210,7 @@ export function stubNode(id: string, model: GraphModel | null, mtime?: string, v
     relPath,
     degree: 0,
     mtime: mtime ?? '',
-    obsidianUrl: obsidianUrlFor(vaultId, relPath),
+    obsidianUrl: obsidianUrl(vaultId, relPath),
     index: -1,
     vaultId,
     cluster: cluster?.index ?? -1,

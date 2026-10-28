@@ -5,7 +5,8 @@ import { AlertTriangle, Cloud, Copy, Film, Layers, Loader2, Music, Play, Refresh
 import type { StudioOutput, StudioProject, StudioStorage } from '@/types/studio';
 import { cn } from '@/lib/cn';
 import { PresetForm } from './PresetForm';
-import { KIND_COLOR, ago, fileUrl, fmtBytes, fmtDur } from './studio-client';
+import { KIND_COLOR, ago, fmtBytes, fmtDur } from './studio-client';
+import { mediaFileUrl } from '@/lib/media-ids';
 
 export interface Prefill {
   presetId: string;
@@ -53,11 +54,11 @@ function Player({ o, onClose }: { o: StudioOutput; onClose: () => void }) {
     <div className="overflow-hidden rounded-lg border border-subtle bg-black">
       {o.media === 'video' ? (
         // key: remount when the source changes so the element reloads
-        <video key={o.id} src={fileUrl(o.id)} controls autoPlay preload="metadata" className="mx-auto block max-h-[46vh] w-full bg-black" />
+        <video key={o.id} src={mediaFileUrl(o.id)} controls autoPlay preload="metadata" className="mx-auto block max-h-[46vh] w-full bg-black" />
       ) : (
         <div className="flex items-center gap-3 p-4">
           <Music className="h-5 w-5 shrink-0 text-orange" />
-          <audio key={o.id} src={fileUrl(o.id)} controls autoPlay className="w-full" />
+          <audio key={o.id} src={mediaFileUrl(o.id)} controls autoPlay className="w-full" />
         </div>
       )}
       <div className="flex items-center gap-2 border-t border-subtle bg-panel px-3 py-1.5">

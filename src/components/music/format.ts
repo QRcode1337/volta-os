@@ -1,13 +1,5 @@
 // Pure helpers shared by the music server code and the client UI (no 'use client', no server-only).
 
-/** Shell-safe double-quoted string (escapes \ " $ `). */
-export function shellDq(s: string): string {
-  return `"${s.replace(/([\\"$`])/g, '\\$1')}"`;
-}
-
-/** Copyable command that asks iCloud to materialise a file or folder. Never run by the app itself. */
-export const brctlCommand = (p: string) => `brctl download ${shellDq(p)}`;
-
 export function fmtBytes(n: number): string {
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GiB`;
   if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`;
@@ -33,5 +25,4 @@ export function cleanTitle(fileName: string): string {
   return t || fileName;
 }
 
-export const trackStreamUrl = (id: string) => `/api/music/file?id=${encodeURIComponent(id)}`;
 export const trackCoverUrl = (id: string) => `/api/music/cover?id=${encodeURIComponent(id)}`;

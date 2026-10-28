@@ -2,10 +2,11 @@ import 'server-only';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { SynthesisDetail, SynthesisItem, VaultMention } from '@/components/research/types';
+import { obsidianUrl, parseFrontmatter, stripMarkdown } from '@/lib/text';
 import { cached } from '../sources/cache';
 import { mapLimit } from '../proc';
+import { walkVault, type VaultFile } from '../vault-walk';
 import { loadConfig } from './config';
-import { isPlaceholder } from './inventory';
 
 // The Voltamachine Obsidian vault (Synthesis/, 00-Meta, 01-Quantum, 03-Esoterica, 04-UAP) and ~/ErisMorn/voltamachine/synthesis.
 // Local notes only: an iCloud placeholder (size > 0 && blocks === 0) is counted and never opened.
@@ -87,25 +88,7 @@ export function stripThinking(md: string): { text: string; stripped: boolean } {
   return { text, stripped };
 }
 
-function frontMatter(md: string): { fm: Record<string, string>; body: string } {
-  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(md);
-  if (!m) return { fm: {}, body: md };
-  const fm: Record<string, string> = {};
-  for (const line of m[1].split(/\r?\n/)) {
-    const kv = /^([A-Za-z_][\w-]*):\s*(.*)$/.exec(line);
-    if (kv) fm[kv[1].toLowerCase()] = kv[2].trim().replace(/^["']|["']$/g, '');
-  }
-  return { fm, body: md.slice(m[0].length) };
-}
-
-function plain(line: string): string {
-  return line
-    .replace(/!?\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, a: string, b?: string) => b ?? a)
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/[*_`#>]+/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+const plain = (md: string) => stripMarkdown(md, { oneLine: true });
 
 function excerptOf(body: string): string {
   const exec = /^#{1,3} +Executive Summary\s*\n+([\s\S]*?)(?=\n#{1,3} |$)/im.exec(body);
@@ -121,19 +104,20 @@ function excerptOf(body: string): string {
 
 function parseNote(source: Note['source'], rel: string, abs: string, raw: string, mtimeMs: number): Note {
   const { text: cleaned, stripped } = stripThinking(stripAnsi(raw));
-  const { fm, body } = frontMatter(cleaned);
+  const fm = parseFrontmatter(cleaned);
+  const { body } = fm;
   const file = path.basename(rel);
   const stem = file.replace(/\.md$/i, '');
   const h1 = /^#\s+(.+)$/m.exec(body)?.[1];
-  const date = fm.date || /^(\d{4}-\d{2}-\d{2})/.exec(stem)?.[1] || new Date(mtimeMs).toISOString().slice(0, 10);
-  const papers = Number(fm.papers_reviewed ?? /\*\*Papers indexed:\*\*\s*(\d+)/.exec(body)?.[1]);
-  const tags = (fm.tags ?? '')
-    .replace(/[[\]]/g, '')
-    .split(/[,\s]+/)
+  const date = fm.get('date') || /^(\d{4}-\d{2}-\d{2})/.exec(stem)?.[1] || new Date(mtimeMs).toISOString().slice(0, 10);
+  const papers = Number(fm.get('papers_reviewed') ?? /\*\*Papers indexed:\*\*\s*(\d+)/.exec(body)?.[1]);
+  const tags = fm
+    .list('tags')
+    .flatMap((t) => t.replace(/[[\]]/g, '').split(/[,\s]+/))
     .map((t) => t.replace(/^#/, '').trim())
     .filter(Boolean)
     .slice(0, 12);
-  const title = plain(fm.topic || h1 || stem.replace(/[-_]+/g, ' '));
+  const title = plain(fm.get('topic') || h1 || stem.replace(/[-_]+/g, ' '));
   return {
     key: `${source}:${rel}`,
     source,
@@ -155,26 +139,16 @@ function parseNote(source: Note['source'], rel: string, abs: string, raw: string
   };
 }
 
-async function listMd(dir: string, relBase: string, depth: number, out: { abs: string; rel: string }[]): Promise<void> {
-  let entries: import('node:fs').Dirent[];
-  try {
-    entries = await fs.readdir(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const e of entries) {
-    if (e.name.startsWith('.') || e.isSymbolicLink()) continue;
-    const abs = path.join(dir, e.name);
-    const rel = relBase ? `${relBase}/${e.name}` : e.name;
-    if (e.isDirectory()) {
-      if (depth < 2) await listMd(abs, rel, depth + 1, out);
-    } else if (e.isFile() && /\.md$/i.test(e.name)) out.push({ abs, rel });
-  }
+/** Notes up to two folder levels below `dir` (dot-prefixed names and symlinks skipped), with their stat. */
+async function listMd(dir: string): Promise<VaultFile[]> {
+  const out: VaultFile[] = [];
+  await walkVault(dir, { onFile: (f) => out.push(f), maxDepth: 2, symlinks: 'skip' });
+  return out;
 }
 
 async function load(): Promise<VaultData> {
   const cfg = loadConfig();
-  const files: { source: Note['source']; abs: string; rel: string }[] = [];
+  const files: (VaultFile & { source: Note['source'] })[] = [];
   let exists = false;
   try {
     exists = (await fs.stat(cfg.vault.path)).isDirectory();
@@ -183,30 +157,24 @@ async function load(): Promise<VaultData> {
   }
   if (exists) {
     for (const d of [cfg.vault.synthesisDir, ...cfg.vault.noteDirs]) {
-      const found: { abs: string; rel: string }[] = [];
-      await listMd(path.join(cfg.vault.path, d), d, 0, found);
-      for (const f of found) files.push({ source: 'vault', ...f });
+      for (const f of await listMd(path.join(cfg.vault.path, d))) files.push({ ...f, source: 'vault', rel: d ? `${d}/${f.rel}` : f.rel });
     }
   }
-  const eris: { abs: string; rel: string }[] = [];
-  await listMd(cfg.stageA.synthesisDir, '', 0, eris);
-  for (const f of eris) files.push({ source: 'erismorn', ...f });
+  for (const f of await listMd(cfg.stageA.synthesisDir)) files.push({ ...f, source: 'erismorn' });
 
   const notes: Note[] = [];
   let local = 0;
   let icloud = 0;
   let stripped = 0;
   await mapLimit(files, 12, async (f) => {
+    if (f.dataless) {
+      icloud++;
+      return; // never opened
+    }
+    if (f.size > MAX_NOTE_BYTES) return;
     try {
-      const st = await fs.stat(f.abs);
-      if (!st.isFile()) return;
-      if (isPlaceholder(st)) {
-        icloud++;
-        return; // never opened
-      }
-      if (st.size > MAX_NOTE_BYTES) return;
       const raw = await fs.readFile(f.abs, 'utf8');
-      const note = parseNote(f.source, f.rel, f.abs, raw, st.mtimeMs);
+      const note = parseNote(f.source, f.rel, f.abs, raw, f.mtimeMs);
       local++;
       if (note.strippedThinking) stripped++;
       notes.push(note);
@@ -220,10 +188,9 @@ async function load(): Promise<VaultData> {
 
 export const getVault = (force = false) => cached<VaultData>('research:vault', TTL_MS, load, { force });
 
-export function obsidianUrl(note: Pick<Note, 'rel' | 'source'>): string | null {
-  if (note.source !== 'vault') return null;
-  const cfg = loadConfig();
-  return `obsidian://open?vault=${encodeURIComponent(cfg.vault.name)}&file=${encodeURIComponent(note.rel.replace(/\.md$/i, ''))}`;
+/** Obsidian link for a vault note (by vault name); null for ErisMorn synthesis files. */
+export function noteObsidianUrl(note: Pick<Note, 'rel' | 'source'>): string | null {
+  return note.source === 'vault' ? obsidianUrl(loadConfig().vault.name, note.rel) : null;
 }
 
 /** Notes that mention a title or file stem. Needles shorter than 14 / 10 characters are ignored (too many false hits). */
@@ -252,7 +219,7 @@ export function snippetFor(note: Note, needles: { title?: string; stem?: string 
 }
 
 export function toMention(note: Note, needles: { title?: string; stem?: string }): VaultMention {
-  return { rel: note.rel, title: note.title, folder: note.folder || note.source, obsidian: obsidianUrl(note) ?? '', snippet: snippetFor(note, needles) };
+  return { rel: note.rel, title: note.title, folder: note.folder || note.source, obsidian: noteObsidianUrl(note) ?? '', snippet: snippetFor(note, needles) };
 }
 
 // ───────────────────────── syntheses ─────────────────────────
@@ -286,7 +253,7 @@ export async function getSynthesis(id: string): Promise<SynthesisDetail | null> 
   const v = await getVault();
   const n = v.notes.filter(isSynthesis).find((x) => idOf(x) === id);
   if (!n) return null;
-  const { body: raw } = frontMatter(n.text);
+  const { body: raw } = parseFrontmatter(n.text);
   // the reader shows the title above the text, so a leading "# <same title>" would repeat it
   const lead = /^\s*#\s+(.+)\n+/.exec(raw);
   const body = lead && plain(lead[1]) === n.title ? raw.slice(lead[0].length) : raw;
@@ -304,6 +271,6 @@ export async function getSynthesis(id: string): Promise<SynthesisDetail | null> 
     strippedThinking: n.strippedThinking,
     markdown: body.trim(),
     path: n.abs,
-    obsidian: obsidianUrl(n),
+    obsidian: noteObsidianUrl(n),
   };
 }

@@ -12,20 +12,12 @@ import { OUTPUT_SCAN_LIMIT, probeFile, projectOutputs, resolveOutputFile } from 
 import { FEEDBACK_DIR } from './feedback';
 import { isWindsorMounted } from '../storage';
 import { isEvicted } from '@/lib/server/icloud';
+import { brctlCommand, mediaFileUrl, parseBinId } from '@/lib/media-ids';
 
 // The Editor media bin: every real Studio output (per configured project, incl. the Windsor renders folder) plus the
 // Generations manifest. Paths are resolved by the existing Studio / Generations registries; the browser only gets ids + URLs.
 
 const GEN_EXT_MEDIA: Record<string, EditorMediaKind> = { video: 'video', voice: 'audio', image: 'image' };
-
-/** `brctl download "<path>"` with the characters that are special inside double quotes escaped. */
-export function brctlCommand(file: string): string {
-  return `brctl download "${file.replace(/[\\"$`]/g, '\\$&')}"`;
-}
-
-const studioUrl = (id: string) => `/api/studio/file?id=${encodeURIComponent(id)}`;
-const genUrl = (id: string) => `/api/media/file?id=${encodeURIComponent(id)}`;
-const musicUrl = (id: string) => `/api/music/file?id=${encodeURIComponent(id)}`;
 
 /** A VANTA VECTOR track as a bin item. iCloud placeholders stay listed (offline + brctl) but are never opened. */
 function musicItem(band: string, t: RawTrack): EditorMediaItem {
@@ -50,7 +42,7 @@ function musicItem(band: string, t: RawTrack): EditorMediaItem {
     height: null,
     hasAudio: true,
     offline,
-    url: musicUrl(t.id),
+    url: mediaFileUrl(t.id),
     brctl: offline ? brctlCommand(t.path) : null,
     canSaveNotes: false,
   };
@@ -77,7 +69,7 @@ function studioItem(project: Project, o: StudioOutput, hasAudio: boolean): Edito
     height: o.height,
     hasAudio: o.media === 'audio' || hasAudio,
     offline: o.offline,
-    url: studioUrl(o.id),
+    url: mediaFileUrl(o.id),
     brctl: o.offline ? brctlCommand(o.path) : null,
     canSaveNotes: true,
   };
@@ -117,7 +109,7 @@ async function genItem(rec: GenItemRecord): Promise<EditorMediaItem | null> {
     height: pr?.height ?? null,
     hasAudio: media === 'audio' || !!pr?.hasAudio,
     offline,
-    url: genUrl(rec.id),
+    url: mediaFileUrl(`g_${rec.id}`),
     brctl: offline ? brctlCommand(rec.file) : null,
     canSaveNotes: false,
   };
@@ -171,8 +163,11 @@ export async function listEditorMedia(opts: { refresh?: boolean } = {}): Promise
 }
 
 /** Describe ONE file by its fileKey (inbox hand-offs beyond the bin's newest-N, or deep links). */
-export async function describeEditorMedia(id: string): Promise<EditorMediaItem> {
-  if (/^o_[0-9a-f]{16}$/.test(id)) {
+export async function describeEditorMedia(rawId: string): Promise<EditorMediaItem> {
+  const p = parseBinId(rawId);
+  if (!p) throw new HttpError('Bad file id.', 400);
+  const id = p.id;
+  if (p.kind === 'o') {
     const f = await resolveOutputFile(id);
     const project = f.projectId ? getProject(f.projectId) : null;
     if (!project) throw new HttpError('This file no longer belongs to a configured Studio project.', 404);
@@ -195,14 +190,11 @@ export async function describeEditorMedia(id: string): Promise<EditorMediaItem> 
     };
     return studioItem(project, out, !!pr?.hasAudio);
   }
-  if (/^g_[a-z0-9-]{6,40}$/i.test(id)) {
-    const { rec } = await resolveFile(id.slice(2));
+  if (p.kind === 'g') {
+    const { rec } = await resolveFile(p.key);
     const item = await genItem(rec);
     if (!item) throw new HttpError('File is missing (is the Windsor drive mounted?).', 404);
     return item;
   }
-  if (/^m_[0-9a-f]{16}$/.test(id)) {
-    return musicItem(musicLoadConfig().band, (await resolveTrack(id)).track);
-  }
-  throw new HttpError('Bad file id.', 400);
+  return musicItem(musicLoadConfig().band, (await resolveTrack(id)).track);
 }

@@ -14,6 +14,7 @@ import { JOB_PATH, datalessReason, getPreset, isDataless, getProject, resolveExe
 import { newestOutputSince, parseRemotionCompositions, registerOutput, saveCliCompositions } from './index-projects';
 import { isInside, isWindsorMounted } from '../storage';
 import { JOBS_FILE, LOGS_DIR, STUDIO_ROOT, checkStudioStorage, ensureStudioDirs, projectRendersDir, requireStudioStorage } from './storage';
+import { icloudHint } from '@/lib/media-ids';
 
 // One job at a time (renders are heavy on a 24 GB Mac), niced to 10, run without a shell, in their own process group so
 // cancel can SIGTERM (then SIGKILL) the whole tree (npx -> node -> chrome / ffmpeg).
@@ -274,7 +275,7 @@ export async function createCompositionsJob(projectId: unknown): Promise<StudioJ
   const exe = resolveExecutable(project.compositionsArgv[0], project);
   if (!exe) throw new HttpError(`${project.compositionsArgv[0]} is not installed in this project.`, 400);
   if (!fs.existsSync(project.path)) throw new HttpError(`Project folder is missing: ${project.path}`, 400);
-  if (isDataless(exe)) throw new HttpError(`${path.basename(exe)} is an iCloud placeholder (evicted from this Mac) and the Studio server cannot download it. Open ${project.path} in Finder, or run brctl download on it, then retry.`, 409);
+  if (isDataless(exe)) throw new HttpError(icloudHint(path.basename(exe), exe), 409);
   const argv = project.compositionsArgv.slice(1);
   const rt = newRuntime(
     project,
@@ -499,7 +500,7 @@ async function finish(rt: Runtime, code: number | null, signal: NodeJS.Signals |
   }
 
   if (status === 'failed' && /Resource deadlock avoided/.test(`${rt.stderr}${rt.stdout}`)) {
-    error = 'A file this command needs is an iCloud placeholder (evicted from this Mac) and the Studio server cannot download it. Open the project folder in Finder (or run brctl download on it), then retry.';
+    error = icloudHint('A file this command needs (in the project folder)', rt.project.path);
   }
   if (status === 'done') {
     try {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { EDITOR_INBOX_EVENT, readEditorInbox, replaceEditorInbox } from '@/lib/editor-inbox';
+import { EDITOR_INBOX_KEY, mediaIdFromUrl } from '@/lib/media-ids';
 import { isTypingTarget } from '@/lib/events';
 import type { EditorEpisodeRef, EditorFeedbackResponse, EditorMediaItem, EditorReviewNoteResponse, EditorSkillsResponse } from '@/types/editor';
 import type { NotionPageDoc, NotionSection, VpCatalog, VpEpisode } from '@/types/notion';
@@ -14,7 +15,7 @@ import { MediaBin, type BinState } from './MediaBin';
 import { MultiTrackTimeline } from './MultiTrackTimeline';
 import { compilePrompt, copyToastText, singlePinMarkdown, toRlInputs, writeClipboard } from './prompt';
 import { SpatialVideoCanvas } from './SpatialVideoCanvas';
-import { STORAGE_KEY, clipAt, clipFromMedia, editorReducer, inboxFileKey, inboxVoiceover, initialState, nextPinNumber, parsePersisted, recordsFromPins, toPersisted, totalDuration, type NewClip } from './state';
+import { STORAGE_KEY, clipAt, clipFromMedia, editorReducer, inboxVoiceover, initialState, nextPinNumber, parsePersisted, recordsFromPins, toPersisted, totalDuration, type NewClip } from './state';
 import { DEFAULT_FPS, type ClipFilter, type ClipStatus, type EditorClip, type EditorPin, type GroupMode, type InspectorTab, type NotesState, type PinDraft, type PinMode, type PlaybackSpeed, type SkillTag } from './types';
 
 const EDITOR_CSS = `
@@ -368,7 +369,7 @@ export function EditorApp({ modeSwitch }: { modeSwitch?: React.ReactNode } = {})
   const importInbox = useCallback(async () => {
     const items = readEditorInbox();
     if (!items.length) return;
-    const keyed = items.map((it) => ({ it, key: it && typeof it.id === 'string' ? inboxFileKey(it) : null }));
+    const keyed = items.map((it) => ({ it, key: it && typeof it.id === 'string' ? mediaIdFromUrl(it.mediaUrl) : null }));
     // consume the file-backed items now; anything unresolved is put back below so nothing vanishes silently
     replaceEditorInbox(keyed.filter((k) => !k.key).map((k) => k.it));
     const leftovers: EditorInboxItem[] = keyed.filter((k) => !k.key).map((k) => k.it);
@@ -394,7 +395,7 @@ export function EditorApp({ modeSwitch }: { modeSwitch?: React.ReactNode } = {})
     } else setHandoffs([]);
     if (last) dispatch({ type: 'SELECT_CLIP', clipId: last.id });
     if (opened) notify(`Opened ${opened} file${opened === 1 ? '' : 's'} from the inbox.`, 'info');
-    const unresolved = leftovers.filter((l) => inboxFileKey(l));
+    const unresolved = leftovers.filter((l) => mediaIdFromUrl(l.mediaUrl));
     if (unresolved.length) notify(`${unresolved.length} inbox item${unresolved.length === 1 ? '' : 's'} pointed at a file that no longer resolves (moved or drive unplugged).`, 'error');
   }, [fetchItem, notify, openItem]);
 
@@ -403,7 +404,7 @@ export function EditorApp({ modeSwitch }: { modeSwitch?: React.ReactNode } = {})
     void importInbox();
     const onInbox = () => void importInbox();
     window.addEventListener(EDITOR_INBOX_EVENT, onInbox);
-    const onStorage = (e: StorageEvent) => e.key === 'rubric:editor-inbox' && void importInbox();
+    const onStorage = (e: StorageEvent) => e.key === EDITOR_INBOX_KEY && void importInbox();
     window.addEventListener('storage', onStorage);
     return () => {
       window.removeEventListener(EDITOR_INBOX_EVENT, onInbox);

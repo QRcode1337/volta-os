@@ -1,4 +1,5 @@
 import 'server-only';
+import { stripMarkdown } from '@/lib/text';
 import type { PodcastConfig, SourceRef } from './types';
 import { notionConfigured, notionQuery, NotionError, pageTitle, pageUrl, type ListResp, type RawPage } from '../notion/client';
 import { getPage } from '../notion/pages';
@@ -50,7 +51,7 @@ async function readNotion(cfg: PodcastConfig, sinceMs: number): Promise<{ items:
     try {
       const doc = await getPage(p.id);
       const title = doc.title || pageTitle(p) || 'Untitled report';
-      const body = doc.markdown.replace(/[#>*_`|]/g, ' ').replace(/\s+/g, ' ').trim();
+      const body = stripMarkdown(doc.markdown, { oneLine: true });
       const { topic } = classifyTopic(`${title} ${body}`, cfg.topics, 'ai');
       return {
         key: `notion:${p.id}`,

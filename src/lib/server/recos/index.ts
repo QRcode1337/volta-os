@@ -1,7 +1,7 @@
 import 'server-only';
 import type { NotionPageDoc } from '@/types/notion';
 import type { Reco, RecoSignal, RecosPayload } from '@/types/recos';
-import { stripMd } from '@/lib/notion-md';
+import { stripMarkdown } from '@/lib/text';
 import { cached, type CachedOptions } from '../sources/cache';
 import { getMemorySources } from '../sources';
 import { getRoutines } from '../sources/routines';
@@ -37,7 +37,7 @@ function normalize(md: string): string[] {
 
 /** Items under a "checklist / next steps / apply" heading, else unchecked to-dos, else a closing numbered list. Capped. */
 export function extractSteps(page: NotionPageDoc): StepList {
-  const clean = (l: string) => cap(stripMd(l.replace(/^\s*([-*]|\d+\.)\s+(\[[ xX]\]\s+)?/, '')).trim(), 220);
+  const clean = (l: string) => cap(stripMarkdown(l.replace(/^\s*([-*]|\d+\.)\s+(\[[ xX]\]\s+)?/, '')).trim(), 220);
   const isItem = (l: string) => /^\s*([-*]|\d+\.)\s+\S/.test(l);
   const take = (lines: string[]) => lines.filter(isItem).map(clean).filter((t) => t.length > 8).slice(0, 6);
   for (const s of page.sections) {
@@ -54,7 +54,7 @@ export function extractSteps(page: NotionPageDoc): StepList {
       block.push(l);
     }
     const items = take(block);
-    if (items.length) return { from: stripMd(lines[at].replace(/^#+\s*/, '')), items };
+    if (items.length) return { from: stripMarkdown(lines[at].replace(/^#+\s*/, '')), items };
   }
   const todos = lines.filter((l) => /^\s*- \[ \]\s+\S/.test(l)).map(clean).filter(Boolean).slice(0, 6);
   if (todos.length) return { from: null, items: todos };
@@ -89,7 +89,7 @@ async function notionRecos(now: string): Promise<{ recos: Reco[]; signal: RecoSi
         bucket: 'Content',
         priority: operative,
         severity: operative ? 'warn' : 'info',
-        title: cap(stripMd(page.title), 90),
+        title: cap(stripMarkdown(page.title), 90),
         why: operative
           ? 'Listed under OPERATIVE ACTION ITEMS in your Video Production index, so it is meant to be acted on.'
           : 'A playbook in your Video Production index. Apply what it says to the next video instead of letting it sit.',

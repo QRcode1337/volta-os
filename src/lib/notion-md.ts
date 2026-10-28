@@ -1,22 +1,8 @@
 // Pure Markdown helpers shared by the Notion-backed apps (client and server safe; no DOM, no React).
 // The Notion client emits a small, predictable Markdown dialect (see lib/server/notion/markdown.ts); these helpers
-// read it back: plain text for the teleprompter, tables for the ledger, headings for outline sections.
+// read it back: tables for the ledger, headings for outline sections (plain text: stripMarkdown in lib/text.ts).
 import type { NotionSection } from '@/types/notion';
-
-/** Drop Markdown syntax and Notion-specific tags, keeping the words. */
-export function stripMd(s: string): string {
-  return s
-    .replace(/\[SRC:?[^\]]*\]/gi, '')
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/`([^`]*)`/g, '$1')
-    .replace(/(\*\*|__)(.*?)\1/g, '$2')
-    .replace(/(^|[^*\w])\*(?!\s)([^*]+?)\*(?!\w)/g, '$1$2')
-    .replace(/~~(.*?)~~/g, '$1')
-    .replace(/^[>#\s]+/, '')
-    .replace(/[ \t]+/g, ' ')
-    .trim();
-}
+import { stripMarkdown } from '@/lib/text';
 
 export interface MdTable {
   headers: string[];
@@ -61,7 +47,7 @@ export function outlineOptions(sections: NotionSection[]): OutlineOption[] {
   for (const s of sections) {
     out.push({ value: s.title, label: s.title, depth: 0 });
     for (const m of s.markdown.matchAll(H3)) {
-      const t = stripMd(m[1]);
+      const t = stripMarkdown(m[1]);
       out.push({ value: `${s.title} › ${t}`, label: t, depth: 1 });
     }
   }
@@ -75,7 +61,7 @@ export function outlineText(sections: NotionSection[], value: string): string | 
   if (!s) return null;
   if (!beat) return s.markdown;
   const lines = s.markdown.split('\n');
-  const start = lines.findIndex((l) => /^### /.test(l) && stripMd(l.replace(/^### +/, '')) === beat);
+  const start = lines.findIndex((l) => /^### /.test(l) && stripMarkdown(l.replace(/^### +/, '')) === beat);
   if (start < 0) return null;
   let end = lines.findIndex((l, i) => i > start && /^### /.test(l));
   if (end < 0) end = lines.length;
@@ -93,7 +79,7 @@ export function guessOutlineValue(fileName: string, sections: NotionSection[]): 
   if (beat) {
     const vo = sections.find((s) => /draft vo/i.test(s.title));
     if (vo) {
-      const hit = [...vo.markdown.matchAll(H3)].map((m) => stripMd(m[1])).find((t) => t.startsWith(`${beat[1]}.`));
+      const hit = [...vo.markdown.matchAll(H3)].map((m) => stripMarkdown(m[1])).find((t) => t.startsWith(`${beat[1]}.`));
       if (hit) return `${vo.title} › ${hit}`;
     }
   }

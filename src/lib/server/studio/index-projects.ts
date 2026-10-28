@@ -7,7 +7,7 @@ import { HttpError } from '../http-error';
 import { BIN, mapLimit, run } from '../proc';
 import { readManifest, resolveFile } from '../media/storage';
 import { assertLocal, getLibrary, musicInputs, resolveTrack } from '../music';
-import { brctlCommand } from '@/components/music/format';
+import { MEDIA_BY_EXT, MIME_BY_EXT, brctlCommand, icloudHint } from '@/lib/media-ids';
 import {
   getProject,
   loadConfig,
@@ -24,14 +24,8 @@ import { isEvicted } from '@/lib/server/icloud';
 // Project index: recent outputs (with ffprobe), compositions, and the id -> path registry behind /api/studio/file.
 // The browser only ever sees ids; paths are resolved here and checked against the project's roots.
 
-const MEDIA_EXT: Record<string, MediaClass> = { '.mp4': 'video', '.mov': 'video', '.webm': 'video', '.wav': 'audio', '.mp3': 'audio' };
-export const MIME: Record<string, string> = {
-  '.mp4': 'video/mp4',
-  '.mov': 'video/quicktime',
-  '.webm': 'video/webm',
-  '.wav': 'audio/wav',
-  '.mp3': 'audio/mpeg',
-};
+/** Intentionally narrower than the shared media table: Studio indexes rendered video/audio only (no stills, no other containers). */
+const MEDIA_EXT: Record<string, MediaClass> = Object.fromEntries(['mp4', 'mov', 'webm', 'wav', 'mp3'].map((e) => [`.${e}`, MEDIA_BY_EXT[e] as MediaClass]));
 const SKIP_DIRS = new Set(['node_modules', '.git', '.next', '.turbo', 'dist', 'build', '__pycache__', '.venv', '.cache', '.hyperframes', '.remotion']);
 const OUTPUT_TTL_MS = 20_000;
 /** Newest outputs indexed per project (the Editor media bin lists all of them). */
@@ -301,7 +295,7 @@ export async function resolveOutputFile(id: string): Promise<ResolvedFile> {
     size: st.size,
     mtimeMs: st.mtimeMs,
     media: MEDIA_EXT[ext],
-    mime: MIME[ext],
+    mime: MIME_BY_EXT[ext.slice(1)],
     name: path.basename(real),
     projectId: project.id,
     offline: isEvicted(st),
@@ -377,7 +371,7 @@ export async function resolveInput(id: string, kinds: MediaClass[]): Promise<{ p
     name = r.name;
     size = r.size;
     mtimeMs = r.mtimeMs;
-    if (r.offline) throw new HttpError(`${r.name} is an iCloud placeholder (not downloaded to this Mac). Open it in Finder to download it first.`, 409);
+    if (r.offline) throw new HttpError(icloudHint(r.name, r.path), 409);
   }
   if (!kinds.includes(media)) throw new HttpError(`${name} is ${media}, but this input needs ${kinds.join(' or ')}.`, 400);
   return { path: file, media, name, probe: await probeFile(file, size, mtimeMs) };

@@ -1,9 +1,10 @@
 'use client';
 // Cross-app hand-off into VOLTA Editor. Producers: Generations, Studio and Music (real files: `mediaUrl` = /api/media/file, /api/studio/file or /api/music/file),
 // plus Scripts and Carousels (no file: the Editor lists them as hand-offs without media). Consumer: Editor.
+// Items are built with makeInboxItem and the storage key lives in lib/media-ids; this module only reads and writes the queue.
 import type { EditorInboxItem } from '@/types/os';
+import { EDITOR_INBOX_KEY } from './media-ids';
 
-export const EDITOR_INBOX_KEY = 'rubric:editor-inbox';
 export const EDITOR_INBOX_EVENT = 'rubric:editor-inbox-updated';
 
 export function readEditorInbox(): EditorInboxItem[] {

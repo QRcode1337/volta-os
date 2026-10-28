@@ -2,6 +2,7 @@
 
 import { Fragment, useMemo, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { parseFrontmatter } from '@/lib/text';
 
 // Read-only markdown preview for Note Ring notes: YAML frontmatter → metadata chips, then headings,
 // paragraphs, lists (incl. task boxes), quotes, code fences, tables, hr and inline code/bold/italic/links/wikilinks.
@@ -21,41 +22,13 @@ function cleanValue(v: string): string {
   return s.trim();
 }
 
-/** Minimal YAML frontmatter parser: `key: value`, `key: [a, b]` and `key:` followed by `- item` lines. */
-export function parseFrontmatter(src: string): { fields: FrontmatterField[]; body: string } {
-  const text = src.replace(/\r\n/g, '\n');
-  if (!text.startsWith('---\n')) return { fields: [], body: text };
-  const end = text.indexOf('\n---', 4);
-  if (end < 0) return { fields: [], body: text };
-  const block = text.slice(4, end).split('\n');
-  const after = text.indexOf('\n', end + 4);
-  const body = after < 0 ? '' : text.slice(after + 1);
-  const fields: FrontmatterField[] = [];
-  let current: FrontmatterField | null = null;
-  for (const raw of block) {
-    if (!raw.trim()) continue;
-    const item = /^\s*-\s+(.*)$/.exec(raw);
-    if (item && current) {
-      const v = cleanValue(item[1]);
-      if (v) current.values.push(v);
-      continue;
-    }
-    const kv = /^([A-Za-z0-9_.-]+)\s*:\s*(.*)$/.exec(raw);
-    if (!kv) continue;
-    const value = kv[2].trim();
-    current = { key: kv[1], values: [] };
-    if (value.startsWith('[') && value.endsWith(']')) {
-      current.values = value
-        .slice(1, -1)
-        .split(',')
-        .map(cleanValue)
-        .filter(Boolean);
-    } else if (value && value !== '|' && value !== '>') {
-      current.values = [cleanValue(value)];
-    }
-    fields.push(current);
-  }
-  return { fields: fields.filter((f) => f.values.length > 0), body };
+/** Frontmatter → display fields: list values (`[a, b]`, `- item`) or the scalar, wikilinks shortened; empty fields dropped. */
+export function frontmatterFields(src: string): { fields: FrontmatterField[]; body: string } {
+  const fm = parseFrontmatter(src.replace(/\r\n/g, '\n'));
+  const fields = fm.fields
+    .map((f) => ({ key: f.key, values: (f.items ?? (f.value ? [f.value] : [])).map(cleanValue).filter(Boolean) }))
+    .filter((f) => f.values.length > 0);
+  return { fields, body: fm.body };
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?/;
@@ -368,7 +341,7 @@ interface NotePreviewProps {
 export function NotePreview({ source, variant = 'card', className }: NotePreviewProps) {
   const full = variant === 'full';
   const { fields, blocks, truncated, empty } = useMemo(() => {
-    const { fields, body } = parseFrontmatter(source);
+    const { fields, body } = frontmatterFields(source);
     const truncated = body.length > MAX_CHARS;
     const text = truncated ? body.slice(0, MAX_CHARS) : body;
     return { fields, blocks: renderBlocks(text, full), truncated, empty: !text.trim() };

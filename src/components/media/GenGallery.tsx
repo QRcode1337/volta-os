@@ -3,7 +3,8 @@ import { useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Copy, FolderOpen, Send, X } from 'lucide-react';
 import type { GenItemRecord } from '@/types/media';
 import { cn } from '@/lib/cn';
-import { KIND_LABEL, fileUrl, fmtBytes, fmtDate, fmtUsd } from './gen-client';
+import { KIND_LABEL, fmtBytes, fmtDate, fmtUsd } from './gen-client';
+import { mediaFileUrl } from '@/lib/media-ids';
 import { Modal } from './ui';
 
 export interface ItemActions {
@@ -18,7 +19,7 @@ const actionBtn =
   'inline-flex h-7 items-center gap-1 rounded-full border border-subtle px-2.5 font-mono text-[9.5px] font-semibold uppercase tracking-[0.06em] text-secondary transition-colors hover:border-highlight hover:text-paper';
 
 function Media({ it, large, hover }: { it: GenItemRecord; large?: boolean; hover?: boolean }) {
-  const src = fileUrl(it.id);
+  const src = mediaFileUrl(`g_${it.id}`);
   const ref = useRef<HTMLVideoElement>(null);
   if (it.kind === 'image') {
     // eslint-disable-next-line @next/next/no-img-element

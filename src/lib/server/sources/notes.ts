@@ -2,14 +2,16 @@ import 'server-only';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import type { BrainGraph, BrainGraphNode, RecentNote } from '@/types/sources';
-import { obsidianUrl, registeredVaults, vaultSnapshot, type NoteFileEntry, type VaultSnapshot } from '../vaults';
+import { obsidianUrl } from '@/lib/text';
+import { registeredVaults, vaultSnapshot, type VaultSnapshot } from '../vaults';
+import type { VaultFile } from '../vault-walk';
 import { isEvicted } from '@/lib/server/icloud';
 import { mapLimit } from '@/lib/server/proc';
 import { cached } from './cache';
 
 // Notes across the user's registered Obsidian vaults: recent edits + a wikilink graph. Read-only.
 
-interface NoteFile extends NoteFileEntry {
+interface NoteFile extends VaultFile {
   vaultId: string;
   vault: string;
 }

@@ -13,7 +13,8 @@ import { copyText } from '@/components/elements/kit/clipboard';
 import { FlowPanel } from './FlowPanel';
 import { ProjectPanel, type Prefill } from './ProjectPanel';
 import { QueuePanel } from './QueuePanel';
-import { ACTIVE, KIND_COLOR, api, fileUrl, fmtBytes } from './studio-client';
+import { ACTIVE, KIND_COLOR, api, fmtBytes } from './studio-client';
+import { makeInboxItem } from '@/lib/media-ids';
 
 type Tab = 'render' | 'flow';
 interface ProjectsData {
@@ -196,16 +197,9 @@ export function StudioApp() {
 
   const sendToEditor = useCallback(
     (o: StudioOutput) => {
-      const waiting = pushToEditorInbox({
-        id: `studio-${o.id}-${Date.now().toString(36)}`,
-        title: o.name.replace(/\.[^.]+$/, ''),
-        kind: 'ANIMATION',
-        durationSec: o.durationSec ?? 3,
-        source: 'studio',
-        createdAt: new Date().toISOString(),
-        file: o.path,
-        mediaUrl: fileUrl(o.id),
-      });
+      const waiting = pushToEditorInbox(
+        makeInboxItem({ source: 'studio', ref: o.id, title: o.name.replace(/\.[^.]+$/, ''), kind: 'ANIMATION', durationSec: o.durationSec ?? 3, media: { id: o.id, path: o.path } }),
+      );
       push(`Sent to the VOLTA Editor inbox (${waiting} waiting).`, { tone: 'success', href: '/apps/editor', linkLabel: 'Open VOLTA Editor' });
     },
     [push],

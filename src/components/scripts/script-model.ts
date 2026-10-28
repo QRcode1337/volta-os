@@ -2,7 +2,9 @@
 // "Script Outline" page (read-only); nothing here is seeded or generated.
 import type { NotionPageDoc } from '@/types/notion';
 import type { EditorInboxItem } from '@/types/os';
-import { parseTables, stripMd } from '@/lib/notion-md';
+import { parseTables } from '@/lib/notion-md';
+import { stripMarkdown } from '@/lib/text';
+import { makeInboxItem } from '@/lib/media-ids';
 
 export const WPM = 150;
 
@@ -93,7 +95,7 @@ export function computeTiming(doc: ScriptDoc): ScriptTiming {
 
 /** Voiceover for the teleprompter: no Markdown, no [SRC: …] tags, no "Loop:" style labels. */
 function cleanVo(s: string): string {
-  return stripMd(s).replace(/^(loop|bridge|tag|cta|button|setup|payoff)\s*:\s*/i, '').trim();
+  return stripMarkdown(s).replace(/^(loop|bridge|tag|cta|button|setup|payoff)\s*:\s*/i, '').trim();
 }
 
 /** Stage directions in the outline are whole-line italics that start with "On-screen" or a timecode. */
@@ -130,7 +132,7 @@ function rowsFromBody(md: string): RawRow[] {
     }
     if (isStageDirection(line)) {
       flush();
-      cue = [cue, stripMd(line)].filter(Boolean).join(' ');
+      cue = [cue, stripMarkdown(line)].filter(Boolean).join(' ');
       continue;
     }
     if (/^([-*]|\d+\.)\s+/.test(line)) {
@@ -158,8 +160,8 @@ function beatCues(page: NotionPageDoc): Map<number, string> {
   const screenCol = table.headers.findIndex((h) => /on-?screen|visual/i.test(h));
   if (beatCol < 0 || screenCol < 0) return map;
   for (const r of table.rows) {
-    const n = /^\W*(\d+)\./.exec(stripMd(r[beatCol] ?? ''));
-    if (n && r[screenCol]) map.set(Number(n[1]), stripMd(r[screenCol]));
+    const n = /^\W*(\d+)\./.exec(stripMarkdown(r[beatCol] ?? ''));
+    if (n && r[screenCol]) map.set(Number(n[1]), stripMarkdown(r[screenCol]));
   }
   return map;
 }
@@ -183,33 +185,35 @@ export function docFromOutline(page: NotionPageDoc): ScriptDoc | null {
     if (/^cold open/i.test(s.title)) add('Cold open', s.markdown, cues.get(0) ?? '');
     else if (/draft vo|voice-?over by beat/i.test(s.title)) {
       const parts = s.markdown.split(/^### +/m);
-      if (parts.length === 1) add(stripMd(s.title), s.markdown, '');
+      if (parts.length === 1) add(stripMarkdown(s.title), s.markdown, '');
       for (const part of parts.slice(1)) {
         const nl = part.indexOf('\n');
-        const head = stripMd(nl < 0 ? part : part.slice(0, nl));
+        const head = stripMarkdown(nl < 0 ? part : part.slice(0, nl));
         const n = /^(\d+)\./.exec(head);
         add(head, nl < 0 ? '' : part.slice(nl + 1), n ? (cues.get(Number(n[1])) ?? '') : '');
       }
     } else if (/^ending/i.test(s.title)) add('Ending', s.markdown, '');
   }
   if (!rows.length) return null;
-  return { id: page.id, title: stripMd(page.title), url: page.url, chapters, rows };
+  return { id: page.id, title: stripMarkdown(page.title), url: page.url, chapters, rows };
 }
 
 // ───────────────────────── editor hand-off ─────────────────────────
 
 /** One fileless Editor hand-off per chapter, with the chapter's rows as cues (atSec relative to the chapter start). */
-export function buildEditorItems(doc: ScriptDoc, timing: ScriptTiming, nowIso: string, stamp: number): EditorInboxItem[] {
+export function buildEditorItems(doc: ScriptDoc, timing: ScriptTiming, at: number): EditorInboxItem[] {
   return timing.chapters
     .filter((c) => c.rows.length > 0)
-    .map((c) => ({
-      id: `scripts-${doc.id}-${c.id}-${stamp}`,
-      title: `${doc.title} · Ch ${String(c.index + 1).padStart(2, '0')} ${c.title}`,
-      kind: 'ANIMATION' as const,
-      durationSec: Math.max(1, Math.round(c.durationSec)),
-      source: 'scripts' as const,
-      cues: c.rows.map((r) => ({ atSec: Math.round((r.startSec - c.startSec) * 10) / 10, voiceover: r.voiceover, visualCue: r.visualCue })),
-      createdAt: nowIso,
-      notion: { title: doc.title, url: doc.url },
-    }));
+    .map((c) =>
+      makeInboxItem({
+        source: 'scripts',
+        ref: `${doc.id}-${c.id}`,
+        title: `${doc.title} · Ch ${String(c.index + 1).padStart(2, '0')} ${c.title}`,
+        kind: 'ANIMATION',
+        durationSec: Math.max(1, Math.round(c.durationSec)),
+        cues: c.rows.map((r) => ({ atSec: Math.round((r.startSec - c.startSec) * 10) / 10, voiceover: r.voiceover, visualCue: r.visualCue })),
+        notion: { title: doc.title, url: doc.url },
+        at,
+      }),
+    );
 }

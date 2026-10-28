@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Clapperboard, Cloud, Copy, ExternalLink, Film, Pause, Play, Plus, Save, Undo2, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Cover } from './Cover';
-import { brctlCommand, fmtBytes, fmtClock } from './format';
+import { fmtBytes, fmtClock } from './format';
+import { brctlCommand } from '@/lib/media-ids';
 import type { MusicTrack, TrackMeta } from './types';
 
 const QUICK_CREDITS = ['Patrick', 'Suno', 'Seraphim of the Void'];

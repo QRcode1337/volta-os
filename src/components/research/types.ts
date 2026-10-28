@@ -297,11 +297,6 @@ export interface StatusResponse {
 
 // ───────────────────────── pure helpers ─────────────────────────
 
-/** Shell-safe double-quoted string (escapes \ " $ `). */
-export const shellDq = (s: string) => `"${s.replace(/([\\"$`])/g, '\\$1')}"`;
-/** Copyable command that asks iCloud to materialise a file. Never run by the app itself. */
-export const brctlCommand = (p: string) => `brctl download ${shellDq(p)}`;
-
 export function fmtBytes(n: number): string {
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GiB`;
   if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`;

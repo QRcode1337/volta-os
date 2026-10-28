@@ -16,8 +16,6 @@ export async function api<T>(url: string, body?: unknown, signal?: AbortSignal):
   return data;
 }
 
-export const fileUrl = (id: string) => `/api/studio/file?id=${encodeURIComponent(id)}`;
-
 export function fmtBytes(n: number): string {
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GiB`;
   if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`;

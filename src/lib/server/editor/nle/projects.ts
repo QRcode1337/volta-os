@@ -6,6 +6,7 @@ import { sequenceDuration } from '@/lib/nle/model';
 import { HttpError } from '../../http-error';
 import { assertFreeSpace, writeAtomic } from '../../storage';
 import { PROJECTS_DIR, TRASH_DIR, ensureDir, isEvictedError } from './paths';
+import { icloudHint } from '@/lib/media-ids';
 
 // Saved Edit-mode sequences: one JSON file per sequence in projects/. Deletes move to projects/.trash/.
 
@@ -70,7 +71,7 @@ export async function loadProject(id: string): Promise<NleSequence> {
     return JSON.parse(await fs.readFile(fileOf(id), 'utf8')) as NleSequence;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') throw new HttpError('Sequence not found.', 404);
-    if (isEvictedError(err)) throw new HttpError(`Sequence ${id} is offline in iCloud; download it first (brctl download).`, 409);
+    if (isEvictedError(err)) throw new HttpError(icloudHint(`Sequence ${id}`, fileOf(id)), 409);
     throw new HttpError(`Sequence file is unreadable: ${(err as Error).message}`, 500);
   }
 }

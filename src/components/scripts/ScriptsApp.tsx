@@ -81,7 +81,7 @@ export function ScriptsApp() {
       push('This page has no voiceover sections to push (needs Cold open, Draft VO by beat or Ending).', { tone: 'error' });
       return;
     }
-    const items = buildEditorItems(doc, timing, new Date().toISOString(), Date.now());
+    const items = buildEditorItems(doc, timing, Date.now());
     const cueCount = items.reduce((a, it) => a + (it.cues?.length ?? 0), 0);
     const queued = pushToEditorInbox(items);
     push(`Pushed ${items.length} chapter hand-offs (${cueCount} cues) from “${doc.title}” to VOLTA Editor · ${queued} waiting.`, { tone: 'success', href: '/apps/editor', linkLabel: 'Open VOLTA Editor' });

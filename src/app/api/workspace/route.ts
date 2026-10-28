@@ -3,7 +3,7 @@ import type { BrainNode, Department, EffortLevel, ModelTier, RoutineItem, SkillC
 import { ARTIFACTS, BRAIN_EDGES, BRAIN_NODES, EFFORT_LEVELS, MODEL_TIERS, ROUTINES, SKILLS, TOTAL_BRAIN_FILES } from '@/lib/mock-data';
 import { listWorkspaceFiles, readWorkspaceFile, resolveWorkspacePath } from '@/lib/server/workspace';
 import { HttpError, route } from '@/lib/server/route-helpers';
-import { parseFrontmatter } from './frontmatter';
+import { parseFrontmatter } from '@/lib/text';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -66,7 +66,7 @@ async function loadSkills(onDisk: Set<string>): Promise<SkillCardItem[]> {
       const md = await readWorkspaceFile(rel);
       if (md === null) return s;
       const fm = parseFrontmatter(md);
-      return { ...s, model: asModel(fm.model) ?? s.model, effort: asEffort(fm.effort) ?? s.effort, markdownContent: md };
+      return { ...s, model: asModel(fm.get('model')) ?? s.model, effort: asEffort(fm.get('effort')) ?? s.effort, markdownContent: md };
     }),
   );
 }
@@ -80,8 +80,9 @@ async function loadRoutines(onDisk: Set<string>): Promise<RoutineItem[]> {
       const md = await readWorkspaceFile(rel);
       if (md === null) return r;
       const fm = parseFrontmatter(md);
-      const mode = fm.mode?.toUpperCase();
-      const cap = fm.cap_usd !== undefined ? Number.parseFloat(fm.cap_usd) : NaN;
+      const mode = fm.get('mode')?.toUpperCase();
+      const capRaw = fm.get('cap_usd');
+      const cap = capRaw !== undefined ? Number.parseFloat(capRaw) : NaN;
       return {
         ...r,
         mode: mode === 'ACTIVE' || mode === 'PASSIVE' ? mode : r.mode,

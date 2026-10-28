@@ -3,27 +3,17 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { RealSkill } from '@/types/sources';
+import { parseFrontmatter } from '@/lib/text';
 import { cached } from './cache';
 import { getPluginState } from './plugins';
 import { getSkillUsage } from './transcripts';
 
 const CLAUDE_DIR = path.join(os.homedir(), '.claude');
 
-function frontmatter(src: string): Record<string, string> {
-  if (!src.startsWith('---')) return {};
-  const end = src.indexOf('\n---', 3);
-  const out: Record<string, string> = {};
-  for (const line of src.slice(3, end > 0 ? end : 0).split('\n')) {
-    const m = line.match(/^([A-Za-z_-]+):\s*(.*)$/);
-    if (m) out[m[1]] = m[2].replace(/^["']|["']$/g, '').trim();
-  }
-  return out;
-}
-
 async function readSkill(file: string): Promise<{ name: string; description: string } | null> {
   try {
-    const fm = frontmatter(await fsp.readFile(file, 'utf8'));
-    return { name: fm.name || path.basename(path.dirname(file)), description: fm.description || '' };
+    const fm = parseFrontmatter(await fsp.readFile(file, 'utf8'));
+    return { name: fm.get('name') || path.basename(path.dirname(file)), description: fm.get('description') || '' };
   } catch {
     return null;
   }

@@ -8,6 +8,7 @@ import { memoByFiles } from '../sources/cache';
 import { STUDIO_ROOT } from './storage';
 import type { ArgSpecPublic, MediaClass, PresetPublic, StudioKind, StudioProject } from '@/types/studio';
 import { isEvictedFileSync } from '@/lib/server/icloud';
+import { icloudHint } from '@/lib/media-ids';
 
 // Loads config/studio-projects.json. The ONLY commands Studio will ever run are the argv arrays defined there.
 
@@ -254,7 +255,7 @@ export function datalessReason(project: Project, preset: Preset, bin: string): s
   }
   const bad = files.find(isDataless);
   if (!bad) return null;
-  return `${path.basename(bad)} is an iCloud placeholder (evicted from this Mac) and the Studio server cannot download it. Open ${project.path} in Finder, or run brctl download on it, then reload.`;
+  return icloudHint(path.basename(bad), bad);
 }
 
 /** Resolve argv[0] to an absolute executable, or null if it is not allowed / not installed. */

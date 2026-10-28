@@ -1,6 +1,6 @@
 'use client';
 // Browser-side helpers for VOLTA Music: fetch wrappers and Web Audio waveform peaks.
-import { trackStreamUrl } from './format';
+import { mediaFileUrl } from '@/lib/media-ids';
 
 export async function api<T>(url: string, opts: { method?: 'GET' | 'PUT' | 'POST'; body?: unknown; signal?: AbortSignal } = {}): Promise<T> {
   const res = await fetch(url, {
@@ -38,7 +38,7 @@ export async function loadPeaks(id: string, bytes: number, signal: AbortSignal):
   const hit = peakCache.get(id);
   if (hit) return hit;
   if (bytes > MAX_DECODE_BYTES) throw new WaveformSkipped('file too large to decode in the browser');
-  const res = await fetch(trackStreamUrl(id), { signal });
+  const res = await fetch(mediaFileUrl(id), { signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.arrayBuffer();
   if (signal.aborted) throw new DOMException('aborted', 'AbortError');

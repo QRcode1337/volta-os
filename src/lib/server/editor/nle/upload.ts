@@ -6,7 +6,8 @@ import path from 'node:path';
 import type { NleUploadResult } from '@/types/nle';
 import { HttpError } from '../../http-error';
 import { probeFile } from '../../studio/index-projects';
-import { MEDIA_BY_EXT, type NleMedia, type UploadMeta } from './assets';
+import type { NleMedia, UploadMeta } from './assets';
+import { EXT_BY_MIME, MEDIA_BY_EXT, mediaFileUrl } from '@/lib/media-ids';
 import { assertFreeSpace, writeAtomic } from '../../storage';
 import { UPLOADS_DIR, ensureDir } from './paths';
 
@@ -14,29 +15,6 @@ import { UPLOADS_DIR, ensureDir } from './paths';
 
 export const MAX_UPLOAD_BYTES = 4 * 1024 ** 3;
 const SPACE_CHECK_EVERY = 256 * 1024 ** 2;
-
-const EXT_BY_TYPE: Record<string, string> = {
-  'video/mp4': 'mp4',
-  'video/quicktime': 'mov',
-  'video/webm': 'webm',
-  'video/x-matroska': 'mkv',
-  'video/x-m4v': 'm4v',
-  'audio/mpeg': 'mp3',
-  'audio/mp3': 'mp3',
-  'audio/wav': 'wav',
-  'audio/x-wav': 'wav',
-  'audio/wave': 'wav',
-  'audio/mp4': 'm4a',
-  'audio/x-m4a': 'm4a',
-  'audio/aac': 'aac',
-  'audio/flac': 'flac',
-  'audio/ogg': 'ogg',
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/webp': 'webp',
-  'image/gif': 'gif',
-  'image/heic': 'heic',
-};
 
 function cleanName(raw: string | null): string {
   let name = 'upload';
@@ -57,7 +35,7 @@ export async function receiveUpload(req: Request): Promise<NleUploadResult> {
   if (!['video', 'audio', 'image'].includes(major)) throw new HttpError('Content-Type must be video/*, audio/* or image/*.', 415);
   const name = cleanName(req.headers.get('x-file-name'));
   const nameExt = path.extname(name).slice(1).toLowerCase();
-  const ext = MEDIA_BY_EXT[nameExt] === major ? nameExt : EXT_BY_TYPE[type];
+  const ext = MEDIA_BY_EXT[nameExt] === major ? nameExt : EXT_BY_MIME[type];
   if (!ext || MEDIA_BY_EXT[ext] !== major) throw new HttpError(`Unsupported ${major} type (${type}${nameExt ? `, .${nameExt}` : ''}).`, 415);
   const declared = Number(req.headers.get('content-length') ?? NaN);
   if (Number.isFinite(declared) && declared > MAX_UPLOAD_BYTES) throw new HttpError('Uploads are limited to 4 GB.', 413);
@@ -107,7 +85,7 @@ export async function receiveUpload(req: Request): Promise<NleUploadResult> {
   const still = major === 'image';
   return {
     assetId: id,
-    url: `/api/editor/nle/file?id=${id}`,
+    url: mediaFileUrl(id),
     name,
     media: major,
     durationSec: still ? null : pr.durationSec,

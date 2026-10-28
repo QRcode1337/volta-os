@@ -1,5 +1,6 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
+import { stripMarkdown } from '@/lib/text';
 import { redactSecrets } from '../redact';
 import { MAX_BODY } from './config';
 
@@ -21,24 +22,18 @@ export function clean(text: string, max = MAX_BODY): string {
 
 /** First meaningful line of a markdown text, stripped of markup, as a one-line title. */
 export function titleFrom(text: string, fallback: string, max = 110): string {
-  for (const raw of text.split('\n')) {
-    const line = raw
-      .replace(/<!--.*?-->/g, '')
+  for (const raw of text.replace(/<!--[\s\S]*?-->/g, '').split('\n')) {
+    const line = stripMarkdown(raw, { oneLine: true })
       .replace(/^[\s>#*\-+•]+/, '')
-      .replace(/\*\*|__|`/g, '')
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
       .trim();
     if (line.length >= 3 && !/^[-=─═_*\s]+$/.test(line)) return line.length > max ? `${line.slice(0, max - 1).trimEnd()}…` : line;
   }
   return fallback;
 }
 
+/** Markdown body as one plain-text line, capped at `max`. */
 export function excerptOf(body: string, max = 360): string {
-  const t = body
-    .replace(/<!--.*?-->/g, '')
-    .replace(/[#*`>|]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const t = stripMarkdown(body, { oneLine: true });
   return t.length > max ? `${t.slice(0, max).trimEnd()}…` : t;
 }
 

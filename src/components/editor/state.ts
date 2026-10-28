@@ -68,13 +68,6 @@ export function clipFromMedia(item: EditorMediaItem, extra: { durationOverride?:
   };
 }
 
-/** Inbox hand-off -> the fileKey it points at, or null when it carries no real file (Scripts / Carousels items). */
-export function inboxFileKey(item: EditorInboxItem): string | null {
-  const m = /^\/api\/(studio|media|music)\/file\?id=([A-Za-z0-9_-]+)$/.exec(item.mediaUrl ?? '');
-  if (!m) return null;
-  return m[1] === 'media' ? `g_${m[2]}` : m[2]; // studio: o_<hex>, music: m_<hex> (already prefixed)
-}
-
 export function inboxVoiceover(item: EditorInboxItem): EditorClip['voiceover'] {
   return (Array.isArray(item.cues) ? item.cues : [])
     .filter((c) => c && typeof c.voiceover === 'string')

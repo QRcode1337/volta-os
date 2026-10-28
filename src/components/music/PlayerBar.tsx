@@ -4,7 +4,8 @@ import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref
 import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Cover } from './Cover';
-import { fmtClock, trackStreamUrl } from './format';
+import { fmtClock } from './format';
+import { mediaFileUrl } from '@/lib/media-ids';
 import { WaveformSkipped, loadPeaks } from './music-client';
 import type { MusicTrack } from './types';
 
@@ -129,7 +130,7 @@ export function PlayerBar({ track, hasPrev, hasNext, onPrev, onNext, onPlayState
       setWave('idle');
       return;
     }
-    a.src = trackStreamUrl(trackId);
+    a.src = mediaFileUrl(trackId);
     a.play().catch((err: unknown) => {
       if ((err as DOMException)?.name === 'AbortError') return;
       if ((err as DOMException)?.name === 'NotAllowedError') return; // autoplay blocked: user presses play

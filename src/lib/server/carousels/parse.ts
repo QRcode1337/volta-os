@@ -1,7 +1,7 @@
 import 'server-only';
 import type { NotionPageDoc } from '@/types/notion';
 import type { Deck, Slide } from '@/components/media/data';
-import { stripMd } from '@/lib/notion-md';
+import { stripMarkdown } from '@/lib/text';
 
 // Shorts/TikTok pages in Notion keep one block per video:
 //   ### S01 — Title  (flags like "(bench)" or "⭐ SHORT #1" may trail it)
@@ -39,10 +39,10 @@ export function parseShorts(md: string): ParsedShort[] {
     }
     if (fields.HOOK || fields.VO) {
       const raw = cur.title;
-      const m = stripMd(raw.replace(/⭐.*$/, '').replace(/\(bench\)/i, '')).match(TITLE_NUM);
+      const m = stripMarkdown(raw.replace(/⭐.*$/, '').replace(/\(bench\)/i, '')).match(TITLE_NUM);
       out.push({
         number: m ? Number(m[1]) : null,
-        title: (m ? m[2] : stripMd(raw.replace(/⭐.*$/, '').replace(/\(bench\)/i, ''))).trim(),
+        title: (m ? m[2] : stripMarkdown(raw.replace(/⭐.*$/, '').replace(/\(bench\)/i, ''))).trim(),
         fields,
         bench: /\(bench\)/i.test(raw),
         lead: /⭐/.test(raw),
@@ -101,14 +101,14 @@ const CTA = /\b(full file|full episode|watch the|link in|subscribe|follow)\b/i;
 
 function slidesFor(deckId: string, s: ParsedShort, hook: string): Slide[] {
   const tag = s.number !== null ? `S${String(s.number).padStart(2, '0')}` : 'SHORT';
-  const episode = s.fields.EPISODE ? stripMd(s.fields.EPISODE) : null;
-  const vo = s.fields.VO ? stripMd(s.fields.VO) : '';
+  const episode = s.fields.EPISODE ? stripMarkdown(s.fields.EPISODE) : null;
+  const vo = s.fields.VO ? stripMarkdown(s.fields.VO) : '';
   const cards = (s.fields.CARDS ?? '')
     .split(/\s+·\s+/)
-    .map((c) => stripMd(c).replace(/^["“]|["”]$/g, '').trim())
+    .map((c) => stripMarkdown(c).replace(/^["“]|["”]$/g, '').trim())
     .filter(Boolean);
   const slides: Slide[] = [
-    { id: `${deckId}-1`, kind: 'cover', theme: 'dark', kicker: `${tag}${episode ? ` · ${episode.split(/\s+\(/)[0].replace(/_/g, ' ')}` : ''}`.toUpperCase(), headline: hook, body: s.fields.SOURCE ? `Source: ${stripMd(s.fields.SOURCE)}`.slice(0, 160) : '' },
+    { id: `${deckId}-1`, kind: 'cover', theme: 'dark', kicker: `${tag}${episode ? ` · ${episode.split(/\s+\(/)[0].replace(/_/g, ' ')}` : ''}`.toUpperCase(), headline: hook, body: s.fields.SOURCE ? `Source: ${stripMarkdown(s.fields.SOURCE)}`.slice(0, 160) : '' },
   ];
   const sentences = vo ? vo.split(SENT).map((x) => x.trim()).filter(Boolean) : [];
   let cta: string | null = null;
@@ -128,7 +128,7 @@ function slidesFor(deckId: string, s: ParsedShort, hook: string): Slide[] {
     });
   }
   if (cta || s.fields.CAPTION) {
-    slides.push({ id: `${deckId}-${slides.length + 1}`, kind: 'cta', theme: 'dark', kicker: 'NEXT', headline: cta ?? 'Watch the full file', body: s.fields.CAPTION ? stripMd(s.fields.CAPTION) : '' });
+    slides.push({ id: `${deckId}-${slides.length + 1}`, kind: 'cta', theme: 'dark', kicker: 'NEXT', headline: cta ?? 'Watch the full file', body: s.fields.CAPTION ? stripMarkdown(s.fields.CAPTION) : '' });
   }
   return slides;
 }
@@ -149,7 +149,7 @@ export function decksFromPage(page: NotionPageDoc, handle = 'The Strangest Times
     const id = `${page.id.slice(0, 8)}-s${String(num).padStart(2, '0')}`;
     if (seen.has(id)) return;
     seen.add(id);
-    const hook = stripMd(s.fields.HOOK ?? s.title);
+    const hook = stripMarkdown(s.fields.HOOK ?? s.title);
     const q = order.indexOf(num);
     decks.push({
       id,
@@ -159,11 +159,11 @@ export function decksFromPage(page: NotionPageDoc, handle = 'The Strangest Times
       handle,
       slides: slidesFor(id, s, hook),
       hook,
-      episode: s.fields.EPISODE ? stripMd(s.fields.EPISODE) : null,
-      source: s.fields.SOURCE ? stripMd(s.fields.SOURCE) : null,
-      voiceover: s.fields.VO ? stripMd(s.fields.VO) : null,
-      cards: (s.fields.CARDS ?? '').split(/\s+·\s+/).map((c) => stripMd(c).trim()).filter(Boolean),
-      caption: s.fields.CAPTION ? stripMd(s.fields.CAPTION) : null,
+      episode: s.fields.EPISODE ? stripMarkdown(s.fields.EPISODE) : null,
+      source: s.fields.SOURCE ? stripMarkdown(s.fields.SOURCE) : null,
+      voiceover: s.fields.VO ? stripMarkdown(s.fields.VO) : null,
+      cards: (s.fields.CARDS ?? '').split(/\s+·\s+/).map((c) => stripMarkdown(c).trim()).filter(Boolean),
+      caption: s.fields.CAPTION ? stripMarkdown(s.fields.CAPTION) : null,
       queue: q >= 0 ? q + 1 : null,
       bench: s.bench,
       notionUrl: page.url,

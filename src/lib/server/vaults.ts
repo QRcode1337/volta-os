@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import type { LtmSessionNote, ObsidianVault } from '@/types/ltm';
 import { cached } from './sources/cache';
-import { isEvicted } from '@/lib/server/icloud';
+import { obsidianUrl, parseFrontmatter } from '@/lib/text';
+import { walkVault, type VaultFile } from './vault-walk';
 
 // Read-only view of the user's registered Obsidian vaults and the Pieces-Vault LTM session notes.
 
@@ -18,38 +19,12 @@ export const PIECES_VAULT_DIR = process.env.PIECES_VAULT_DIR ?? path.join(os.hom
 /** Folders that are never notes (in addition to anything dot-prefixed). */
 const SKIP_NAMES = new Set(['.obsidian', '.trash', '.git', 'node_modules', '.tools', '_archive']);
 /** The single skip rule: dot-prefixed files and folders, and the folders above. */
-export const isSkippedEntry = (name: string) => name.startsWith('.') || SKIP_NAMES.has(name);
-
-export interface NoteFileEntry {
-  rel: string; // vault-relative, '/'-separated
-  abs: string;
-  mtimeMs: number;
-  size: number;
-  dataless: boolean; // iCloud-evicted placeholder: reading it would force a slow download
-}
+const isSkippedEntry = (name: string) => name.startsWith('.') || SKIP_NAMES.has(name);
 
 /** Every .md note under `root` (readdir + stat only, never reads note bodies). */
-export async function walkVaultNotes(root: string, dir = '', out: NoteFileEntry[] = []): Promise<NoteFileEntry[]> {
-  let entries: import('node:fs').Dirent[];
-  try {
-    entries = await fs.readdir(path.join(root, dir), { withFileTypes: true });
-  } catch {
-    return out;
-  }
-  for (const e of entries) {
-    if (isSkippedEntry(e.name)) continue;
-    const rel = dir ? `${dir}/${e.name}` : e.name;
-    if (e.isDirectory()) await walkVaultNotes(root, rel, out);
-    else if ((e.isFile() || e.isSymbolicLink()) && e.name.endsWith('.md')) {
-      const abs = path.join(root, rel);
-      try {
-        const st = await fs.stat(abs);
-        out.push({ rel, abs, mtimeMs: st.mtimeMs, size: st.size, dataless: isEvicted(st) });
-      } catch {
-        // vanished (iCloud eviction etc.)
-      }
-    }
-  }
+async function walkVaultNotes(root: string): Promise<VaultFile[]> {
+  const out: VaultFile[] = [];
+  await walkVault(root, { onFile: (f) => out.push(f), skip: isSkippedEntry, match: (name) => name.endsWith('.md') });
   return out;
 }
 
@@ -92,7 +67,7 @@ export function registeredVaults(): Promise<RegisteredVault[]> {
 }
 
 export interface VaultSnapshot {
-  vaults: { vault: RegisteredVault; files: NoteFileEntry[] }[];
+  vaults: { vault: RegisteredVault; files: VaultFile[] }[];
   /** Changes whenever a note is added, removed or edited (count + mtime/size sums per vault). */
   signature: string;
   at: number;
@@ -126,11 +101,6 @@ export function vaultSnapshot(force = false): Promise<VaultSnapshot> {
   );
 }
 
-export function obsidianUrl(vaultId: string, file?: string): string {
-  const base = `obsidian://open?vault=${encodeURIComponent(vaultId)}`;
-  return file ? `${base}&file=${encodeURIComponent(file.replace(/\.md$/, ''))}` : base;
-}
-
 /** Vaults registered in Obsidian with note counts, from the shared snapshot. `force` = re-walk (rate-limited). */
 export async function listVaults(force = false): Promise<ObsidianVault[]> {
   const snap = await vaultSnapshot(force);
@@ -157,26 +127,10 @@ async function piecesVaultId(): Promise<string | null> {
   return (await registeredVaults()).find((v) => path.resolve(v.path) === target)?.id ?? null;
 }
 
-export function parseFrontmatter(src: string): { fm: string; body: string } {
-  if (!src.startsWith('---')) return { fm: '', body: src };
-  const end = src.indexOf('\n---', 3);
-  if (end < 0) return { fm: '', body: src };
-  return { fm: src.slice(3, end), body: src.slice(end + 4) };
-}
-
 /** Capture-id range of an ltm_ingest session note (`source: "ltm:A-B"`); null for day recaps (`ltm:day:…`). */
 export function ltmSourceRange(fm: string): { from: number; to: number } | null {
   const m = fm.match(/^source:\s*"?ltm:(\d+)(?:-(\d+))?"?/m);
   return m ? { from: Number(m[1]), to: Number(m[2] ?? m[1]) } : null;
-}
-
-function fmList(fm: string, key: string): string[] {
-  const m = fm.match(new RegExp(`^${key}:\\s*\\n((?:\\s+-\\s.*\\n?)+)`, 'm'));
-  if (!m) return [];
-  return m[1]
-    .split('\n')
-    .map((l) => l.replace(/^\s+-\s*/, '').replace(/^"|"$/g, '').trim())
-    .filter(Boolean);
 }
 
 /** LTM session notes (written by ltm_ingest) for one day, oldest first. */
@@ -193,8 +147,9 @@ export async function listSessionNotes(date: string): Promise<LtmSessionNote[]> 
     files.map(async (f): Promise<LtmSessionNote> => {
       const rel = path.join(relDir, f);
       const src = await fs.readFile(path.join(PIECES_VAULT_DIR, rel), 'utf8');
-      const { fm, body } = parseFrontmatter(src);
-      const source = ltmSourceRange(fm);
+      const fm = parseFrontmatter(src);
+      const { body } = fm;
+      const source = ltmSourceRange(fm.block);
       const title = body.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? f.replace(/^\d{4}-\d{2}-\d{2}\s+/, '').replace(/\.md$/, '');
       const tldr = body.match(/###\s*\*{0,2}TLDR\*{0,2}\s*\n+([^\n#][^\n]*)/i)?.[1]?.trim() ?? null;
       return {
@@ -205,8 +160,8 @@ export async function listSessionNotes(date: string): Promise<LtmSessionNote[]> 
         captureFrom: source?.from ?? null,
         captureTo: source?.to ?? null,
         tldr,
-        tags: fmList(fm, 'tags'),
-        apps: fmList(fm, 'apps'),
+        tags: fm.list('tags'),
+        apps: fm.list('apps'),
         obsidianUrl: vaultId ? obsidianUrl(vaultId, rel) : null,
       };
     }),

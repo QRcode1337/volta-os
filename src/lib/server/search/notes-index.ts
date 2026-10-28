@@ -2,7 +2,8 @@ import 'server-only';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { mapLimit } from '../proc';
-import { obsidianUrl, vaultSnapshot } from '../vaults';
+import { obsidianUrl, parseFrontmatter } from '@/lib/text';
+import { vaultSnapshot } from '../vaults';
 import { makeSnippet, makeTitle, type ParsedQuery } from './text';
 import type { SearchHit } from './types';
 
@@ -155,10 +156,8 @@ function countIn(buf: Buffer, needle: Buffer, cap: number): number {
 
 /** The note body (frontmatter removed) when the match is in the body, so snippets show prose, not tag lists. */
 function bodyFirst(src: string, pq: ParsedQuery): string {
-  if (!src.startsWith('---')) return src;
-  const end = src.indexOf('\n---', 3);
-  if (end < 0) return src;
-  const body = src.slice(end + 4);
+  const { has, body } = parseFrontmatter(src);
+  if (!has) return src;
   if (pq.phraseRe?.test(body)) return body;
   if (pq.termRe) {
     pq.termRe.lastIndex = 0;

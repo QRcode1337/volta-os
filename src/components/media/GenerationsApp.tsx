@@ -10,7 +10,8 @@ import { pushToEditorInbox } from '@/lib/editor-inbox';
 import { AppTopBar } from '@/components/elements/kit/AppTopBar';
 import { ToastStack, useToasts } from '@/components/elements/kit/toast';
 import { copyText } from '@/components/elements/kit/clipboard';
-import { api, fileUrl, fmtBytes, fmtUsd, itemDurationSec } from './gen-client';
+import { api, fmtBytes, fmtUsd, itemDurationSec } from './gen-client';
+import { makeInboxItem } from '@/lib/media-ids';
 import { GenComposer, buildRequest, initialForm, type GenForm } from './GenComposer';
 import { GenConfirm } from './GenConfirm';
 import { ShotListPanel } from './ShotListPanel';
@@ -222,16 +223,16 @@ export function GenerationsApp() {
     () => ({
       onOpen: setLightboxId,
       onSend: (it) => {
-        const waiting = pushToEditorInbox({
-          id: `gen-${it.id}-${Date.now().toString(36)}`,
-          title: it.prompt.length > 60 ? `${it.prompt.slice(0, 57)}...` : it.prompt,
-          kind: it.kind === 'video' ? 'ANIMATION' : 'A-ROLL CUT',
-          durationSec: itemDurationSec(it),
-          source: 'generations',
-          createdAt: new Date().toISOString(),
-          file: it.file,
-          mediaUrl: fileUrl(it.id),
-        });
+        const waiting = pushToEditorInbox(
+          makeInboxItem({
+            source: 'generations',
+            ref: it.id,
+            title: it.prompt.length > 60 ? `${it.prompt.slice(0, 57)}...` : it.prompt,
+            kind: it.kind === 'video' ? 'ANIMATION' : 'A-ROLL CUT',
+            durationSec: itemDurationSec(it),
+            media: { id: `g_${it.id}`, path: it.file },
+          }),
+        );
         push(`Sent to the VOLTA Editor inbox (${waiting} waiting).`, { tone: 'success', href: '/apps/editor', linkLabel: 'Open VOLTA Editor' });
       },
       onCopyPath: async (it) => {

@@ -2,7 +2,8 @@
 import { useMemo } from 'react';
 import type { NotionPageDoc, VpItem } from '@/types/notion';
 import { cn } from '@/lib/cn';
-import { parseTables, stripMd } from '@/lib/notion-md';
+import { parseTables } from '@/lib/notion-md';
+import { stripMarkdown } from '@/lib/text';
 import { ErrorNotice, ExternalPill, NoAccessNotice, Skeleton, fmtDay } from '@/components/notion/NotionBits';
 import { MarkdownView, renderInline, toneFor } from '@/components/notion/MarkdownView';
 import type { Remote } from '@/components/notion/useRemote';
@@ -41,16 +42,16 @@ const tierGroup = (t: string): 'verified' | 'legend' | 'other' => {
 function tierLegend(page: NotionPageDoc): { line: string | null; codes: Map<string, string> } {
   const codes = new Map<string, string>();
   const line = page.markdown.split('\n').find((l) => /^\s*\**Tiers?:?\**\s*\S+\s*=/.test(l)) ?? null;
-  if (line) for (const part of stripMd(line).replace(/^Tiers?:?\s*/i, '').split(/\s+[·;]\s+/)) {
+  if (line) for (const part of stripMarkdown(line).replace(/^Tiers?:?\s*/i, '').split(/\s+[·;]\s+/)) {
     const m = part.match(/^([A-Za-z/]{1,6})\s*=\s*(.+)$/);
     if (m) codes.set(m[1].toUpperCase(), m[2].trim());
   }
-  return { line: line ? stripMd(line) : null, codes };
+  return { line: line ? stripMarkdown(line) : null, codes };
 }
 
 /** "VD" -> "verified document"; "SR — verify" -> "secondary reporting — verify"; full words pass through. */
 function expandTier(raw: string, codes: Map<string, string>): string {
-  const t = stripMd(raw);
+  const t = stripMarkdown(raw);
   const m = t.match(/^([A-Za-z/]{1,6})(?=$|[\s(—–-])/);
   const full = m ? codes.get(m[1].toUpperCase()) : undefined;
   return full ? `${full}${t.slice(m![1].length)}` : t;
@@ -123,10 +124,10 @@ export function LedgerPanel({ ledger, evidence, evidenceId, onEvidence, fallback
               {claims.map((c, i) => (
                 <li key={i} className="rounded-lg border border-subtle bg-obsidian/40 p-2.5">
                   <div className="flex items-start gap-2">
-                    <span className="min-w-0 flex-1 font-mono text-[10px] font-semibold uppercase tracking-[0.05em] text-muted">{stripMd(c.beat) || `Claim ${i + 1}`}</span>
+                    <span className="min-w-0 flex-1 font-mono text-[10px] font-semibold uppercase tracking-[0.05em] text-muted">{stripMarkdown(c.beat) || `Claim ${i + 1}`}</span>
                     {c.tier && (
                       <span className={cn('shrink-0 rounded-full border px-2 py-px font-mono text-[9.5px] font-semibold', toneFor(expandTier(c.tier, legend.codes)))} title={expandTier(c.tier, legend.codes)}>
-                        {stripMd(c.tier)}
+                        {stripMarkdown(c.tier)}
                       </span>
                     )}
                   </div>

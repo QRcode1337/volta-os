@@ -43,23 +43,49 @@ export interface SunoStatus {
 export type SunoCredit = 'Patrick' | 'Suno' | 'Seraphim of the Void';
 export const SUNO_CREDIT_CHOICES: SunoCredit[] = ['Patrick', 'Suno', 'Seraphim of the Void'];
 
-/** Suno's Create page has a Songs tab and a Speech tab. */
-export type SunoMode = 'song' | 'speech';
+/** Suno's Create page tabs: Songs, Speech and Sounds. */
+export type SunoMode = 'song' | 'speech' | 'sound';
+export type SunoVoice = 'any' | 'female' | 'male';
+export type SunoSoundType = 'one-shot' | 'loop';
 
 export interface SunoCreateBody {
   mode: SunoMode;
   title: string;
   /** Song: comma-separated style tags, e.g. "dark synthwave, 100 bpm, female vocals". */
   tags: string;
-  /** Song: lyrics (ignored when instrumental). */
+  /** Song: lyrics with bracketed composition cues (ignored when instrumental). */
   lyrics: string;
   instrumental: boolean;
   /** Speech: the words to speak. */
   script: string;
   /** Speech: delivery, pacing, mood and setting. */
   tone: string;
+  /** Speech: Advanced → Vocal Gender. */
+  voice: SunoVoice;
+  /** Sound: what to make. */
+  sound: string;
+  soundType: SunoSoundType;
+  /** Sound: BPM, or empty for Auto. */
+  bpm: string;
+  /** Sound: key, or empty / "Any". */
+  key: string;
   /** Must be true: each creation spends Suno credits. */
   confirm: boolean;
+}
+
+export interface SunoDraftBody {
+  kind: 'style' | 'lyrics' | 'tone' | 'script' | 'sound';
+  /** What Patrick wants, in his words. */
+  brief: string;
+  /** The field's current text, to revise rather than start over. */
+  current: string;
+  /** The other fields (title, style, ...) so the draft fits them. */
+  context: string;
+}
+
+export interface SunoDraftResult {
+  text: string;
+  model: string | null;
 }
 
 export interface SunoHandoff {

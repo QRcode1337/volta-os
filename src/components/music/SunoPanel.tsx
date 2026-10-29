@@ -3,12 +3,14 @@
 // that fills in suno.com/create in Patrick's own Chrome and downloads the MP3s -> "Import from Downloads" moves them into
 // the Suno library folder on Windsor. Every creation spends Suno credits, so it always goes through a confirm step.
 // The local suno-api service only shows credits now; when it is down or its cookie is stale, creating still works.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, Copy, Download, Loader2, RefreshCw, Sparkles, Terminal } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { api } from './music-client';
 import { SUNO_CREDIT_CHOICES } from './suno-types';
-import type { SunoCreateBody, SunoCredit, SunoHandoff, SunoImportResult, SunoMode, SunoSaveContext, SunoStatus } from './suno-types';
+import type { SunoCreateBody, SunoCredit, SunoHandoff, SunoImportResult, SunoMode, SunoSaveContext, SunoSoundType, SunoStatus, SunoVoice } from './suno-types';
+import { DraftBar, ListChips, LyricTools, Presets } from './SunoComposer';
+import { EXAMPLE_LYRICS_SKELETON, EXAMPLE_STYLE, KEYS, SOUND_GROUPS, STYLE_GROUPS, TONE_GROUPS } from './suno-formulas';
 
 const DRAFT_KEY = 'volta:music:suno:draft';
 const PENDING_KEY = 'volta:music:suno:handoff';
@@ -22,9 +24,19 @@ interface Draft {
   instrumental: boolean;
   script: string;
   tone: string;
+  voice: SunoVoice;
+  sound: string;
+  soundType: SunoSoundType;
+  bpm: string;
+  key: string;
   seraphim: boolean;
 }
-const EMPTY: Draft = { mode: 'song', title: '', tags: '', lyrics: '', instrumental: false, script: '', tone: '', seraphim: false };
+const EMPTY: Draft = { mode: 'song', title: '', tags: '', lyrics: '', instrumental: false, script: '', tone: '', voice: 'any', sound: '', soundType: 'one-shot', bpm: '', key: 'Any', seraphim: false };
+const MODES: { id: SunoMode; label: string }[] = [
+  { id: 'song', label: 'Song' },
+  { id: 'speech', label: 'Speech' },
+  { id: 'sound', label: 'Sound' },
+];
 
 interface Pending {
   since: number;
@@ -74,6 +86,7 @@ export function SunoPanel({ onSaved, onCopy, onToast }: SunoPanelProps) {
   const [results, setResults] = useState<SunoImportResult[]>([]);
   const [note, setNote] = useState<string | null>(null);
   const patch = (x: Partial<Draft>) => setDraft((d) => ({ ...d, ...x }));
+  const lyricsRef = useRef<HTMLTextAreaElement | null>(null);
 
   const check = useCallback(async () => {
     setChecking(true);
@@ -107,11 +120,22 @@ export function SunoPanel({ onSaved, onCopy, onToast }: SunoPanelProps) {
   const ctx: SunoSaveContext = {
     mode: draft.mode,
     title: draft.title.trim(),
-    tags: isSong ? draft.tags.trim() : draft.tone.trim(),
-    lyrics: isSong ? (draft.instrumental ? '' : draft.lyrics) : draft.script,
+    tags: isSong ? draft.tags.trim() : draft.mode === 'speech' ? draft.tone.trim() : '',
+    lyrics: isSong ? (draft.instrumental ? '' : draft.lyrics) : draft.mode === 'speech' ? draft.script : draft.sound,
     instrumental: isSong && draft.instrumental,
     credits,
   };
+  /** The rest of the piece, so AI drafts of one field fit the others. */
+  const draftContext = [
+    draft.title.trim() && `Title: ${draft.title.trim()}`,
+    isSong && draft.tags.trim() && `Style: ${draft.tags.trim()}`,
+    isSong && (draft.instrumental ? 'Instrumental (no vocals).' : draft.lyrics.trim() && `Lyrics so far:\n${draft.lyrics.trim().slice(0, 1500)}`),
+    draft.mode === 'speech' && draft.tone.trim() && `Tone: ${draft.tone.trim()}`,
+    draft.mode === 'speech' && draft.script.trim() && `Script so far:\n${draft.script.trim().slice(0, 1500)}`,
+    draft.mode === 'sound' && `${draft.soundType === 'loop' ? 'Loop' : 'One-shot'}${draft.bpm ? `, ${draft.bpm} BPM` : ''}${draft.key !== 'Any' ? `, key ${draft.key}` : ''}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
 
   const missingInput = !draft.title.trim()
     ? 'Add a title.'
@@ -121,9 +145,13 @@ export function SunoPanel({ onSaved, onCopy, onToast }: SunoPanelProps) {
         : !draft.instrumental && !draft.lyrics.trim()
           ? 'Add lyrics, or switch on Instrumental.'
           : null
-      : !draft.script.trim()
-        ? 'Add the script to speak.'
-        : null;
+      : draft.mode === 'speech'
+        ? !draft.script.trim()
+          ? 'Add the script to speak.'
+          : null
+        : !draft.sound.trim()
+          ? 'Describe the sound.'
+          : null;
   const busy = phase === 'submitting' || phase === 'handed_off' || phase === 'importing';
   const canCreate = !!status?.canCreate;
 
@@ -132,7 +160,21 @@ export function SunoPanel({ onSaved, onCopy, onToast }: SunoPanelProps) {
     setNote(null);
     setResults([]);
     setBrief(null);
-    const body: SunoCreateBody = { mode: draft.mode, title: ctx.title, tags: draft.tags.trim(), lyrics: draft.lyrics, instrumental: ctx.instrumental, script: draft.script, tone: draft.tone.trim(), confirm: true };
+    const body: SunoCreateBody = {
+      mode: draft.mode,
+      title: ctx.title,
+      tags: draft.tags.trim(),
+      lyrics: draft.lyrics,
+      instrumental: ctx.instrumental,
+      script: draft.script,
+      tone: draft.tone.trim(),
+      voice: draft.voice,
+      sound: draft.sound.trim(),
+      soundType: draft.soundType,
+      bpm: draft.bpm.trim(),
+      key: draft.key,
+      confirm: true,
+    };
     try {
       const h = await api<SunoHandoff>('/api/music/suno/generate', { method: 'POST', body });
       const p: Pending = { since: h.since, ctx };
@@ -220,79 +262,146 @@ export function SunoPanel({ onSaved, onCopy, onToast }: SunoPanelProps) {
       {status && status.windsorMounted && !status.ready && <CreditsState status={status} onCopy={onCopy} />}
 
       <div className="mb-3 flex gap-1.5" role="tablist" aria-label="What to create">
-        {(['song', 'speech'] as const).map((m) => (
+        {MODES.map((m) => (
           <button
-            key={m}
+            key={m.id}
             type="button"
             role="tab"
-            aria-selected={draft.mode === m}
+            aria-selected={draft.mode === m.id}
             disabled={busy}
-            className={cn(btn, 'h-7 px-3', draft.mode === m && 'border-orange/60 text-paper')}
-            onClick={() => patch({ mode: m })}
+            className={cn(btn, 'h-7 px-3', draft.mode === m.id && 'border-orange/60 text-paper')}
+            onClick={() => patch({ mode: m.id })}
           >
-            {m === 'song' ? 'Song' : 'Speech'}
+            {m.label}
           </button>
         ))}
+        <span className="ml-2 self-center font-mono text-[10px] text-muted">{draft.mode === 'song' ? 'Suno Songs' : draft.mode === 'speech' ? 'Suno Speech · voiceover for videos' : 'Suno Sounds · FX and loops for videos'}</span>
       </div>
 
-      <fieldset disabled={!canCreate || busy} className={cn('grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]', !canCreate && 'opacity-50')}>
+      <fieldset disabled={!canCreate || busy} className={cn('grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]', !canCreate && 'opacity-50')}>
         <div className="space-y-3">
           <div>
             <label className={label} htmlFor="suno-title">Title</label>
-            <input id="suno-title" className={field} value={draft.title} maxLength={100} onChange={(e) => patch({ title: e.target.value })} placeholder={isSong ? 'Song title' : 'Clip title'} />
+            <input id="suno-title" className={field} value={draft.title} maxLength={100} onChange={(e) => patch({ title: e.target.value })} placeholder={isSong ? 'Song title' : draft.mode === 'speech' ? 'Clip title' : 'Sound name'} />
           </div>
-          {isSong ? (
+
+          {isSong && (
             <>
-              <div>
-                <label className={label} htmlFor="suno-tags">Style tags</label>
-                <input id="suno-tags" className={field} value={draft.tags} maxLength={500} onChange={(e) => patch({ tags: e.target.value })} placeholder="dark synthwave, female vocals, 100 bpm" />
-                <p className="mt-1 font-mono text-[10px] text-muted">Comma-separated. These also become the track tags in the library.</p>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <label className={cn(label, 'mb-0')} htmlFor="suno-tags">Style</label>
+                  <span className="ml-auto font-mono text-[9.5px] text-muted">{draft.tags.length}/1000</span>
+                  <Presets kind="style" value={draft.tags} onLoad={(t) => patch({ tags: t })} builtIn={[{ name: 'Toycore glitch (dark 8-bit)', text: EXAMPLE_STYLE }]} />
+                </div>
+                <textarea id="suno-tags" className={cn(field, 'min-h-[84px] resize-y leading-relaxed')} value={draft.tags} maxLength={1000} onChange={(e) => patch({ tags: e.target.value })} placeholder="dark emotional 8-bit toycore, glitch hop, toy piano arpeggios, deep moog synth, half time groove..." />
+                <ListChips groups={STYLE_GROUPS} value={draft.tags} onChange={(v) => patch({ tags: v })} title="Style chips · click to add or remove" />
+                <DraftBar kind="style" current={draft.tags} context={draftContext} onApply={(t) => patch({ tags: t })} placeholder="Brief: e.g. haunted nursery rhyme meets industrial trap, female hook" />
+                <p className="font-mono text-[10px] text-muted">Comma-separated. These also become the track tags in the library.</p>
               </div>
               <label className="flex items-center gap-2 text-[12.5px] text-paper">
                 <input type="checkbox" className="h-3.5 w-3.5 accent-[#FF5500]" checked={draft.instrumental} onChange={(e) => patch({ instrumental: e.target.checked })} />
                 Instrumental (no vocals; lyrics are ignored)
               </label>
             </>
-          ) : (
-            <div>
-              <label className={label} htmlFor="suno-tone">Tone</label>
-              <input id="suno-tone" className={field} value={draft.tone} maxLength={500} onChange={(e) => patch({ tone: e.target.value })} placeholder="calm, low voice, slow pacing, late-night radio" />
-              <p className="mt-1 font-mono text-[10px] text-muted">Optional: delivery, pacing, mood and setting.</p>
+          )}
+
+          {draft.mode === 'speech' && (
+            <>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <label className={cn(label, 'mb-0')} htmlFor="suno-tone">Tone</label>
+                  <span className="ml-auto font-mono text-[9.5px] text-muted">{draft.tone.length}/500</span>
+                  <Presets kind="tone" value={draft.tone} onLoad={(t) => patch({ tone: t })} builtIn={[{ name: 'Late-night documentary', text: 'low warm male voice, slow and deliberate, measured pauses, documentary calm, close mic' }]} />
+                </div>
+                <textarea id="suno-tone" className={cn(field, 'min-h-[60px] resize-y leading-relaxed')} value={draft.tone} maxLength={500} onChange={(e) => patch({ tone: e.target.value })} placeholder="Describe the delivery: tone, pacing, mood and setting" />
+                <ListChips groups={TONE_GROUPS} value={draft.tone} onChange={(v) => patch({ tone: v })} title="Tone chips · voice, pacing, mood, setting" />
+                <DraftBar kind="tone" current={draft.tone} context={draftContext} onApply={(t) => patch({ tone: t })} placeholder="Brief: e.g. an old archivist confessing something on a crackly phone line" />
+              </div>
+              <div>
+                <label className={label} htmlFor="suno-voice">Vocal gender</label>
+                <select id="suno-voice" className={field} value={draft.voice} onChange={(e) => patch({ voice: e.target.value as SunoVoice })}>
+                  <option value="any">Let Suno choose</option>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                </select>
+              </div>
+            </>
+          )}
+
+          {draft.mode === 'sound' && (
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className={label} htmlFor="suno-stype">Type</label>
+                <select id="suno-stype" className={field} value={draft.soundType} onChange={(e) => patch({ soundType: e.target.value as SunoSoundType })}>
+                  <option value="one-shot">One-shot</option>
+                  <option value="loop">Loop</option>
+                </select>
+              </div>
+              <div>
+                <label className={label} htmlFor="suno-bpm">BPM</label>
+                <input id="suno-bpm" className={field} inputMode="numeric" value={draft.bpm} placeholder="Auto" onChange={(e) => patch({ bpm: e.target.value.replace(/\D/g, '').slice(0, 3) })} />
+              </div>
+              <div>
+                <label className={label} htmlFor="suno-key">Key</label>
+                <select id="suno-key" className={field} value={draft.key} onChange={(e) => patch({ key: e.target.value })}>
+                  {KEYS.map((k) => (
+                    <option key={k}>{k}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
+
           <label className="flex items-center gap-2 text-[12.5px] text-paper">
             <input type="checkbox" className="h-3.5 w-3.5 accent-[#FF5500]" checked={draft.seraphim} onChange={(e) => patch({ seraphim: e.target.checked })} />
             Also credit &quot;Seraphim of the Void&quot;
           </label>
           <p className="font-mono text-[10px] text-muted">Credits recorded: {credits.join(', ')}</p>
         </div>
-        <div>
-          {isSong ? (
+
+        <div className="space-y-1.5">
+          {isSong && (
             <>
-              <label className={label} htmlFor="suno-lyrics">Lyrics</label>
+              <div className="flex items-center gap-2">
+                <label className={cn(label, 'mb-0')} htmlFor="suno-lyrics">Lyrics + composition</label>
+                <span className="ml-auto font-mono text-[9.5px] text-muted">{draft.lyrics.length}/5000</span>
+                <Presets kind="lyrics" value={draft.lyrics} onLoad={(t) => patch({ lyrics: t })} builtIn={[{ name: 'Forbidden Names (format example)', text: EXAMPLE_LYRICS_SKELETON }]} />
+              </div>
+              {!draft.instrumental && <LyricTools value={draft.lyrics} onChange={(v) => patch({ lyrics: v })} textRef={lyricsRef} title={draft.title} />}
               <textarea
+                ref={lyricsRef}
                 id="suno-lyrics"
-                className={cn(field, 'min-h-[170px] resize-y font-mono leading-relaxed')}
+                className={cn(field, 'min-h-[300px] resize-y font-mono leading-relaxed')}
                 value={draft.lyrics}
                 maxLength={5000}
                 disabled={draft.instrumental}
                 onChange={(e) => patch({ lyrics: e.target.value })}
-                placeholder={'[Verse]\nLines here...\n\n[Chorus]\n...'}
+                placeholder={'[152 BPM] [Melodic Industrial Trap] [Key: D harmonic minor] [4/4]\n\n[Verse 1 – restrained, intimate]\n[Half-time trap beat] [808 glide] [Low male vocal] [Dm–C–Bb–A]\nLines here...\n\n[Hook – huge, melodic]\n[Full drums] [Wide female lead] [Forte]\n...'}
               />
-              <p className="mt-1 font-mono text-[10px] text-muted">{draft.lyrics.length}/5000 · section tags like [Verse] and [Chorus] work.</p>
+              {!draft.instrumental && <DraftBar kind="lyrics" current={draft.lyrics} context={draftContext} onApply={(t) => patch({ lyrics: t })} placeholder="Brief: theme, story, hook idea, structure (e.g. the Watchers teaching forbidden arts, anthem hook)" />}
             </>
-          ) : (
+          )}
+          {draft.mode === 'speech' && (
             <>
-              <label className={label} htmlFor="suno-script">Script</label>
-              <textarea
-                id="suno-script"
-                className={cn(field, 'min-h-[170px] resize-y leading-relaxed')}
-                value={draft.script}
-                maxLength={5000}
-                onChange={(e) => patch({ script: e.target.value })}
-                placeholder="The words to speak..."
-              />
-              <p className="mt-1 font-mono text-[10px] text-muted">{draft.script.length}/5000</p>
+              <div className="flex items-center gap-2">
+                <label className={cn(label, 'mb-0')} htmlFor="suno-script">Script</label>
+                <span className="ml-auto font-mono text-[9.5px] text-muted">{draft.script.length}/5000</span>
+                <Presets kind="script" value={draft.script} onLoad={(t) => patch({ script: t })} builtIn={[]} />
+              </div>
+              <textarea id="suno-script" className={cn(field, 'min-h-[300px] resize-y leading-relaxed')} value={draft.script} maxLength={5000} onChange={(e) => patch({ script: e.target.value })} placeholder="Write or paste your speech. Line breaks are breaths; … is a held pause." />
+              <DraftBar kind="script" current={draft.script} context={draftContext} onApply={(t) => patch({ script: t })} placeholder="Brief: what the voiceover says, length, the scene it plays over" />
+            </>
+          )}
+          {draft.mode === 'sound' && (
+            <>
+              <div className="flex items-center gap-2">
+                <label className={cn(label, 'mb-0')} htmlFor="suno-sound">Sound</label>
+                <span className="ml-auto font-mono text-[9.5px] text-muted">{draft.sound.length}/500</span>
+                <Presets kind="sound" value={draft.sound} onLoad={(t) => patch({ sound: t })} builtIn={[{ name: 'Cinematic sub impact', text: 'deep sub boom impact with a metallic tail, huge cathedral reverb, cinematic, decays into low rumble' }]} />
+              </div>
+              <textarea id="suno-sound" className={cn(field, 'min-h-[110px] resize-y leading-relaxed')} value={draft.sound} maxLength={500} onChange={(e) => patch({ sound: e.target.value })} placeholder="Describe the sound you want: source, texture, space, character" />
+              <ListChips groups={SOUND_GROUPS} value={draft.sound} onChange={(v) => patch({ sound: v })} title="Sound chips · source, texture, space, character" />
+              <DraftBar kind="sound" current={draft.sound} context={draftContext} onApply={(t) => patch({ sound: t })} placeholder="Brief: e.g. a door opening onto something enormous breathing in the dark" />
             </>
           )}
         </div>

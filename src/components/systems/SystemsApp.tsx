@@ -8,6 +8,7 @@ import { ToastStack, useToasts } from '@/components/elements/kit/toast';
 import { copyText } from '@/components/elements/kit/clipboard';
 import { useSharedJson } from '@/components/dashboard/widgets/shared-json';
 import { AttentionStrip, type FixHandlers, type FixOutcome } from './AttentionStrip';
+import { InventoryPanel } from './InventoryPanel';
 import { MemoryGauge } from './MemoryGauge';
 import { ModelsPanel } from './ModelsPanel';
 import { ServiceCard } from './ServiceCard';
@@ -205,6 +206,8 @@ export function SystemsApp() {
                 <StoragePanel storage={data.storage} now={now} highlighted={highlight === 'storage'} />
               </div>
             </div>
+
+            <InventoryPanel now={now} highlighted={highlight === 'inventory'} />
           </div>
         )}
       </main>

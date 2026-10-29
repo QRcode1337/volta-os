@@ -247,3 +247,50 @@ export interface SystemsReport {
   attention: AttentionItem[];
   counts: { up: number; degraded: number; down: number; unknown: number };
 }
+
+// ── Inventory (GET /api/systems/inventory): every launchd job + every TCP listener, read-only ──
+
+/** user = ~/Library/LaunchAgents · global-agent = /Library/LaunchAgents · daemon = /Library/LaunchDaemons (system domain) · app = registered by an app, no plist. */
+export type LaunchdScope = 'user' | 'global-agent' | 'daemon' | 'app';
+
+export interface LaunchdJob {
+  label: string;
+  scope: LaunchdScope;
+  /** Display path of the plist (~ for home); null for app-registered jobs. */
+  plistPath: string | null;
+  /** Executable basename from Program / ProgramArguments[0] (never arguments). */
+  program: string | null;
+  schedule: LaunchAgentState['schedule'];
+  /** false when `launchctl print-disabled` (or the plist's Disabled key) says disabled. */
+  enabled: boolean;
+  loaded: boolean;
+  pid: number | null;
+  lastExit: number | null;
+  health: LaunchAgentHealth;
+  /** TCP ports this job's process is listening on. */
+  ports: number[];
+}
+
+export interface ListenerRow {
+  port: number;
+  pid: number;
+  /** Executable name (never arguments). */
+  name: string;
+  ppid: number | null;
+  parentName: string | null;
+  bind: 'loopback' | 'all-interfaces';
+  addrs: string[];
+  uptimeSec: number | null;
+  rssBytes: number | null;
+  /** launchd job whose PID owns the port, if any. */
+  launchdLabel: string | null;
+}
+
+export interface SystemsInventory {
+  generatedAt: string;
+  durationMs: number;
+  jobs: LaunchdJob[];
+  listeners: ListenerRow[];
+  /** lsof without root only sees this user's processes; root daemons' listeners are absent. */
+  notes: string[];
+}

@@ -53,7 +53,7 @@ export function bindOf(l: Listener | undefined): 'loopback' | 'all-interfaces' |
 }
 
 /** "[[dd-]hh:]mm:ss" → seconds. */
-function etimeSec(s: string): number | null {
+export function etimeSec(s: string): number | null {
   const m = s.trim().match(/^(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)$/);
   if (!m) return null;
   return Number(m[1] ?? 0) * 86_400 + Number(m[2] ?? 0) * 3_600 + Number(m[3]) * 60 + Number(m[4]);
@@ -64,7 +64,7 @@ function etimeSec(s: string): number | null {
  * sets its title to its command line would expose its arguments: cut at the first " -…" flag, reduce a path to its
  * basename, then redact and cap whatever is left.
  */
-function processName(comm: string): string {
+export function processName(comm: string): string {
   const head = comm.trim().split(/\s+(?=-)/)[0];
   return redactSecrets((head.startsWith('/') ? path.basename(head) : head).split(HOME).join('~')).slice(0, 80) || '?';
 }

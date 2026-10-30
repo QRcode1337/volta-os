@@ -16,7 +16,7 @@
 - [ ] Publish on a cadence (OMNI_VEO plan: 1 Short/day + 1 long episode/week). The channel needs uploads before YouTube Partner Program thresholds can be reached.
 - [ ] Confirm the YouTube channel URL/handle so analytics can be wired (`routines/yt-analytics.md`).
 - [ ] Ship VIDEO_1 (18 storyboard frames done; self-recorded narration; one clip licence to clear). [Notion Ledger, claude-mem]
-- [ ] TikTok "Four Files, One Sky" trailer (74 s): approved (2026-10-20, reconfirmed 2026-10-30). Not built yet (no renders; the planned Oct 29 post passed). Next: agent runs PLAN.md build steps 1–6 (draft), Patrick records narration (step 7), then final render and post. [PLAN.md, Patrick]
+- [ ] TikTok "Four Files, One Sky" trailer (74 s): approved (2026-10-20, reconfirmed 2026-10-30). Draft built 2026-10-30 (Voltamachina .../four-files-one-sky/renders/draft_03.mp4, STATUS.md there); the Oct 29 post date passed. Next: Patrick records narration (step 7), then final render and post. [PLAN.md, Patrick]
 - [ ] Sponsor one-pager once there are real channel numbers (no invented stats).
 
 ## 3. Automations and fleet health

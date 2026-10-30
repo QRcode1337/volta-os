@@ -2,16 +2,18 @@ import 'server-only';
 import { redactSecrets } from '@/lib/server/redact';
 import type { ObsidianVault } from '@/types/ltm';
 import { LTM_LIVE_MINUTES, type MemorySource, type NotionPage, type SourceMetric } from '@/types/sources';
+import type { YouTubeChannel } from '@/types/youtube';
 import { HONCHO_START_COMMAND, HONCHO_URL, health as honchoHealth, listPeers, listSessions, listWorkspaces } from '../honcho';
 import { capturesAfter, getStatus as getLtmStatus } from '../ltm';
 import { listVaults } from '../vaults';
+import { getYouTubeChannel, youtubeConfig } from '../youtube';
 import { cached } from './cache';
 import { CLAUDE_MEM_URL, getClaudeMemStats, type ClaudeMemStats } from './claude-mem';
 import { getNotionPages } from './notion';
 import { getLtmIngestAgent, getLtmSummaryWatermark, LTM_INGEST_LABEL, type LtmIngestAgent, type LtmSummaryWatermark } from './pieces';
 
 // Status rows for the home "Memory Sources" panel and the Second Brain Applications view.
-// The slow probes (Honcho, claude-mem, vault walk, Notion, ltm-ingest) are one shared, cached fan-out
+// The slow probes (Honcho, claude-mem, vault walk, Notion, ltm-ingest, YouTube) are one shared, cached fan-out
 // (stale-while-revalidate), so every widget and tab reuses it; the LTM numbers are read fresh per request
 // (one cheap SQLite query) so this row never drifts from /api/ltm/status.
 
@@ -69,6 +71,8 @@ interface SlowProbes {
   watermark: LtmSummaryWatermark | null;
   /** null = plist not installed · undefined = the check itself failed */
   ingest: LtmIngestAgent | null | undefined;
+  /** null = not configured · { error } = the Data API call failed (youtube.ts keeps its own 15 min cache) */
+  youtube: YouTubeChannel | { error: string } | null;
   checkedAt: string;
 }
 
@@ -77,15 +81,16 @@ async function loadSlow(): Promise<SlowProbes> {
     () => true,
     () => false,
   );
-  const [honchoCounts, mem, vaults, notion, watermark, ingest] = await Promise.all([
+  const [honchoCounts, mem, vaults, notion, watermark, ingest, youtube] = await Promise.all([
     honchoUp ? cached('sources:honcho-counts', HONCHO_COUNTS_TTL_MS, loadHonchoCounts).catch(() => null) : Promise.resolve(null),
     getClaudeMemStats(),
     listVaults().catch(() => []),
     getLtmStatus().available ? getNotionPages(3).catch(() => []) : Promise.resolve(null),
     getLtmSummaryWatermark().catch(() => null),
     getLtmIngestAgent().catch(() => undefined),
+    youtubeConfig() ? getYouTubeChannel().catch((err: unknown) => ({ error: (err as Error).message || 'failed' })) : Promise.resolve(null),
   ]);
-  return { honchoUp, honchoCounts, mem, vaults, notion, watermark, ingest, checkedAt: new Date().toISOString() };
+  return { honchoUp, honchoCounts, mem, vaults, notion, watermark, ingest, youtube, checkedAt: new Date().toISOString() };
 }
 
 function honchoRow(s: SlowProbes): MemorySource {
@@ -232,6 +237,52 @@ function piecesRow(s: SlowProbes, ltmAvailable: boolean): MemorySource {
   };
 }
 
+function youtubeRow(s: SlowProbes): MemorySource {
+  const base = { id: 'youtube', name: 'YouTube' } as const;
+  const y = s.youtube;
+  if (!y) {
+    return {
+      ...base,
+      status: 'not-connected',
+      headline: 'Not connected',
+      detail: 'The Strangest Times channel stats',
+      setupHint: 'Add YOUTUBE_API_KEY and YOUTUBE_CHANNEL_ID to .env.local',
+    };
+  }
+  if ('error' in y) {
+    return {
+      ...base,
+      status: 'offline',
+      headline: 'API error',
+      detail: redactSecrets(y.error),
+      setupHint: /\b(401|403)\b/.test(y.error)
+        ? 'Check the key in Google Cloud Console: YouTube Data API v3 must be enabled for it'
+        : undefined,
+      checkedAt: s.checkedAt,
+    };
+  }
+  const latest = y.recent[0];
+  return {
+    ...base,
+    status: 'live',
+    headline: y.subscribers === null ? `${n(y.views)} views` : plural(y.subscribers, 'subscriber'),
+    detail: [
+      y.handle ?? y.title,
+      plural(y.videoCount, 'video'),
+      `${n(y.views)} views`,
+      latest ? `latest “${latest.title}” ${ago(latest.publishedAt)}` : 'no uploads',
+    ].join(' · '),
+    href: y.url,
+    external: true,
+    metrics: [
+      ...(y.subscribers === null ? [] : [{ label: 'subscribers', value: y.subscribers }]),
+      { label: 'views', value: y.views },
+      { label: 'videos', value: y.videoCount },
+    ],
+    checkedAt: y.fetchedAt,
+  };
+}
+
 /** Status rows for the home "Memory Sources" panel. */
 export async function getMemorySources(): Promise<MemorySource[]> {
   const ltm = getLtmStatus(); // fresh: same numbers as /api/ltm/status
@@ -240,7 +291,6 @@ export async function getMemorySources(): Promise<MemorySource[]> {
   const ltmMins = ltm.last ? (Date.now() - Date.parse(ltm.last)) / 60_000 : Infinity;
   const otherVaults = s.vaults.filter((v) => v.name !== 'Pieces-Vault');
   const calendarConfigured = !!process.env.GOOGLE_CALENDAR_ICS_URL;
-  const youtubeConfigured = !!(process.env.YOUTUBE_API_KEY && process.env.YOUTUBE_CHANNEL_ID);
   const notion = ltm.available ? (s.notion ?? []) : null;
 
   return [
@@ -283,7 +333,7 @@ export async function getMemorySources(): Promise<MemorySource[]> {
       setupHint: notion === null ? 'Mount the Windsor drive' : undefined,
       checkedAt: s.checkedAt,
     },
-    // No code fetches Calendar or YouTube yet: a configured key is reported as such, never as "Connected".
+    // No code fetches Calendar yet: a configured URL is reported as such, never as "Connected".
     {
       id: 'calendar',
       name: 'Google Calendar',
@@ -292,13 +342,6 @@ export async function getMemorySources(): Promise<MemorySource[]> {
       detail: 'Upcoming events for the calendar widget',
       setupHint: calendarConfigured ? 'No calendar fetcher exists yet' : 'Add GOOGLE_CALENDAR_ICS_URL (secret iCal address) to .env.local',
     },
-    {
-      id: 'youtube',
-      name: 'YouTube',
-      status: 'not-connected',
-      headline: youtubeConfigured ? 'Configured · not implemented' : 'Not connected',
-      detail: 'The Strangest Times channel stats',
-      setupHint: youtubeConfigured ? 'No YouTube fetcher exists yet' : 'Add YOUTUBE_API_KEY and YOUTUBE_CHANNEL_ID to .env.local',
-    },
+    youtubeRow(s),
   ];
 }

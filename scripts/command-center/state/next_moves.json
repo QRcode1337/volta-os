@@ -1,0 +1,44 @@
+[
+ {
+  "rank": 1,
+  "area": "Strangest Times",
+  "move": "Approve or kill the \"Four Files, One Sky\" TikTok trailer",
+  "why": "It is finished and has waited 30 days. Approving it is your first upload toward the 8-a-week plan.",
+  "minutes": 10
+ },
+ {
+  "rank": 2,
+  "area": "EPSILON",
+  "move": "Pick one niche and one metro for the first 30 days",
+  "why": "Every other EPSILON step (site, 50-prospect list, outreach drafts) waits on this choice. Home services in MD/DC/NoVA is the drafted default.",
+  "minutes": 15
+ },
+ {
+  "rank": 3,
+  "area": "Security",
+  "move": "Rotate the OpenCode Console-linked API keys",
+  "why": "The breach was published Oct 19 and this has waited 11 days. Agents cannot do it for you.",
+  "minutes": 30
+ },
+ {
+  "rank": 4,
+  "area": "EPSILON",
+  "move": "Decide on the VA MOSAIC Data Access RFI",
+  "why": "Due Nov 4. A yes is a real ARGUS/EPSILON proposal; a no clears it.",
+  "minutes": 10
+ },
+ {
+  "rank": 5,
+  "area": "EPSILON",
+  "move": "Have an agent run the AI Visibility Audit on epsilonsec.ai",
+  "why": "Your first proof asset for outreach, and it shows what the live site still gets wrong.",
+  "minutes": 5
+ },
+ {
+  "rank": 6,
+  "area": "Strangest Times",
+  "move": "Confirm the YouTube channel handle",
+  "why": "Analytics, the sponsor kit and YPP tracking on this page all need it.",
+  "minutes": 2
+ }
+]

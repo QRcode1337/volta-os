@@ -1,0 +1,30 @@
+[
+ {
+  "id": "clients",
+  "goal": "EPSILON paying clients",
+  "now": 0,
+  "target": null,
+  "note": "Target not set yet"
+ },
+ {
+  "id": "sponsors",
+  "goal": "Strangest Times signed sponsors",
+  "now": 0,
+  "target": null,
+  "note": "Target not set yet"
+ },
+ {
+  "id": "uploads",
+  "goal": "Uploads in the last 7 days",
+  "now": 0,
+  "target": 8,
+  "note": "OMNI_VEO plan: 7 Shorts + 1 long a week"
+ },
+ {
+  "id": "ypp",
+  "goal": "YouTube Partner Program",
+  "now": 0,
+  "target": 1,
+  "note": "Not accepted yet"
+ }
+]

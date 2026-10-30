@@ -1,0 +1,22 @@
+[
+ {
+  "applet": "Facebook photo backups",
+  "failures": 3,
+  "last_failure": "2026-10-25"
+ },
+ {
+  "applet": "X @American_zero1 \u2192 Discord",
+  "failures": 2,
+  "last_failure": "2026-10-16"
+ },
+ {
+  "applet": "Strangest Times link post \u2192 Discord",
+  "failures": 2,
+  "last_failure": "2026-10-16"
+ },
+ {
+  "applet": "Google Docs \u2192 Dropbox",
+  "failures": 2,
+  "last_failure": "2026-10-14"
+ }
+]

@@ -2,8 +2,10 @@ import 'server-only';
 import { redactSecrets } from '@/lib/server/redact';
 import type { ObsidianVault } from '@/types/ltm';
 import { LTM_LIVE_MINUTES, type MemorySource, type NotionPage, type SourceMetric } from '@/types/sources';
+import type { CalendarEvent, CalendarFeed } from '@/types/calendar';
 import type { YouTubeChannel } from '@/types/youtube';
 import { HONCHO_START_COMMAND, HONCHO_URL, health as honchoHealth, listPeers, listSessions, listWorkspaces } from '../honcho';
+import { calendarConfigured, getCalendar } from '../calendar';
 import { capturesAfter, getStatus as getLtmStatus } from '../ltm';
 import { listVaults } from '../vaults';
 import { getYouTubeChannel, youtubeConfig } from '../youtube';
@@ -13,7 +15,7 @@ import { getNotionPages } from './notion';
 import { getLtmIngestAgent, getLtmSummaryWatermark, LTM_INGEST_LABEL, type LtmIngestAgent, type LtmSummaryWatermark } from './pieces';
 
 // Status rows for the home "Memory Sources" panel and the Second Brain Applications view.
-// The slow probes (Honcho, claude-mem, vault walk, Notion, ltm-ingest, YouTube) are one shared, cached fan-out
+// The slow probes (Honcho, claude-mem, vault walk, Notion, ltm-ingest, Calendar, YouTube) are one shared, cached fan-out
 // (stale-while-revalidate), so every widget and tab reuses it; the LTM numbers are read fresh per request
 // (one cheap SQLite query) so this row never drifts from /api/ltm/status.
 
@@ -73,6 +75,8 @@ interface SlowProbes {
   ingest: LtmIngestAgent | null | undefined;
   /** null = not configured · { error } = the Data API call failed (youtube.ts keeps its own 15 min cache) */
   youtube: YouTubeChannel | { error: string } | null;
+  /** null = not configured · { error } = the iCal feed failed (calendar.ts keeps its own 5 min cache) */
+  calendar: CalendarFeed | { error: string } | null;
   checkedAt: string;
 }
 
@@ -81,7 +85,7 @@ async function loadSlow(): Promise<SlowProbes> {
     () => true,
     () => false,
   );
-  const [honchoCounts, mem, vaults, notion, watermark, ingest, youtube] = await Promise.all([
+  const [honchoCounts, mem, vaults, notion, watermark, ingest, youtube, calendar] = await Promise.all([
     honchoUp ? cached('sources:honcho-counts', HONCHO_COUNTS_TTL_MS, loadHonchoCounts).catch(() => null) : Promise.resolve(null),
     getClaudeMemStats(),
     listVaults().catch(() => []),
@@ -89,8 +93,9 @@ async function loadSlow(): Promise<SlowProbes> {
     getLtmSummaryWatermark().catch(() => null),
     getLtmIngestAgent().catch(() => undefined),
     youtubeConfig() ? getYouTubeChannel().catch((err: unknown) => ({ error: (err as Error).message || 'failed' })) : Promise.resolve(null),
+    calendarConfigured() ? getCalendar().catch((err: unknown) => ({ error: (err as Error).message || 'failed' })) : Promise.resolve(null),
   ]);
-  return { honchoUp, honchoCounts, mem, vaults, notion, watermark, ingest, youtube, checkedAt: new Date().toISOString() };
+  return { honchoUp, honchoCounts, mem, vaults, notion, watermark, ingest, youtube, calendar, checkedAt: new Date().toISOString() };
 }
 
 function honchoRow(s: SlowProbes): MemorySource {
@@ -237,6 +242,61 @@ function piecesRow(s: SlowProbes, ltmAvailable: boolean): MemorySource {
   };
 }
 
+/** "Today 6:00 PM" · "Tomorrow · all day" · "Sat Nov 7 6:00 PM" in the server's (= Patrick's) local zone. */
+function whenLabel(e: CalendarEvent, nowMs = Date.now()): string {
+  const start = new Date(e.start);
+  const dayKey = (d: Date) => d.toLocaleDateString('en-CA');
+  const day =
+    dayKey(start) === dayKey(new Date(nowMs))
+      ? 'Today'
+      : dayKey(start) === dayKey(new Date(nowMs + 86_400_000))
+        ? 'Tomorrow'
+        : start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  if (e.allDay) return `${day} · all day`;
+  if (start.getTime() <= nowMs) return 'Now';
+  return `${day} ${start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+function calendarRow(s: SlowProbes): MemorySource {
+  const base = { id: 'calendar', name: 'Calendar' } as const;
+  const c = s.calendar;
+  if (!c) {
+    return {
+      ...base,
+      status: 'not-connected',
+      headline: 'Not connected',
+      detail: 'Upcoming events for the calendar widget',
+      setupHint: 'Add GOOGLE_CALENDAR_ICS_URL (secret iCal address) or ICLOUD_CALENDAR_ICS_URL (public calendar link) to .env.local',
+    };
+  }
+  if ('error' in c) {
+    return {
+      ...base,
+      status: 'offline',
+      headline: 'Feed error',
+      detail: c.error,
+      setupHint: /404|reset/.test(c.error)
+        ? 'A calendar link was reset: copy the current one from Google Calendar / iCloud sharing settings into .env.local'
+        : undefined,
+      checkedAt: s.checkedAt,
+    };
+  }
+  const next = c.upcoming[0];
+  const dayAhead = Date.now() + 86_400_000;
+  const failing = c.feeds.filter((f) => !f.ok);
+  const feeds = c.feeds.map((f) => (f.ok ? `${f.source}: ${plural(f.events, 'event')}` : `${f.source} failing: ${f.error}`)).join(' · ');
+  return {
+    ...base,
+    status: failing.length ? 'stale' : next && Date.parse(next.start) < dayAhead ? 'live' : 'idle',
+    headline: next ? `${whenLabel(next)} · ${next.title}` : 'No upcoming events',
+    detail: `${next ? `${plural(c.upcoming.length, 'event')}` : 'Nothing'} in the next ${c.windowDays} days${next?.location ? ` · next at ${next.location}` : ''} · ${feeds}`,
+    href: next?.url ?? 'https://calendar.google.com',
+    external: true,
+    metrics: [{ label: `events in ${c.windowDays} days`, value: c.upcoming.length }],
+    checkedAt: c.fetchedAt,
+  };
+}
+
 function youtubeRow(s: SlowProbes): MemorySource {
   const base = { id: 'youtube', name: 'YouTube' } as const;
   const y = s.youtube;
@@ -290,7 +350,6 @@ export async function getMemorySources(): Promise<MemorySource[]> {
   // LTM timestamps are naive local time; Date.parse treats them as local too.
   const ltmMins = ltm.last ? (Date.now() - Date.parse(ltm.last)) / 60_000 : Infinity;
   const otherVaults = s.vaults.filter((v) => v.name !== 'Pieces-Vault');
-  const calendarConfigured = !!process.env.GOOGLE_CALENDAR_ICS_URL;
   const notion = ltm.available ? (s.notion ?? []) : null;
 
   return [
@@ -333,15 +392,7 @@ export async function getMemorySources(): Promise<MemorySource[]> {
       setupHint: notion === null ? 'Mount the Windsor drive' : undefined,
       checkedAt: s.checkedAt,
     },
-    // No code fetches Calendar yet: a configured URL is reported as such, never as "Connected".
-    {
-      id: 'calendar',
-      name: 'Google Calendar',
-      status: 'not-connected',
-      headline: calendarConfigured ? 'Configured · not implemented' : 'Not connected',
-      detail: 'Upcoming events for the calendar widget',
-      setupHint: calendarConfigured ? 'No calendar fetcher exists yet' : 'Add GOOGLE_CALENDAR_ICS_URL (secret iCal address) to .env.local',
-    },
+    calendarRow(s),
     youtubeRow(s),
   ];
 }

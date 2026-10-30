@@ -89,7 +89,7 @@ export function TodayCard() {
           </p>
         )}
 
-        {/* Calendar source status (no events are fetched yet) */}
+        {/* Next calendar event (the /api/sources calendar row's headline) */}
         {!sources && srcLoading ? (
           <Skel className="my-2 h-6 w-full" />
         ) : (

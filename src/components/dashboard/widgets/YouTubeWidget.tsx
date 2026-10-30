@@ -1,6 +1,6 @@
 'use client';
 
-// Not mounted on the home grid yet. Real channel numbers from /api/youtube (YouTube Data API v3, cached 15 min
+// Home right column, bottom. Real channel numbers from /api/youtube (YouTube Data API v3, cached 15 min
 // server-side); the same snapshot drives the "YouTube" row of /api/sources. Never falls back to mock counts.
 
 import { Play } from 'lucide-react';
@@ -11,6 +11,8 @@ import { useSharedJson } from './shared-json';
 import { relativeAgo } from './source-facts';
 
 const POLL_MS = 15 * 60_000;
+/** Short viewports (≤760px tall): drop the uploads list so the right column keeps its room. */
+const COMPACT_HIDE = '[@media(max-height:760px)]:hidden';
 const n = (x: number) => x.toLocaleString('en-US');
 
 export function YouTubeWidget({ className }: { className?: string }) {
@@ -38,8 +40,8 @@ export function YouTubeWidget({ className }: { className?: string }) {
             <Stat label="VIEWS" value={n(ch.views)} />
             <Stat label="VIDEOS" value={n(ch.videoCount)} />
           </div>
-          <ul className="flex flex-col">
-            {ch.recent.slice(0, 3).map((v) => (
+          <ul className={`flex flex-col ${COMPACT_HIDE}`}>
+            {ch.recent.slice(0, 2).map((v) => (
               <li key={v.id} className="flex items-baseline gap-2 border-t border-subtle py-1 first:border-t-0">
                 <a href={v.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-[11.5px] text-paper hover:text-orange">
                   {v.title}

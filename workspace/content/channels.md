@@ -20,7 +20,7 @@ Handle conflicts to confirm: Notion lists TikTok "volta.ai" and Instagram voltam
 - **Concept:** cinematic essays on UAP, ancient mysteries, Gnostic texts and AI — "the real files behind the strangest stories", one named document per video. [Notion WhoAmI, OMNI_VEO plan]
 - **Library:** 12 long episodes in the Notion archive (e.g. Sumerian AI, CIA Mars Gateway, Navy Warp Patents, Aliens and Angels, Five Ancient Temples). [1 src: Notion TST README, 2026-09-18]
 - **In production:** VIDEO_1 — 18 storyboard frames done, Patrick recording narration himself, one clip licence to clear. [Notion Ledger, claude-mem]
-- **Shorts:** Shorts Batch 1 (15 topics, 20 scripts) [1 src: Notion]; TikTok "Four Files, One Sky" 74 s trailer awaiting approval since 2026-09-30. [Pieces, claude-mem]
+- **Shorts:** Shorts Batch 1 (15 topics, 20 scripts) [1 src: Notion]; TikTok "Four Files, One Sky" 74 s trailer approved (2026-10-20, reconfirmed 2026-10-30), not built yet; plan at ~/Documents/PROJECTS/tiktok-four-files/PLAN.md. [Pieces, claude-mem]
 - **Series ideas:** Internet Lore (Ep 1–4), EPSILON YouTube packet (THE RULERS, THE OTHER SEVEN), Unseen Realm / Aliens & Angels ("The Rulers v3" render stalled). [Notion, claude-mem]
 
 ### Monetisation path: ads + sponsors

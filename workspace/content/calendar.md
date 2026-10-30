@@ -8,7 +8,7 @@
 | Date (ET) | Channel | Title / working title | Format | Status | Notion / file | URL |
 |---|---|---|---|---|---|---|
 | TODO | YouTube | VIDEO_1 (The Strangest Times) | Long | Narration + licence pending | Notion Video Production | — |
-| TODO | TikTok @Epsilonsec | Four Files, One Sky (trailer, 74 s) | Short | Awaiting Patrick's approval | Studio "TikTok Four Files" | — |
+| TODO (Oct 29 slot missed) | TikTok @Epsilonsec | Four Files, One Sky (trailer, 74 s) | Short | Approved (2026-10-20, reconfirmed 2026-10-30); not built yet: agent builds draft, then Patrick records narration | ~/Documents/PROJECTS/tiktok-four-files/PLAN.md | — |
 | TODO | YouTube Shorts | Shorts Batch 1 (15 topics) | Short | Scripts drafted | Notion Shorts Batch 1 | — |
 
 ## Published

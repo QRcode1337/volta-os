@@ -1,16 +1,17 @@
 'use client';
 // Threads: what connects the folders. Graphify clusters, the Stage A cross-domain network, folder bridges and the highlights list.
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeftRight, Network, Star } from 'lucide-react';
+import { ArrowLeftRight, Network, Sparkles, Star } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { ForceGraph, linkKey, type FGLink, type FGNode } from './ForceGraph';
 import { api, isBuilding } from './research-client';
-import { ActionBadge, Building, chip, ContradictionChip, ErrorNote, field, Loading, NoveltyChip, Section, smallBtn, StorageBadge } from './ui';
-import type { DomainLink, GraphData, ThreadCluster, ThreadsResponse } from './types';
+import { ActionBadge, Building, chip, ContradictionChip, ErrorNote, field, Loading, Notice, NoveltyChip, Section, smallBtn, StorageBadge } from './ui';
+import type { DomainLink, GraphData, SemanticCluster, SemanticThreadsResponse, ThreadCluster, ThreadsResponse } from './types';
 
-type Sub = 'clusters' | 'network' | 'bridges' | 'highlights';
+type Sub = 'semantic' | 'clusters' | 'network' | 'bridges' | 'highlights';
 const SUBS: { id: Sub; label: string; icon: typeof Network }[] = [
-  { id: 'clusters', label: 'Clusters', icon: Network },
+  { id: 'semantic', label: 'Semantic', icon: Sparkles },
+  { id: 'clusters', label: 'Graph clusters', icon: Network },
   { id: 'network', label: 'Cross-domain network', icon: ArrowLeftRight },
   { id: 'bridges', label: 'Folder bridges', icon: ArrowLeftRight },
   { id: 'highlights', label: 'Highlights', icon: Star },
@@ -149,6 +150,117 @@ function Clusters({ data, onOpenDoc }: { data: ThreadsResponse; onOpenDoc: (id: 
   );
 }
 
+// ───────────────────────── semantic (Phase 2) ─────────────────────────
+
+const niceFolder = (f: string) => f.replace(/^\d+[-_ ]/, '').replace(/_/g, ' ') || '(top level)';
+type SemSort = 'spread' | 'size' | 'cohesion';
+
+function SemanticCard({ c, open, onToggle, onOpenDoc }: { c: SemanticCluster; open: boolean; onToggle: () => void; onOpenDoc: (id: string) => void }) {
+  return (
+    <li className={cn('rounded-lg border bg-panel px-3.5 py-3', open ? 'border-orange/50' : 'border-subtle')}>
+      <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-start gap-3 text-left">
+        <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorOf(c.id) }} />
+        <span className="min-w-0 flex-1">
+          <span className={cn('block text-[14px] font-semibold leading-snug', c.named ? 'text-paper' : 'text-secondary')}>{c.name}</span>
+          <span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[0.05em] text-muted">
+            {c.size} docs · spans {c.spread} folders · cohesion {c.cohesion.toFixed(2)}
+          </span>
+          <span className="mt-1.5 flex flex-wrap gap-1">
+            {c.roots.map((r) => (
+              <span key={r.key} className={chip}>
+                {r.label} {r.count}
+              </span>
+            ))}
+          </span>
+          {c.named && c.terms.length > 0 && <span className="mt-1.5 block font-mono text-[10px] text-secondary">{c.terms.join(' · ')}</span>}
+        </span>
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3 border-t border-subtle pt-3">
+          <div>
+            <p className="hud-label mb-1 !text-[9.5px]">Folders</p>
+            <ul className="flex flex-wrap gap-1">
+              {c.folders.map((f) => (
+                <li key={`${f.root}/${f.folder}`} className={chip}>
+                  {niceFolder(f.folder)} {f.count}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="hud-label mb-1 !text-[9.5px]">Closest to the centre</p>
+            <ul className="space-y-1">
+              {c.members.map((m) => (
+                <li key={m.id} className="flex items-baseline gap-2 text-[12.5px]">
+                  <button type="button" onClick={() => onOpenDoc(m.id)} className="min-w-0 truncate text-left text-paper hover:text-orange">
+                    {m.title}
+                  </button>
+                  <span className="ml-auto flex shrink-0 items-center gap-1.5 font-mono text-[10px] text-muted">
+                    <span>{niceFolder(m.folder)}</span>
+                    {m.novelty !== null && <span>n {m.novelty.toFixed(2)}</span>}
+                    {m.storage === 'icloud' && <span className="text-amber">iCloud</span>}
+                    <span>{m.sim.toFixed(2)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {c.size > c.members.length && <p className="mt-1 font-mono text-[10px] text-muted">+{c.size - c.members.length} more</p>}
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function Semantic({ onOpenDoc }: { onOpenDoc: (id: string) => void }) {
+  const [data, setData] = useState<SemanticThreadsResponse | null | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [sort, setSort] = useState<SemSort>('spread');
+  const [openId, setOpenId] = useState<number | null>(null);
+  useEffect(() => {
+    const ac = new AbortController();
+    api<{ threads: SemanticThreadsResponse | null }>('/api/research/phase2?view=threads', ac.signal)
+      .then((d) => setData(d.threads))
+      .catch((e: Error) => e.name !== 'AbortError' && setError(e.message));
+    return () => ac.abort();
+  }, []);
+  if (error) return <ErrorNote>{error}</ErrorNote>;
+  if (data === undefined) return <Loading>Reading the embedding clusters...</Loading>;
+  if (data === null) return <Notice tone="orange">The Phase 2 index is not built yet. Build it from the Status tab (about two minutes; nothing is downloaded from iCloud).</Notice>;
+  const needle = q.toLowerCase();
+  const list = data.clusters
+    .filter((c) => !needle || `${c.name} ${c.terms.join(' ')} ${c.members.map((m) => m.title).join(' ')}`.toLowerCase().includes(needle))
+    .sort((a, b) => (sort === 'size' ? b.size - a.size : sort === 'cohesion' ? b.cohesion - a.cohesion : b.spread - a.spread || b.size - a.size));
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter threads" aria-label="Filter semantic threads" className={cn(field, 'w-56 placeholder:text-muted')} />
+        <label className="flex items-center gap-1.5">
+          <span className="hud-label">Sort</span>
+          <select value={sort} onChange={(e) => setSort(e.target.value as SemSort)} className={field} aria-label="Sort threads">
+            <option value="spread">Crosses most folders</option>
+            <option value="size">Largest</option>
+            <option value="cohesion">Tightest</option>
+          </select>
+        </label>
+        <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.05em] text-muted">
+          {data.clusters.length} threads · {data.docs.toLocaleString()} docs · built {data.builtAt.slice(0, 10)}
+        </span>
+      </div>
+      <p className="mb-3 max-w-3xl text-[12.5px] leading-relaxed text-secondary">
+        Every file grouped by meaning (Phase 2 embeddings of titles, folders, Stage A summaries and local text), whatever folder it was filed in. Spread is the effective number of folders a thread draws from.
+      </p>
+      <ul className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+        {list.map((c) => (
+          <SemanticCard key={c.id} c={c} open={openId === c.id} onToggle={() => setOpenId(openId === c.id ? null : c.id)} onOpenDoc={onOpenDoc} />
+        ))}
+      </ul>
+      {list.length === 0 && <p className="py-10 text-center text-secondary">No thread matches.</p>}
+    </div>
+  );
+}
+
 // ───────────────────────── domain network ─────────────────────────
 
 function Network_({ data, onOpenDoc }: { data: ThreadsResponse; onOpenDoc: (id: string) => void }) {
@@ -282,7 +394,7 @@ function Highlights({ data, onOpenDoc }: { data: ThreadsResponse; onOpenDoc: (id
 }
 
 export function ThreadsView({ onOpenDoc }: { onOpenDoc: (id: string) => void }) {
-  const [sub, setSub] = useState<Sub>('clusters');
+  const [sub, setSub] = useState<Sub>('semantic');
   const [data, setData] = useState<ThreadsResponse | null>(null);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -329,7 +441,8 @@ export function ThreadsView({ onOpenDoc }: { onOpenDoc: (id: string) => void }) 
       <main className="hud-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-24 pt-4">
         {building && <Building />}
         {error && <ErrorNote>{error}</ErrorNote>}
-        {!data && !error && !building && <Loading>Reading the graphs...</Loading>}
+        {sub === 'semantic' && <Semantic onOpenDoc={onOpenDoc} />}
+        {sub !== 'semantic' && !data && !error && !building && <Loading>Reading the graphs...</Loading>}
         {data && sub === 'clusters' && <Clusters data={data} onOpenDoc={onOpenDoc} />}
         {data && sub === 'network' && <Network_ data={data} onOpenDoc={onOpenDoc} />}
         {data && sub === 'bridges' && <Bridges data={data} />}

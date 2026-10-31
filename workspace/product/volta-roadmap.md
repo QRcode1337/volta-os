@@ -6,7 +6,7 @@
 ## Next up (HANDOFF order)
 1. **Launchpad:** list real GitHub repos with `GITHUB_TOKEN` (most local repos are iCloud placeholders).
 2. **Feeds:** tighten JEV triage (too many items marked needs-action).
-3. **Research phase 2:** embeddings + clusters on Windsor; needs Patrick's OK for batched iCloud hydration. Phase 3: cited research assistant.
+3. **Research phase 2:** shipped 2026-10-30. Embeddings + 48 semantic threads on Windsor, hybrid search, nearest-by-meaning; built from local metadata, no iCloud hydration. Next: full text from Voltamachina mirror PDFs. Phase 3: cited research assistant.
 4. **iPhone/iPad capture:** "Share to VOLTA" Shortcut → token-auth inbox route.
 5. **Agent-built video** presets in Studio.
 6. **VOLTA Cut:** Editor timeline → HyperFrames/Remotion project → Studio render.

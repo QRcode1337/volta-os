@@ -9,6 +9,7 @@ import { getGraph } from './graphs';
 import { WINDSOR_ROOT, isWindsorMounted, volumeMounted } from '@/lib/server/storage';
 import { inventoryState, isPlaceholder } from './inventory';
 import { getLibrary } from './library';
+import { phase2Status } from './phase2';
 import { getVault } from './vault';
 
 const AGENT_TTL_MS = 20_000;
@@ -205,7 +206,7 @@ export async function getStatus(opts: { refresh?: boolean } = {}): Promise<Statu
     vault,
     graphs,
     catalog,
-    phase2: { built: false, note: 'Phase 2 (embeddings and semantic search) is not built yet. Search today is filename, title, tag and summary matching, with an optional JEV re-rank of the top 30.' },
+    phase2: await phase2Status(),
     warnings,
   };
 }

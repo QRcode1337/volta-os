@@ -6,7 +6,9 @@
     "roots[]: { id, label, path (~ ok), enabled, excludeDirs? }. excludeDirs are folder names (case-insensitive) skipped inside that root, on top of the global excludeDirNames / excludeDirPatterns.",
     "excludeDirPatterns are case-insensitive regular expressions matched against a folder name. The default pattern skips image folders (images, figures, screenshots, thumbnails...).",
     "stageA.mirrorPrefixes maps the paths Voltamachine recorded (/Volumes/Voltamachina/...) to a root id, so a Stage A record joins the same file under ~/Documents by relative path.",
-    "indexPath: the persisted inventory. Lives on Windsor, never on the boot disk (the disk is tight)."
+    "indexPath: the persisted inventory. Lives on Windsor, never on the boot disk (the disk is tight).",
+    "graphs[].dir: graphify-out copies on Windsor. The originals under ~/Documents/PROJECTS/ErisMornCloud are iCloud and get evicted (Optimize Mac Storage), which emptied Threads.",
+    "phase2: embeddings of every library row (title, folder path, Stage A tags/summary/claims, the head of local md/txt files) in Windsor. embedUrl is any OpenAI-compatible /v1/embeddings server (Ollama :11434 or LM Studio :1234). labelTask is the config/llm-routes.json task that names clusters from their titles (\"quick\": local first, then OmniRoute); \"\" keeps term labels only. Nothing is downloaded from iCloud."
   ],
   "indexPath": "/Volumes/Windsor/VOLTA/research/inventory.json",
   "maxFilesPerRoot": 60000,
@@ -44,16 +46,23 @@
     {
       "id": "voltamachine",
       "label": "Voltamachine papers",
-      "dir": "~/Documents/PROJECTS/ErisMornCloud/voltamachine-graph/graphify-out",
+      "dir": "/Volumes/Windsor/VOLTA/research/graphs/voltamachine",
       "docNodes": "stagea"
     },
     {
       "id": "uap",
       "label": "UAP / UFO corpus",
-      "dir": "~/Documents/PROJECTS/ErisMornCloud/UAP-UFO-graph/graphify-out",
+      "dir": "/Volumes/Windsor/VOLTA/research/graphs/uap",
       "docNodes": "source"
     }
   ],
+  "phase2": {
+    "dir": "/Volumes/Windsor/VOLTA/research/phase2",
+    "embedUrl": "http://127.0.0.1:11434",
+    "embedModel": "nomic-embed-text",
+    "labelTask": "quick",
+    "localTextChars": 1500
+  },
   "launchAgents": ["com.erismorn.voltamachine-batch-index", "com.erismorn.voltamachine-stageb-watch"],
   "batchIndexHold": {
     "envVar": "VM_BATCH_INDEX_ENABLED",

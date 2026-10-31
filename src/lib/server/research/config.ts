@@ -27,6 +27,17 @@ export interface GraphCfg {
   dir: string;
   docNodes: 'stagea' | 'source';
 }
+export interface Phase2Cfg {
+  /** Embedding index (vectors, meta, clusters). Windsor only. */
+  dir: string;
+  /** OpenAI-compatible base URL (Ollama :11434 or LM Studio :1234); POST {base}/v1/embeddings. */
+  embedUrl: string;
+  embedModel: string;
+  /** config/llm-routes.json task that names clusters (local first, then OmniRoute); empty = term labels only. */
+  labelTask: string;
+  /** Characters of a local text file (md/txt) added to its embedding text. Placeholders are never read. */
+  localTextChars: number;
+}
 export interface ResearchConfig {
   indexPath: string;
   maxFilesPerRoot: number;
@@ -46,6 +57,7 @@ export interface ResearchConfig {
   };
   vault: { name: string; path: string; synthesisDir: string; noteDirs: string[] };
   graphs: GraphCfg[];
+  phase2: Phase2Cfg;
   launchAgents: string[];
   batchIndexHold: { envVar: string; plist: string; latestLog: string };
   /** Hash of everything that changes what the walk would find; a persisted inventory built under another hash is rebuilt. */
@@ -101,6 +113,7 @@ function parseConfig(): ResearchConfig {
   const sa = obj(raw.stageA);
   const vt = obj(raw.vault);
   const bh = obj(raw.batchIndexHold);
+  const p2 = obj(raw.phase2);
   const graphs: GraphCfg[] = [];
   for (const g of Array.isArray(raw.graphs) ? (raw.graphs as unknown[]) : []) {
     const o = obj(g);
@@ -138,6 +151,13 @@ function parseConfig(): ResearchConfig {
       noteDirs: strs(vt.noteDirs),
     },
     graphs,
+    phase2: {
+      dir: abs(str(p2.dir, path.join(WINDSOR_VOLTA, 'research', 'phase2'))),
+      embedUrl: str(p2.embedUrl, 'http://127.0.0.1:11434').replace(/\/+$/, ''),
+      embedModel: str(p2.embedModel, 'nomic-embed-text'),
+      labelTask: str(p2.labelTask, 'quick'),
+      localTextChars: typeof p2.localTextChars === 'number' ? Math.max(0, Math.floor(p2.localTextChars)) : 1500,
+    },
     launchAgents: strs(raw.launchAgents),
     batchIndexHold: {
       envVar: str(bh.envVar, 'VM_BATCH_INDEX_ENABLED'),

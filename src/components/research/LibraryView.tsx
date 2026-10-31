@@ -1,7 +1,7 @@
 'use client';
 // Library: ranked search over every file in the research roots, joined to Voltamachine Stage A.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ExternalLink, FileText, Search, Sparkles } from 'lucide-react';
+import { ExternalLink, FileText, Orbit, Search, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { api, fmtDate, isBuilding, qs } from './research-client';
 import { ActionBadge, Building, chip, ContradictionChip, CopyButton, ErrorNote, field, NoveltyChip, smallBtn, StorageBadge } from './ui';
@@ -19,9 +19,11 @@ interface Filters {
   contradiction: boolean;
   indexed: boolean;
   rerank: boolean;
+  /** Phase 2 hybrid ranking (on by default; falls back to plain matching when there is no index). */
+  semantic: boolean;
   sort: string;
 }
-const EMPTY: Filters = { q: '', root: '', folder: '', kind: '', storage: '', tag: '', minNovelty: '', escalate: false, contradiction: false, indexed: false, rerank: false, sort: '' };
+const EMPTY: Filters = { q: '', root: '', folder: '', kind: '', storage: '', tag: '', minNovelty: '', escalate: false, contradiction: false, indexed: false, rerank: false, semantic: true, sort: '' };
 const PAGE = 50;
 const STORAGES = [
   { id: '', label: 'All' },
@@ -187,9 +189,10 @@ export function LibraryView({ activeId, onOpen, onCopied, onMeta }: { activeId: 
       contradiction: f.contradiction,
       indexed: f.indexed,
       rerank: f.rerank && !!debounced,
+      semantic: f.semantic && !!debounced,
       sort: f.sort,
     }),
-    [debounced, f.root, f.folder, f.kind, f.storage, f.tag, f.minNovelty, f.escalate, f.contradiction, f.indexed, f.rerank, f.sort],
+    [debounced, f.root, f.folder, f.kind, f.storage, f.tag, f.minNovelty, f.escalate, f.contradiction, f.indexed, f.rerank, f.semantic, f.sort],
   );
 
   const run = useCallback(
@@ -330,6 +333,9 @@ export function LibraryView({ activeId, onOpen, onCopied, onMeta }: { activeId: 
           <Toggle on={f.indexed} onClick={() => set({ indexed: !f.indexed })} title="Only files Voltamachine Stage A has summarised">
             Indexed
           </Toggle>
+          <Toggle on={f.semantic} onClick={() => set({ semantic: !f.semantic })} title="Phase 2: rank by meaning as well as words (local embeddings, nothing leaves this Mac). Finds close matches that share no words with the query.">
+            <Orbit className="h-3 w-3" /> Semantic
+          </Toggle>
           <Toggle on={f.rerank} onClick={() => set({ rerank: !f.rerank })} title="Re-rank the top 30 matches with JEV (sends their titles, tags and summaries to TypeSafe). Falls back to the plain order if JEV is unavailable.">
             <Sparkles className="h-3 w-3" /> JEV re-rank
           </Toggle>
@@ -360,6 +366,8 @@ export function LibraryView({ activeId, onOpen, onCopied, onMeta }: { activeId: 
               {data.total.toLocaleString()} result{data.total === 1 ? '' : 's'}
               {debounced ? ` for "${debounced}"` : ''}
             </span>
+            {data.semantic === 'on' && <span className="text-teal">ranked by meaning + words</span>}
+            {data.semantic === 'unavailable' && <span title="No Phase 2 index yet, or the embedding server did not answer in time">semantic unavailable, words only</span>}
             {data.rerank === 'jev' && <span className="text-purple">top 30 re-ranked by JEV</span>}
             {data.rerank === 'fallback' && <span>JEV unavailable, plain order</span>}
             {loading && <span className="text-orange">searching...</span>}

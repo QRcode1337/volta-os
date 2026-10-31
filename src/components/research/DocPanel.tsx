@@ -1,12 +1,13 @@
 'use client';
-// Slide-over detail for one library row: Stage A fields, Stage B, vault notes that mention it, graph concepts, related papers.
+// Slide-over detail for one library row: Stage A fields, Stage B, vault notes that mention it, graph concepts, related papers,
+// and its nearest neighbours in the Phase 2 embedding index.
 import { useEffect, useState } from 'react';
 import { ExternalLink, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Markdown } from './Markdown';
 import { api, fmtDate, isBuilding } from './research-client';
 import { ActionBadge, chip, ContradictionChip, CopyButton, ErrorNote, Loading, NoveltyChip, Section, StorageBadge } from './ui';
-import { fmtBytes, type DocDetail } from './types';
+import { fmtBytes, type DocDetail, type LibraryRow, type RelatedResponse } from './types';
 
 function List({ items, ordered }: { items: string[]; ordered?: boolean }) {
   if (!items.length) return <p className="text-[12px] text-muted">None recorded.</p>;
@@ -17,6 +18,43 @@ function List({ items, ordered }: { items: string[]; ordered?: boolean }) {
         <li key={i}>{x}</li>
       ))}
     </L>
+  );
+}
+
+/** Phase 2 nearest neighbours. Quietly absent when there is no index or the row is newer than it. */
+function NearestByMeaning({ row, onOpen }: { row: LibraryRow; onOpen: (id: string) => void }) {
+  const [rel, setRel] = useState<RelatedResponse | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    const ac = new AbortController();
+    setRel(null);
+    setNote(null);
+    api<RelatedResponse>(`/api/research/phase2?related=${encodeURIComponent(row.id)}&n=10`, ac.signal)
+      .then(setRel)
+      .catch((e: Error) => e.name !== 'AbortError' && setNote(e.message));
+    return () => ac.abort();
+  }, [row.id]);
+  if (note) return <Section title="Nearest by meaning"><p className="text-[12px] text-muted">{note}</p></Section>;
+  if (!rel?.related.length) return null;
+  return (
+    <Section title="Nearest by meaning" right={<span className="font-mono text-[10px] text-muted">Phase 2 embeddings</span>}>
+      <ul className="space-y-1.5">
+        {rel.related.map((x) => {
+          const elsewhere = x.root !== row.root || x.folder !== row.folder;
+          return (
+            <li key={x.id} className="flex items-baseline gap-2">
+              <button type="button" onClick={() => onOpen(x.id)} className="min-w-0 truncate text-left text-[12.5px] text-paper hover:text-orange">
+                {x.title}
+              </button>
+              <span className={cn('ml-auto shrink-0 font-mono text-[10px]', elsewhere ? 'text-orange' : 'text-muted')} title={elsewhere ? 'Filed in a different folder' : 'Same folder'}>
+                {elsewhere ? `${x.folder.replace(/^\d+[-_ ]/, '').replace(/_/g, ' ')} · ` : ''}
+                {x.sim.toFixed(2)}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </Section>
   );
 }
 
@@ -224,6 +262,7 @@ export function DocPanel({ id, onClose, onOpen, onCopied }: { id: string; onClos
                 </ul>
               </Section>
             )}
+            {r && <NearestByMeaning row={r} onOpen={onOpen} />}
           </>
         )}
       </div>

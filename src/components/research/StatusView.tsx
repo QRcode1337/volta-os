@@ -1,11 +1,11 @@
 'use client';
 // Status: how much of the library Voltamachine has indexed, the indexer's state, and what the inventory is doing.
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { Play, RefreshCw, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { api, fmtDate, pct } from './research-client';
 import { chip, ErrorNote, Loading, Notice, Section, smallBtn, Tick } from './ui';
-import { fmtBytes, type StatusResponse } from './types';
+import { fmtBytes, type Phase2Status, type StatusResponse } from './types';
 
 function Bar({ parts }: { parts: { n: number; cls: string; label: string }[] }) {
   const total = parts.reduce((a, p) => a + p.n, 0) || 1;
@@ -19,6 +19,139 @@ function Bar({ parts }: { parts: { n: number; cls: string; label: string }[] }) 
 }
 
 const card = 'rounded-lg border border-subtle bg-panel p-4';
+
+const STAGE_LABEL: Record<Phase2Status['job']['stage'], string> = {
+  idle: 'Idle',
+  text: 'Reading titles, summaries and local text',
+  embed: 'Embedding',
+  cluster: 'Clustering',
+  label: 'Naming clusters',
+  done: 'Done',
+  error: 'Failed',
+};
+
+/** Phase 2: the embedding index on Windsor. Polls its own endpoint while a build runs. */
+function Phase2Panel({ initial }: { initial: Phase2Status }) {
+  const [p, setP] = useState(initial);
+  const [err, setErr] = useState<string | null>(null);
+  const [posting, setPosting] = useState(false);
+  useEffect(() => setP(initial), [initial]);
+  useEffect(() => {
+    if (!p.job.running) return;
+    const t = window.setTimeout(() => {
+      api<Phase2Status>('/api/research/phase2')
+        .then(setP)
+        .catch((e: Error) => setErr(e.message));
+    }, 1500);
+    return () => window.clearTimeout(t);
+  }, [p]);
+  const start = async (action: 'build' | 'label') => {
+    setPosting(true);
+    setErr(null);
+    try {
+      const res = await fetch('/api/research/phase2', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) });
+      const body = (await res.json().catch(() => ({}))) as Phase2Status & { error?: string };
+      if (!res.ok) throw new Error(body.error ?? `Build failed (${res.status})`);
+      setP(body);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setPosting(false);
+    }
+  };
+  const j = p.job;
+  const ix = p.index;
+  const cl = p.clusters;
+  const unnamed = cl ? cl.count - cl.named : 0;
+  return (
+    <Section
+      title="Phase 2 · semantic index"
+      right={
+        <span className="flex gap-1.5">
+          {cl && unnamed > 0 && p.labeler.enabled && (
+            <button type="button" disabled={j.running || posting} onClick={() => void start('label')} className={smallBtn} title={`Name the ${unnamed} unnamed clusters through the LLM router (task "${p.labeler.task}"); sends their top titles`}>
+              <Sparkles className="h-3 w-3" /> Name clusters
+            </button>
+          )}
+          <button type="button" disabled={j.running || posting || !p.embedder.ok} onClick={() => void start('build')} className={cn(smallBtn, 'border-orange/50 text-orange')}>
+            {ix ? <RefreshCw className={cn('h-3 w-3', j.running && 'animate-spin')} /> : <Play className="h-3 w-3" />} {ix ? 'Update index' : 'Build index'}
+          </button>
+        </span>
+      }
+    >
+      <div className="space-y-3">
+        <Notice tone={p.built ? 'green' : 'orange'}>{p.note}</Notice>
+        {err && <ErrorNote>{err}</ErrorNote>}
+        {(j.running || j.stage === 'error' || (j.error && j.stage === 'done')) && (
+          <div className={card}>
+            <p className="text-[12.5px] text-paper">
+              <strong>{STAGE_LABEL[j.stage]}</strong>
+              {j.total > 0 && <span className="font-mono text-[11px] text-secondary"> · {j.done.toLocaleString()} / {j.total.toLocaleString()}</span>}
+              {j.reused > 0 && <span className="font-mono text-[11px] text-muted"> · {j.reused.toLocaleString()} unchanged, reused</span>}
+            </p>
+            {j.running && j.total > 0 && (
+              <div className="mt-2">
+                <Bar parts={[{ n: j.done, cls: 'bg-orange', label: 'done' }, { n: Math.max(0, j.total - j.done), cls: 'bg-transparent', label: 'to go' }]} />
+              </div>
+            )}
+            {j.error && <p className={cn('mt-2 text-[11.5px]', j.stage === 'error' ? 'text-[#EF4444]' : 'text-amber')}>{j.error}</p>}
+          </div>
+        )}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className={card}>
+            <h4 className="hud-label mb-2">Embedder</h4>
+            <p className="text-[12.5px] text-paper">
+              <Tick ok={p.embedder.ok} /> {p.embedder.model}
+            </p>
+            <p className="mt-0.5 font-mono text-[10.5px] text-muted">{p.embedder.url}/v1/embeddings</p>
+            {p.embedder.error && <p className="mt-1.5 text-[11.5px] text-amber">{p.embedder.error}</p>}
+            <p className="mt-2 font-mono text-[10.5px] text-muted">Cluster names: {p.labeler.enabled ? `LLM router task "${p.labeler.task}" (local first, then OmniRoute; sends cluster titles)` : 'off (term labels)'}</p>
+          </div>
+          <div className={card}>
+            <h4 className="hud-label mb-2">Index</h4>
+            {ix ? (
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[11px]">
+                <dt className="text-muted">Documents</dt>
+                <dd className="text-paper">{ix.docs.toLocaleString()}</dd>
+                <dt className="text-muted">With summary</dt>
+                <dd className="text-paper">{ix.withSummary.toLocaleString()}</dd>
+                <dt className="text-muted">With local text</dt>
+                <dd className="text-paper">{ix.withText.toLocaleString()}</dd>
+                <dt className="text-muted">Vectors</dt>
+                <dd className="text-paper">{ix.dim}-d · {fmtBytes(ix.bytes)}</dd>
+                <dt className="text-muted">Built</dt>
+                <dd className="text-paper">{fmtDate(ix.builtAt)}</dd>
+                <dt className="text-muted">New since</dt>
+                <dd className={p.missing ? 'text-amber' : 'text-green'}>{p.missing.toLocaleString()} file{p.missing === 1 ? '' : 's'}</dd>
+              </dl>
+            ) : (
+              <p className="text-[12px] text-secondary">Not built. {p.missing.toLocaleString()} documents to embed.</p>
+            )}
+            <p className="mt-2 break-all font-mono text-[10px] text-muted">{p.dir}</p>
+          </div>
+          <div className={card}>
+            <h4 className="hud-label mb-2">Semantic threads</h4>
+            {cl ? (
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[11px]">
+                <dt className="text-muted">Clusters</dt>
+                <dd className="text-paper">{cl.count}</dd>
+                <dt className="text-muted">Named by LLM</dt>
+                <dd className={cl.named === cl.count ? 'text-green' : 'text-amber'}>
+                  {cl.named} of {cl.count}
+                </dd>
+                <dt className="text-muted">Span 3+ folders</dt>
+                <dd className="text-paper">{cl.crossFolder}</dd>
+              </dl>
+            ) : (
+              <p className="text-[12px] text-secondary">Built with the index.</p>
+            )}
+            <p className="mt-2 text-[11.5px] text-secondary">See them in Threads → Semantic. Library search has a Semantic toggle; each document lists its nearest reading.</p>
+          </div>
+        </div>
+      </div>
+    </Section>
+  );
+}
 
 export function StatusView() {
   const [s, setS] = useState<StatusResponse | null>(null);
@@ -215,9 +348,7 @@ export function StatusView() {
           </Section>
         </div>
 
-        <Section title="Phase 2">
-          <Notice tone="orange">{s.phase2.note}</Notice>
-        </Section>
+        <Phase2Panel initial={s.phase2} />
       </div>
     </main>
   );

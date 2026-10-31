@@ -28,7 +28,7 @@
 - Action Orchestrate (Tier 2), Hermes gateway and OmniRoute autostart last status: error. (`/api/routines`)
 
 ## 4. VOLTA OS (HANDOFF "Next up", in order)
-1. Launchpad: list real GitHub repos with the GitHub token. 2. Feeds: tighten JEV triage. 3. Research phase 2 (needs OK for iCloud hydration).
+1. Launchpad: list real GitHub repos with the GitHub token. 2. Feeds: tighten JEV triage. 3. Research phase 3: cited research assistant (phase 2 embeddings shipped 2026-10-30).
 4. iPhone/iPad "Share to VOLTA" capture inbox. 5. Agent-built video presets in Studio. 6. VOLTA Cut. 7. Orchestra OS ports.
 - Move Editor working files off iCloud.
 

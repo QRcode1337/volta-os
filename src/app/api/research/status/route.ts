@@ -1,4 +1,4 @@
-// GET /api/research/status[?refresh=1]  coverage per root, indexer state, vault and graph health, Phase 2 note.
+// GET /api/research/status[?refresh=1]  coverage per root, indexer state, vault and graph health, Phase 2 index state.
 // refresh=1 rebuilds the inventory now (rate limited to one build per 15 s).
 import { route } from '@/lib/server/route-helpers';
 import { getStatus } from '@/lib/server/research/status';

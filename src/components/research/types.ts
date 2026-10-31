@@ -97,6 +97,8 @@ export interface SearchResponse {
   limit: number;
   rows: LibraryRow[];
   rerank: 'off' | 'jev' | 'fallback';
+  /** Phase 2 hybrid ranking: 'on' when the query was embedded, 'unavailable' when asked for but no index or embedder. */
+  semantic: 'off' | 'on' | 'unavailable';
   inventory: InventoryState;
   facets: Facets;
 }
@@ -291,7 +293,7 @@ export interface StatusResponse {
   vault: { path: string; exists: boolean; syntheses: number; notesLocal: number; notesIcloud: number; stripped: number };
   graphs: { id: string; label: string; path: string; local: boolean; nodes: number | null; edges: number | null; communities: number | null; mtime: string | null; error: string | null }[];
   catalog: { path: string; local: boolean | null; note: string };
-  phase2: { built: false; note: string };
+  phase2: Phase2Status;
   warnings: string[];
 }
 
@@ -318,4 +320,72 @@ export const tagKey = (s: string) => {
 export function bestLabel(variants: Map<string, number>, key: string): string {
   const all = [...variants].sort((a, b) => b[1] - a[1]);
   return (all.find(([v]) => normKey(v) === key) ?? all[0])?.[0] ?? key;
+}
+
+// ───────────────────────── Phase 2: embeddings ─────────────────────────
+
+export interface Phase2Job {
+  running: boolean;
+  stage: 'idle' | 'text' | 'embed' | 'cluster' | 'label' | 'done' | 'error';
+  done: number;
+  total: number;
+  /** Vectors carried over from the previous index (same id, same text). */
+  reused: number;
+  embedded: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string | null;
+}
+
+export interface Phase2Status {
+  built: boolean;
+  note: string;
+  dir: string;
+  embedder: { url: string; model: string; ok: boolean; error: string | null };
+  /** LLM router task that names clusters (titles are sent through it). */
+  labeler: { task: string; enabled: boolean };
+  index: { docs: number; dim: number; model: string; builtAt: string; withSummary: number; withText: number; bytes: number } | null;
+  /** Library rows with no vector yet (new since the last build). */
+  missing: number;
+  clusters: { count: number; named: number; crossFolder: number } | null;
+  job: Phase2Job;
+}
+
+export interface SemanticMember {
+  id: string;
+  title: string;
+  root: string;
+  folder: string;
+  storage: Storage;
+  novelty: number | null;
+  sid: string | null;
+  /** Cosine similarity to the cluster centre (clusters) or to the source document (related). */
+  sim: number;
+}
+
+export interface SemanticCluster {
+  id: number;
+  /** LLM name when the label pass reached it, else the top terms. */
+  name: string;
+  named: boolean;
+  terms: string[];
+  size: number;
+  roots: { key: string; label: string; count: number }[];
+  folders: { root: string; folder: string; count: number }[];
+  /** Effective number of folders (exp of the folder entropy): 1 = one folder, higher = the thread crosses folders. */
+  spread: number;
+  /** Mean similarity of the members to the centre: low = a grab-bag (odd file names), high = one subject. */
+  cohesion: number;
+  members: SemanticMember[];
+}
+
+export interface SemanticThreadsResponse {
+  builtAt: string;
+  docs: number;
+  clusters: SemanticCluster[];
+}
+
+export interface RelatedResponse {
+  id: string;
+  related: SemanticMember[];
 }

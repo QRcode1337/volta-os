@@ -3,6 +3,7 @@ import type { LibraryRow, SearchResponse } from '@/components/research/types';
 import { redactSecrets } from '../redact';
 import { inventoryState } from './inventory';
 import { getLibrary, type LibRow } from './library';
+import { embedQuery, similarities } from './phase2';
 
 export interface SearchParams {
   q: string;
@@ -19,10 +20,17 @@ export interface SearchParams {
   limit: number;
   offset: number;
   rerank: boolean;
+  /** Phase 2 hybrid: mix embedding similarity into the score and admit close matches that share no words. */
+  semantic: boolean;
 }
 
 const RERANK_TOP = 30;
 const RERANK_TIMEOUT_MS = 6000;
+/** Semantic candidates: the best SIM_POOL rows by cosine, never below SIM_FLOOR. Score adds SIM_WEIGHT per unit above SIM_BASE. */
+const SIM_POOL = 150;
+const SIM_FLOOR = 0.5;
+const SIM_BASE = 0.45;
+const SIM_WEIGHT = 60;
 
 export function parseParams(url: URL): SearchParams {
   const p = url.searchParams;
@@ -49,6 +57,7 @@ export function parseParams(url: URL): SearchParams {
     limit: Math.min(200, Math.max(1, Math.floor(num('limit') ?? 50))),
     offset: Math.max(0, Math.floor(num('offset') ?? 0)),
     rerank: p.get('rerank') === '1',
+    semantic: p.get('semantic') === '1',
   };
 }
 
@@ -128,8 +137,27 @@ export async function search(params: SearchParams): Promise<SearchResponse | { b
     return true;
   });
 
+  let sims = new Map<string, number>();
+  let semantic: SearchResponse['semantic'] = 'off';
+  if (params.semantic && toks.length) {
+    const qv = await embedQuery(params.q);
+    sims = qv ? await similarities(qv) : sims;
+    semantic = sims.size ? 'on' : 'unavailable';
+  }
+
   let hits: { r: LibRow; s: number }[];
-  if (toks.length) {
+  if (semantic === 'on') {
+    const pool = base.map((r) => sims.get(r.id) ?? -1).sort((a, b) => b - a);
+    const cutoff = Math.max(SIM_FLOOR, pool[Math.min(SIM_POOL, pool.length) - 1] ?? 1);
+    hits = [];
+    for (const r of base) {
+      const sim = sims.get(r.id) ?? -1;
+      const strict = scoreRow(r, toks, phrase, true);
+      if (strict === null && sim < cutoff) continue;
+      const lex = strict ?? scoreRow(r, toks, phrase, false) ?? 0;
+      hits.push({ r, s: Math.round((lex + SIM_WEIGHT * Math.max(0, sim - SIM_BASE)) * 100) / 100 });
+    }
+  } else if (toks.length) {
     hits = [];
     for (const r of base) {
       const s = scoreRow(r, toks, phrase, true);
@@ -172,5 +200,5 @@ export async function search(params: SearchParams): Promise<SearchResponse | { b
   }
   const score = new Map(hits.map((h) => [h.r.id, h.s]));
   const page = ordered.slice(params.offset, params.offset + params.limit).map((r) => ({ ...publicRow(r), score: toks.length ? score.get(r.id) : undefined }));
-  return { total: ordered.length, offset: params.offset, limit: params.limit, rows: page, rerank, inventory: inventoryState(), facets: lib.facets };
+  return { total: ordered.length, offset: params.offset, limit: params.limit, rows: page, rerank, semantic, inventory: inventoryState(), facets: lib.facets };
 }

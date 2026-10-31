@@ -51,7 +51,7 @@ You're picking up **VOLTA OS**: Patrick's local dashboard over his whole digital
 1. ~~Launcher Podcast entry~~ done (`d3bc7d6`). Podcast shipped in `f9bda50`: episode ~$0.20 (Gemini TTS), confirm >$0.50, cap $1.00; 06:00 LaunchAgent still not loaded.
 2. **Launchpad:** use `GITHUB_TOKEN` to list real GitHub repos. 84 of 91 local repos are iCloud placeholders, so local scans miss them.
 3. **Feeds:** tighten JEV triage. 108 of 238 items are marked needs-action, which is too many. Adjust the labels or thresholds.
-4. **Research phase 2:** cross-folder threads via embeddings (LM Studio nomic on :1234), clustering, and qwen labels. Index lives on Windsor. This needs batched iCloud hydration with a disk cap; ask the user first. Phase 3 is a research assistant with cited sources.
+4. ~~**Research phase 2**~~ done (2026-10-30): `src/lib/server/research/phase2.ts`, `/api/research/phase2`. All 6.9k library rows embedded with Ollama `nomic-embed-text` from what is already local (titles, folders, Stage A summaries/claims, local md/txt heads), no iCloud hydration. Index in `/Volumes/Windsor/VOLTA/research/phase2/`; 48 k-means threads named through the LLM router `quick` task; hybrid search (Semantic toggle, on by default) and "Nearest by meaning" in the doc panel. Build/Update and Name clusters buttons on Status. Graphify graphs moved to `/Volumes/Windsor/VOLTA/research/graphs/` (the iCloud originals were evicted, which emptied Threads). Next: embed full text from the Voltamachina mirror PDFs (still no hydration), then Phase 3, a research assistant with cited sources.
 5. **iPhone/iPad capture:** an iOS Shortcut "Share to VOLTA" that POSTs links, text and screenshots over Tailscale to a new inbox route. That route needs a token, because Shortcuts don't send the Tailscale identity header.
 6. **Agent-built video:** Studio presets that brief Claude Code, Codex, Grok Build or Manus (`MANUS_API_KEY`) to build videos with Blender MCP, three.js, HTML/JS, HyperFrames or Remotion. Outputs go to the render queue.
 7. **VOLTA Cut:** a timeline in the Editor that exports to a HyperFrames or Remotion project and renders via Studio. Don't build a new render engine.
@@ -60,6 +60,5 @@ You're picking up **VOLTA OS**: Patrick's local dashboard over his whole digital
 
 ## Open questions for the user
 - Load the podcast LaunchAgent (06:00 daily)?
-- Approve research hydration (about 4.4k files, batched) for phase 2?
 - Allow cron Run-now/Pause controls in VOLTA?
 - Rotate the keys that were pasted into chat or leaked: Manus, Typesafe x2, Runway, Notion, the two Google `AIzaSy…` keys and the two passwords from the CODED API note.

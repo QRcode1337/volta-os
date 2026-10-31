@@ -488,7 +488,7 @@ export function LtmApp() {
         }
       />
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 max-md:flex-col max-md:overflow-y-auto">
         <DayRail
           status={status}
           nowIso={nowIso}
@@ -501,7 +501,7 @@ export function LtmApp() {
           vaults={vaults}
         />
 
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className="flex min-w-0 flex-1 flex-col max-md:min-h-[80dvh] max-md:shrink-0">
           {/* Day header + timeline */}
           <div className="shrink-0 border-b border-subtle px-4 pb-3 pt-3">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">

@@ -49,7 +49,7 @@ const shortTitle = (it: VpItem) =>
 export function CatalogRail({ catalog, selection, onSelect }: { catalog: Remote<VpCatalog>; selection: Selection | null; onSelect: (s: Selection) => void }) {
   const c = catalog.data;
   return (
-    <aside className="hud-scroll flex min-h-0 flex-col gap-4 overflow-y-auto border-r border-subtle bg-panel p-3">
+    <aside className="hud-scroll flex min-h-0 flex-col gap-4 overflow-y-auto border-r border-subtle bg-panel p-3 max-md:max-h-[40dvh] max-md:overflow-y-auto max-md:border-r-0 max-md:border-b">
       {catalog.status === 'loading' && !c && <Skeleton lines={9} />}
       {catalog.status === 'error' && <ErrorNotice message={catalog.notConfigured ? 'NOTION_TOKEN is not set in .env.local, so Notion content cannot load.' : `Could not read the Video Production index: ${catalog.error}`} onRetry={() => catalog.reload()} />}
 

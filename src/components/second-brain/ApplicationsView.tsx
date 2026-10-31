@@ -176,7 +176,7 @@ export function ApplicationsView({ query = '' }: Props) {
                   measurable from config — tools load on demand.
                 </p>
               </div>
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <McpGroup
                   title="Local"
                   subtitle="stdio · spawned as a child process"

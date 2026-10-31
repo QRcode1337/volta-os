@@ -111,7 +111,7 @@ export function TrackPanel(p: TrackPanelProps) {
 
   return (
     <aside
-      className="hud-scroll flex w-[430px] max-w-[46vw] shrink-0 flex-col overflow-y-auto border-l border-subtle bg-panel"
+      className="hud-scroll flex w-[430px] max-w-[46vw] shrink-0 flex-col overflow-y-auto border-l border-subtle bg-panel max-md:fixed max-md:inset-x-0 max-md:top-[calc(3.5rem+env(safe-area-inset-top,0px))] max-md:bottom-[var(--mobile-tabbar-space)] max-md:z-40 max-md:w-full max-md:max-w-none max-md:border-l-0"
       aria-label="Track details"
       onKeyDown={(e) => {
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {

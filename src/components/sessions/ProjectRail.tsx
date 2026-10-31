@@ -143,7 +143,7 @@ export function ProjectRail({ data, now, selected, onSelect, showAutomated }: Pr
   const humanSessions = human.reduce((n, p) => n + p.sessions, 0);
 
   return (
-    <aside className="flex w-[264px] shrink-0 flex-col border-r border-subtle bg-panel/40">
+    <aside className="flex w-[264px] shrink-0 flex-col border-r border-subtle bg-panel/40 max-md:max-h-[40dvh] max-md:overflow-y-auto max-md:w-full max-md:shrink-0 max-md:border-r-0 max-md:border-b">
       <div className="border-b border-subtle p-3">
         <IndexCard progress={data?.progress ?? null} totals={data?.totals ?? null} />
       </div>

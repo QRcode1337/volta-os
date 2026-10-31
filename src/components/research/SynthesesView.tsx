@@ -50,8 +50,8 @@ export function SynthesesView({ onCopied }: { onCopied: (ok: boolean, what: stri
   }, [list, selected]);
 
   return (
-    <div className="flex min-h-0 flex-1">
-      <aside className="flex w-[360px] shrink-0 flex-col border-r border-subtle">
+    <div className="flex min-h-0 flex-1 max-md:flex-col max-md:overflow-y-auto">
+      <aside className="flex w-[360px] shrink-0 flex-col border-r border-subtle max-md:max-h-[40dvh] max-md:overflow-y-auto max-md:w-full max-md:shrink-0 max-md:border-r-0 max-md:border-b">
         <div className="shrink-0 space-y-2 border-b border-subtle px-3 py-2.5">
           <label className="relative flex items-center">
             <Search className="pointer-events-none absolute left-3 h-3.5 w-3.5 text-muted" />
@@ -92,7 +92,7 @@ export function SynthesesView({ onCopied }: { onCopied: (ok: boolean, what: stri
           {items && list.length === 0 && <p className="p-4 text-center text-secondary">No synthesis matches.</p>}
         </ul>
       </aside>
-      <main className="hud-scroll min-w-0 flex-1 overflow-y-auto px-8 pb-24 pt-5">
+      <main className="hud-scroll min-w-0 flex-1 overflow-y-auto px-8 pb-24 pt-5 max-md:px-4 max-md:min-h-[80dvh] max-md:shrink-0">
         {detailError && <ErrorNote>{detailError}</ErrorNote>}
         {selected && !detail && !detailError && <Loading />}
         {detail && (

@@ -570,7 +570,7 @@ function RootsPanel({
       {candidates.length === 0 ? (
         <p className="font-mono text-[11px] text-muted">No other folders with audio files found.</p>
       ) : (
-        <ul className="grid gap-1.5 md:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-1.5 md:grid-cols-2">
           {candidates.map((c) => (
             <li key={c.path} className="flex items-center gap-3 rounded-md border border-subtle px-3 py-2">
               <span className="min-w-0 flex-1">

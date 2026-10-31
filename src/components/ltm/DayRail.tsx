@@ -29,7 +29,7 @@ export function DayRail({ status, nowIso, days, selected, onSelect, vaults }: Da
   }
 
   return (
-    <aside className="flex w-[248px] shrink-0 flex-col border-r border-subtle bg-panel/40">
+    <aside className="flex w-[248px] shrink-0 flex-col border-r border-subtle bg-panel/40 max-md:max-h-[40dvh] max-md:overflow-y-auto max-md:w-full max-md:shrink-0 max-md:border-r-0 max-md:border-b">
       {/* Status */}
       <div className="border-b border-subtle p-3">
         <div className="hud-card p-3">

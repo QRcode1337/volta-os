@@ -166,7 +166,7 @@ function Network_({ data, onOpenDoc }: { data: ThreadsResponse; onOpenDoc: (id: 
   const shownLinks: DomainLink[] = selLink ? [byKey.get(selLink)].filter((x): x is DomainLink => !!x) : selNode ? net.links.filter((l) => l.a === selNode || l.b === selNode).slice(0, 12) : net.links.slice(0, 8);
   const node = selNode ? net.nodes.find((n) => n.key === selNode) : null;
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div>
         <ForceGraph
           nodes={nodes}

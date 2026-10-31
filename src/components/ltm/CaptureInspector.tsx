@@ -29,7 +29,7 @@ export function CaptureInspector(props: CaptureInspectorProps) {
     : undefined;
 
   return (
-    <section className="flex min-h-0 w-[42%] min-w-[380px] shrink-0 flex-col border-l border-subtle bg-panel/40">
+    <section className="flex min-h-0 w-[42%] min-w-[380px] shrink-0 flex-col border-l border-subtle bg-panel/40 max-md:min-h-[60dvh] max-md:w-full max-md:min-w-0 max-md:max-w-none max-md:shrink-0 max-md:border-l-0 max-md:border-t">
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-subtle px-2">
         {(['capture', 'sessions'] as const).map((t) => (
           <button

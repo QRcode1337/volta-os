@@ -298,7 +298,7 @@ function Overview({ d, onAgent }: { d: ClaudeSessionDetail; onAgent: (a: string)
 export function SessionDetail({ detail, loading, error, tab, onTab, agentId, onAgent, onCopy }: SessionDetailProps) {
   if (!detail) {
     return (
-      <aside className="flex w-[min(46vw,760px)] shrink-0 flex-col items-center justify-center border-l border-subtle bg-panel/30 p-8">
+      <aside className="flex w-[min(46vw,760px)] shrink-0 flex-col items-center justify-center border-l border-subtle bg-panel/30 p-8 max-md:min-h-[60dvh] max-md:w-full max-md:min-w-0 max-md:max-w-none max-md:shrink-0 max-md:border-l-0 max-md:border-t max-md:min-h-0">
         {error ? (
           <div className="max-w-sm rounded-md border border-[#EF4444]/40 bg-[#EF4444]/10 px-3 py-2 text-center text-[12px] text-paper">{error}</div>
         ) : (
@@ -309,7 +309,7 @@ export function SessionDetail({ detail, loading, error, tab, onTab, agentId, onA
   }
   const d = detail;
   return (
-    <aside className="flex w-[min(46vw,760px)] shrink-0 flex-col border-l border-subtle bg-panel/30">
+    <aside className="flex w-[min(46vw,760px)] shrink-0 flex-col border-l border-subtle bg-panel/30 max-md:min-h-[60dvh] max-md:w-full max-md:min-w-0 max-md:max-w-none max-md:shrink-0 max-md:border-l-0 max-md:border-t">
       <div className="shrink-0 border-b border-subtle px-4 pb-2 pt-3">
         <div className="flex items-start gap-2">
           <h2 className={cn('min-w-0 flex-1 text-[15px] font-semibold leading-snug text-paper', loading && 'opacity-60')}>{d.title}</h2>

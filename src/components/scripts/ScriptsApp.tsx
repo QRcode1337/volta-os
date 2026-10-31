@@ -150,10 +150,10 @@ export function ScriptsApp() {
         }
       />
 
-      <main className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_minmax(320px,400px)] gap-0">
+      <main className="grid min-h-0 flex-1 grid-cols-1 gap-0 max-md:overflow-y-auto md:grid-cols-[280px_minmax(0,1fr)_minmax(320px,400px)]">
         <CatalogRail catalog={catalog} selection={sel} onSelect={select} />
 
-        <section className="flex min-h-0 min-w-0 flex-col border-r border-subtle" aria-label="Outline">
+        <section className="flex min-h-0 min-w-0 flex-col border-r border-subtle max-md:min-h-[80dvh] max-md:border-r-0 max-md:border-b" aria-label="Outline">
           {sel && sel.type === 'ep' && cat && !episode ? (
             <p className="m-4 text-[13px] text-muted">Episode not found in the Video Production index.</p>
           ) : sel?.type === 'ep' && episode && !episode.outline ? (
@@ -171,7 +171,7 @@ export function ScriptsApp() {
         <HudPanel
           title={episode ? (evidenceId ? 'Evidence' : 'Source Ledger') : 'Linked pages'}
           icon={episode ? <Library className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
-          className="min-h-0 rounded-none border-0"
+          className="min-h-0 rounded-none border-0 max-md:min-h-[60dvh]"
           bodyClassName="flex min-h-0 flex-1 flex-col"
         >
           {episode ? (

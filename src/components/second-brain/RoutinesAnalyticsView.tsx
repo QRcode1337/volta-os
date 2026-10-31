@@ -238,7 +238,7 @@ export function RoutinesAnalyticsView({ query = '' }: Props) {
               <ViewState kind="empty" title={filter === 'failing' ? 'NOTHING FAILING' : 'NO JOBS IN THIS FILTER'} minH="min-h-[140px]" />
             </div>
           ) : (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {visible.map((x) => (
                 <RoutineCard
                   key={x.r.id}
@@ -262,7 +262,7 @@ export function RoutinesAnalyticsView({ query = '' }: Props) {
         </section>
 
         {/* ── Weekly matrix + interval jobs ── */}
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <section className="hud-card p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <Timer size={14} className="text-orange" />

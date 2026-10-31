@@ -61,8 +61,8 @@ export function SessionsTab({ workspace, session, focus, onSession, selfPeer, st
   }, [list, filter]);
 
   return (
-    <div className="flex min-h-0 flex-1">
-      <div className="flex w-[300px] shrink-0 flex-col border-r border-subtle">
+    <div className="flex min-h-0 flex-1 max-md:flex-col">
+      <div className="flex w-[300px] shrink-0 flex-col border-r border-subtle max-md:max-h-[40dvh] max-md:overflow-y-auto max-md:w-full max-md:shrink-0 max-md:border-r-0 max-md:border-b">
         <div className="flex h-10 shrink-0 items-center gap-2 border-b border-subtle px-3">
           <MessagesSquare className="h-3.5 w-3.5 text-teal" />
           <span className="hud-label">Sessions</span>

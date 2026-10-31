@@ -90,7 +90,7 @@ function ServicesSections({ s }: { s: Loaded<ServicesData> }) {
       <SubHeading>OpenClaw control panel and tailnet · tailscale serve</SubHeading>
       {tailnet.error && <div className="mb-3"><ErrorNote tone={tailnet.entries.length ? 'warn' : 'error'}>{tailnet.error}{tailnet.entries.length ? ' (showing the last good snapshot)' : ''}</ErrorNote></div>}
       {tailnet.entries.length === 0 && !tailnet.error && <p className="text-[12.5px] text-muted">Nothing is published with tailscale serve.</p>}
-      <ul className="grid gap-2 lg:grid-cols-2">
+      <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
         {tailnet.entries.map((e) => (
           <li key={e.id}>
             <a

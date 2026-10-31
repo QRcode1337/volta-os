@@ -236,7 +236,7 @@ export function SearchApp() {
 
           {/* Empty query: recent searches + what is searched */}
           {query.length < MIN_QUERY_CHARS && (
-            <div className="grid gap-4 md:grid-cols-[1fr_1.2fr]">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_1.2fr]">
               <section className="hud-card p-4">
                 <header className="mb-2 flex items-center gap-2">
                   <History className="h-3.5 w-3.5 text-orange" />

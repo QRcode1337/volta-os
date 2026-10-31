@@ -158,9 +158,9 @@ export function ElementsApp() {
           }
         />
 
-        <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1 max-md:flex-col max-md:overflow-y-auto">
           {/* Left nav */}
-          <nav className="hud-scroll flex w-[248px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-subtle bg-panel/40 px-3 py-4" aria-label="Elements sections">
+          <nav className="hud-scroll flex w-[248px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-subtle bg-panel/40 px-3 py-4 max-md:max-h-[40dvh] max-md:overflow-y-auto max-md:w-full max-md:shrink-0 max-md:border-r-0 max-md:border-b" aria-label="Elements sections">
             <span className="hud-label mb-2 px-2 !text-[10px] !text-muted">Library</span>
             {SECTIONS.map((s) => {
               const Icon = s.icon;
@@ -218,7 +218,7 @@ export function ElementsApp() {
           </nav>
 
           {/* Content */}
-          <div ref={scrollRef} className="hud-scroll min-w-0 flex-1 overflow-y-auto">
+          <div ref={scrollRef} className="hud-scroll min-w-0 flex-1 overflow-y-auto max-md:min-h-[80dvh] max-md:shrink-0">
             <div className="mx-auto flex max-w-[1080px] flex-col gap-14 px-8 pb-24 pt-8">
               <div>
                 <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-orange">/robo design system</span>

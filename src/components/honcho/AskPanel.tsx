@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Copy, CornerDownLeft, Loader2, MessageCircleQuestion, Square, Trash2 } from 'lucide-react';
+import { Copy, CornerDownLeft, Loader2, MessageCircleQuestion, Square, Trash2, X } from 'lucide-react';
 import { HONCHO_REASONING_LEVELS, type HonchoChatResponse, type HonchoPeer, type HonchoReasoningLevel } from '@/types/honcho';
 import { cn } from '@/lib/cn';
 import { HonchoClientError, hPost, isAbort, isOffline, peerColor, shortId, wsUrl } from './honcho-client';
@@ -60,9 +60,11 @@ interface Props {
   session: string | null;
   onCopy: (text: string, what: string) => void;
   className?: string;
+  /** Phones show the panel as a full-screen sheet; this renders its close button there. */
+  onClose?: () => void;
 }
 
-export function AskPanel({ workspace, peers, selectedPeer, session, onCopy, className }: Props) {
+export function AskPanel({ workspace, peers, selectedPeer, session, onCopy, className, onClose }: Props) {
   const reportOffline = useReportOffline();
   const [mode, setMode] = useState<'peer' | 'workspace'>('peer');
   const [target, setTarget] = useState('');
@@ -151,6 +153,11 @@ export function AskPanel({ workspace, peers, selectedPeer, session, onCopy, clas
         {turns.length > 0 && pending == null && (
           <button type="button" onClick={() => setTurns([])} className="ml-auto text-muted hover:text-paper" title="Clear conversation">
             <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {onClose && (
+          <button type="button" onClick={onClose} aria-label="Close Ask Honcho" className={cn('rounded-full border border-subtle p-2 text-muted hover:text-paper md:hidden', !(turns.length > 0 && pending == null) && 'ml-auto')}>
+            <X className="h-3.5 w-3.5" />
           </button>
         )}
       </div>

@@ -135,7 +135,7 @@ export function SubHeading({ children }: { children: ReactNode }) {
 
 export function SkeletonGrid({ n = 3 }: { n?: number }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true">
       {Array.from({ length: n }, (_, i) => (
         <div key={i} className="h-[74px] animate-pulse rounded-lg border border-subtle bg-panel" />
       ))}

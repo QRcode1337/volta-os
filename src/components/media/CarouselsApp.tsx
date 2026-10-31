@@ -407,9 +407,9 @@ function CarouselsBoard({ data, onReload }: { data: DecksResponse; onReload: () 
           </>
         }
       />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 max-md:flex-col max-md:overflow-y-auto">
         {/* ── deck list ── */}
-        <aside className="hud-scroll flex w-[272px] shrink-0 flex-col gap-2 overflow-y-auto border-r border-subtle bg-panel p-3">
+        <aside className="hud-scroll flex w-[272px] shrink-0 flex-col gap-2 overflow-y-auto border-r border-subtle bg-panel p-3 max-md:max-h-[40dvh] max-md:overflow-y-auto max-md:w-full max-md:shrink-0 max-md:border-r-0 max-md:border-b">
           <p className="hud-label px-1 pb-1">Deck queue</p>
           {decks.map((d) => {
             const st = state[d.id] ?? emptyDeck();
@@ -459,7 +459,7 @@ function CarouselsBoard({ data, onReload }: { data: DecksResponse; onReload: () 
         </aside>
 
         {/* ── main ── */}
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className="flex min-w-0 flex-1 flex-col max-md:min-h-[80dvh] max-md:shrink-0">
           <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-subtle px-5 py-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -623,7 +623,7 @@ function CarouselsBoard({ data, onReload }: { data: DecksResponse; onReload: () 
           </div>
 
           {/* review notes */}
-          <section className="flex h-[188px] shrink-0 border-t border-subtle bg-panel">
+          <section className="flex h-[188px] shrink-0 border-t border-subtle bg-panel max-md:h-auto max-md:flex-col">
             <div className="hud-scroll min-w-0 flex-1 overflow-y-auto px-5 py-3">
               <p className="hud-label mb-2">📍 Pinned comments ({ds.pins.length})</p>
               {sortedPins.length === 0 ? (
@@ -654,7 +654,7 @@ function CarouselsBoard({ data, onReload }: { data: DecksResponse; onReload: () 
                 </ul>
               )}
             </div>
-            <div className="hud-scroll w-[360px] shrink-0 overflow-y-auto border-l border-subtle px-5 py-3">
+            <div className="hud-scroll w-[360px] shrink-0 overflow-y-auto border-l border-subtle px-5 py-3 max-md:w-full max-md:border-l-0 max-md:border-t">
               <p className="hud-label mb-2">✎ Copy edits ({editedCount})</p>
               {editedCount === 0 ? (
                 <p className="text-[12.5px] text-muted">

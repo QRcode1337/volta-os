@@ -103,7 +103,7 @@ export function PeersTab({ workspace, peer, peers, stats, onOpenSession, onCopy 
         </div>
       </div>
 
-      <div className="grid gap-4 p-5 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      <div className="grid grid-cols-1 gap-4 p-5 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         {/* Peer card */}
         <section className="hud-card flex min-h-[160px] flex-col p-4">
           <div className="mb-3 flex items-center gap-2">

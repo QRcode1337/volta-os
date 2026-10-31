@@ -72,7 +72,7 @@ export function StatusView() {
         )}
 
         <Section title="Coverage by root" right={<span className="font-mono text-[10px] text-muted">{totalFiles.toLocaleString()} files · {pct(totalIndexed, totalFiles)}% summarised by Stage A · {pct(totalCloud, totalFiles)}% in iCloud</span>}>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {s.roots.map((r) => (
               <div key={r.id} className={card}>
                 <div className="flex items-baseline gap-2">
@@ -106,7 +106,7 @@ export function StatusView() {
           </p>
         </Section>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Section title="Voltamachine indexer">
             <div className={card}>
               <ul className="space-y-2.5">

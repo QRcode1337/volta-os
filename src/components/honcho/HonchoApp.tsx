@@ -36,6 +36,7 @@ import { SessionsTab } from './SessionsTab';
 import { ConclusionsTab } from './ConclusionsTab';
 import { SearchTab, type SearchScope } from './SearchTab';
 import { AskPanel } from './AskPanel';
+import { MOBILE_MEDIA_QUERY } from '@/components/mobile/constants';
 import type { MessageFocus } from './MessageThread';
 
 type Tab = 'peers' | 'sessions' | 'conclusions' | 'search';
@@ -88,6 +89,10 @@ export function HonchoApp() {
   const [searchScope, setSearchScope] = useState<SearchScope>('workspace');
   const [reloadKey, setReloadKey] = useState(0);
   const [askOpen, setAskOpen] = useState(true);
+  // Phones: the Ask panel is a full-screen sheet there, so start closed instead of covering the app.
+  useEffect(() => {
+    if (window.matchMedia(MOBILE_MEDIA_QUERY).matches) setAskOpen(false);
+  }, []);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const urlInit = useRef<{ w?: string; tab?: string; peer?: string; session?: string } | null>(null);
@@ -471,7 +476,7 @@ export function HonchoApp() {
             </div>
           </div>
         ) : (
-          <div className="relative flex min-h-0 flex-1">
+          <div className="relative flex min-h-0 flex-1 max-md:flex-col max-md:overflow-y-auto">
             <HonchoRail
               status={status}
               queue={queue}
@@ -489,8 +494,8 @@ export function HonchoApp() {
               }}
             />
 
-            <main className="flex min-w-0 flex-1 flex-col">
-              <nav className="flex h-10 shrink-0 items-center gap-1 border-b border-subtle px-3">
+            <main className="flex min-w-0 flex-1 flex-col max-md:min-h-[80dvh] max-md:shrink-0">
+              <nav className="flex h-10 shrink-0 items-center gap-1 border-b border-subtle px-3 max-md:overflow-x-auto max-md:[scrollbar-width:none]">
                 {TABS.map((t, i) => (
                   <button
                     key={t.id}
@@ -577,9 +582,11 @@ export function HonchoApp() {
                 selectedPeer={selectedPeer}
                 session={session}
                 onCopy={copy}
+                onClose={() => setAskOpen(false)}
                 className={cn(
                   !askOpen && 'hidden',
                   'max-xl:absolute max-xl:inset-y-0 max-xl:right-0 max-xl:z-30 max-xl:bg-panel max-xl:shadow-[-16px_0_40px_rgba(0,0,0,0.5)]',
+                  'max-md:fixed max-md:inset-x-0 max-md:top-[calc(3.5rem+env(safe-area-inset-top,0px))] max-md:bottom-[var(--mobile-tabbar-space)] max-md:z-40 max-md:w-full max-md:max-w-none max-md:border-l-0',
                 )}
               />
             )}

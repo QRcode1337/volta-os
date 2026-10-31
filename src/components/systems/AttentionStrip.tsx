@@ -56,7 +56,7 @@ export function AttentionStrip({ report, onCopy, onJump, fix }: { report: System
           {fix.busy === 'agent:*' ? <RefreshCw className="h-3 w-3 robo-spin" /> : <Sparkles className="h-3 w-3" />} Fix all with agent
         </button>
       </div>
-      <ul className="grid gap-2 md:grid-cols-2 2xl:grid-cols-3">
+      <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3">
         {items.map((a) => (
           <Item key={a.id} a={a} onCopy={onCopy} onJump={onJump} fix={fix} />
         ))}

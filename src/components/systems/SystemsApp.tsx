@@ -191,14 +191,14 @@ export function SystemsApp() {
                   {data.services.length} probed in {data.durationMs} ms · fix from Needs attention above
                 </span>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {data.services.map((s) => (
                   <ServiceCard key={s.id} s={s} onCopy={copy} highlighted={highlight === `svc-${s.id}`} />
                 ))}
               </div>
             </section>
 
-            <div className="grid items-start gap-4 lg:grid-cols-2 2xl:grid-cols-[minmax(320px,0.85fr)_1fr_1.2fr]">
+            <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2 2xl:grid-cols-[minmax(320px,0.85fr)_1fr_1.2fr]">
               <MemoryGauge m={data.memory} highlighted={highlight === 'memory'} />
               <ModelsPanel runtimes={data.models} now={now} highlighted={highlight === 'models'} />
               {/* lg: Storage (the tallest) spans both columns under Memory + Models instead of leaving half a row empty. */}

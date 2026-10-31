@@ -61,7 +61,8 @@
     "embedUrl": "http://127.0.0.1:11434",
     "embedModel": "nomic-embed-text",
     "labelTask": "quick",
-    "localTextChars": 1500
+    "localTextChars": 1500,
+    "notesDir": "~/Pieces-Vault/research/pdf-abstracts"
   },
   "launchAgents": ["com.erismorn.voltamachine-batch-index", "com.erismorn.voltamachine-stageb-watch"],
   "batchIndexHold": {

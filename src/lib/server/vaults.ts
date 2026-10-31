@@ -16,8 +16,8 @@ export const PIECES_VAULT_DIR = process.env.PIECES_VAULT_DIR ?? path.join(os.hom
 // /api/vaults, the note list (/api/notes/recent, notes-index) and the brain graph all read the same cached
 // snapshot below, so their totals agree by construction.
 
-/** Folders that are never notes (in addition to anything dot-prefixed). */
-const SKIP_NAMES = new Set(['.obsidian', '.trash', '.git', 'node_modules', '.tools', '_archive']);
+/** Folders that are never notes (in addition to anything dot-prefixed). pdf-abstracts holds ~1.8k generated Research notes: Obsidian and Research read them, the brain graph and recent list do not. */
+const SKIP_NAMES = new Set(['.obsidian', '.trash', '.git', 'node_modules', '.tools', '_archive', 'pdf-abstracts']);
 /** The single skip rule: dot-prefixed files and folders, and the folders above. */
 const isSkippedEntry = (name: string) => name.startsWith('.') || SKIP_NAMES.has(name);
 

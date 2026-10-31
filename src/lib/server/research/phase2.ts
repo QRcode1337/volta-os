@@ -9,6 +9,7 @@ import { redactSecrets } from '../redact';
 import { cached } from '../sources/cache';
 import { requireWindsor, writeAtomic } from '@/lib/server/storage';
 import { loadConfig } from './config';
+import { buildFulltext, loadFulltext, writeVaultNotes, type FulltextCache } from './fulltext';
 import { getLibrary, type Library, type LibRow } from './library';
 
 // Phase 2: an embedding index of the whole library, on Windsor.
@@ -191,7 +192,7 @@ async function localHead(r: LibRow, chars: number): Promise<string> {
   }
 }
 
-async function docTexts(lib: Library, onProgress: (n: number) => void): Promise<{ texts: string[]; withSummary: number; withText: number }> {
+async function docTexts(lib: Library, full: FulltextCache, onProgress: (n: number) => void): Promise<{ texts: string[]; withSummary: number; withText: number }> {
   const chars = loadConfig().phase2.localTextChars;
   const texts = new Array<string>(lib.rows.length);
   let withSummary = 0;
@@ -205,7 +206,7 @@ async function docTexts(lib: Library, onProgress: (n: number) => void): Promise<
         const i = next++;
         const r = lib.rows[i];
         const rec = r.sid ? lib.stageA.bySid.get(r.sid) : undefined;
-        const head = await localHead(r, chars);
+        const head = (await localHead(r, chars)) || full[r.id]?.abstract || '';
         if (rec?.summary) withSummary++;
         if (head) withText++;
         const parts = [
@@ -366,11 +367,23 @@ function bump(patch: Partial<Phase2Job>) {
   S.job = { ...S.job, ...patch };
 }
 
-async function buildIndex(lib: Library): Promise<Index> {
+async function buildIndex(lib: Library, fulltextLimit = 0): Promise<Index> {
   const cfg = loadConfig().phase2;
   const f = files();
+  let full: FulltextCache = await loadFulltext();
+  bump({ stage: 'fulltext', done: 0, total: 0 });
+  try {
+    full = (await buildFulltext(lib, (done, total) => bump({ done, total }), fulltextLimit)).cache;
+  } catch (err) {
+    bump({ error: `PDF full text skipped: ${(err as Error).message}` });
+  }
+  try {
+    await writeVaultNotes(lib, full);
+  } catch (err) {
+    bump({ error: `Vault notes skipped: ${(err as Error).message}` });
+  }
   bump({ stage: 'text', done: 0, total: lib.rows.length });
-  const { texts, withSummary, withText } = await docTexts(lib, (n) => bump({ done: n }));
+  const { texts, withSummary, withText } = await docTexts(lib, full, (n) => bump({ done: n }));
   const hashes = texts.map((t) => createHash('sha1').update(`${cfg.embedModel}\0${t}`).digest('hex').slice(0, 16));
   const ids = lib.rows.map((r) => r.id);
 
@@ -449,7 +462,7 @@ async function labelClusters(lib: Library, idx: Index, cf: ClusterFile): Promise
 }
 
 /** Start a build (or just the naming pass) in the background. A running job is left alone. */
-export async function startPhase2(action: 'build' | 'label'): Promise<Phase2Status> {
+export async function startPhase2(action: 'build' | 'label', fulltextLimit = 0): Promise<Phase2Status> {
   if (S.running) return phase2Status();
   await requireWindsor('the Phase 2 embedding index');
   const lib = await getLibrary({ waitMs: 25_000 });
@@ -468,7 +481,7 @@ export async function startPhase2(action: 'build' | 'label'): Promise<Phase2Stat
       let idx = await loadIndex();
       let cf = idx && (await loadClusters(idx));
       if (action === 'build') {
-        idx = await buildIndex(lib);
+        idx = await buildIndex(lib, fulltextLimit);
         cf = await buildClusters(lib, idx);
       }
       await labelClusters(lib, idx!, cf!);

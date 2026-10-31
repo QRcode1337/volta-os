@@ -37,6 +37,8 @@ export interface Phase2Cfg {
   labelTask: string;
   /** Characters of a local text file (md/txt) added to its embedding text. Placeholders are never read. */
   localTextChars: number;
+  /** Folder in the local Pieces-Vault (never iCloud) that gets one note per PDF abstract; empty = no notes. */
+  notesDir: string;
 }
 export interface ResearchConfig {
   indexPath: string;
@@ -71,7 +73,7 @@ const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object'
 const abs = (p: string) => path.resolve(expandHome(p));
 
 export function loadConfig(): ResearchConfig {
-  return memoByFiles('research-config', [CONFIG_PATH], parseConfig);
+  return memoByFiles('research-config-v2', [CONFIG_PATH], parseConfig);
 }
 
 function parseConfig(): ResearchConfig {
@@ -157,6 +159,7 @@ function parseConfig(): ResearchConfig {
       embedModel: str(p2.embedModel, 'nomic-embed-text'),
       labelTask: str(p2.labelTask, 'quick'),
       localTextChars: typeof p2.localTextChars === 'number' ? Math.max(0, Math.floor(p2.localTextChars)) : 1500,
+      notesDir: str(p2.notesDir) ? abs(str(p2.notesDir)) : '',
     },
     launchAgents: strs(raw.launchAgents),
     batchIndexHold: {

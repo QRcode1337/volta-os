@@ -22,6 +22,7 @@ const card = 'rounded-lg border border-subtle bg-panel p-4';
 
 const STAGE_LABEL: Record<Phase2Status['job']['stage'], string> = {
   idle: 'Idle',
+  fulltext: 'Reading PDFs (OmniRoute abstracts)',
   text: 'Reading titles, summaries and local text',
   embed: 'Embedding',
   cluster: 'Clustering',

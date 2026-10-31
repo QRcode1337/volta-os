@@ -50,6 +50,18 @@
       "maxTokens": 2048,
       "note": "The video combo lists gemini/* (Google AI Studio API key) as members 3 and 4; the volta-os key cannot use that connection, so only Antigravity answers."
     },
+    "vm-stage-a": {
+      "chain": ["vm-stage-a", "local"],
+      "timeoutMs": 90000,
+      "maxTokens": 1024,
+      "note": "Voltamachine Stage A and Volta Research PDF abstracts. Dedicated OmniRoute combo (grok-4.7, gemini flash, gpt-5.6-terra, grok-cli); no Claude, no API-billed provider."
+    },
+    "vm-stage-b": {
+      "chain": ["vm-stage-b", "local"],
+      "timeoutMs": 240000,
+      "maxTokens": 8192,
+      "note": "Voltamachine Stage B cross-document synthesis. Dedicated OmniRoute combo, strongest OAuth models first; no Claude, no API-billed provider."
+    },
     "deep-reasoning": {
       "chain": ["top-tier", "SmartSpread", "local"],
       "timeoutMs": 240000,

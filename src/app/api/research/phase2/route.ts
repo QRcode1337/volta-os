@@ -1,7 +1,7 @@
 // GET  /api/research/phase2                  Phase 2 status (embedder, index, clusters, job progress).
 // GET  /api/research/phase2?view=threads     embedding clusters with their member docs (null until built).
 // GET  /api/research/phase2?related=<rowId>  the nearest documents to one row.
-// POST /api/research/phase2 {action:"build"|"label"}  start a (re)build or only the cluster-naming pass, in the background.
+// POST /api/research/phase2 {action:"build"|"label", limit?}  start a (re)build or only the cluster-naming pass, in the background (limit caps new PDF abstracts this run, for a pilot).
 import { HttpError, route } from '@/lib/server/route-helpers';
 import { phase2Status, related, semanticThreads, startPhase2 } from '@/lib/server/research/phase2';
 
@@ -21,7 +21,7 @@ export const GET = route(
 export const POST = route(
   ({ body }) => {
     if (body.action !== 'build' && body.action !== 'label') throw new HttpError('action must be "build" or "label".', 400);
-    return startPhase2(body.action);
+    return startPhase2(body.action, Math.max(0, Math.floor(Number(body.limit) || 0)));
   },
   { json: true, tag: 'research phase2' },
 );

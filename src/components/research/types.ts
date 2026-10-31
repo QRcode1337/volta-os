@@ -326,7 +326,7 @@ export function bestLabel(variants: Map<string, number>, key: string): string {
 
 export interface Phase2Job {
   running: boolean;
-  stage: 'idle' | 'text' | 'embed' | 'cluster' | 'label' | 'done' | 'error';
+  stage: 'idle' | 'fulltext' | 'text' | 'embed' | 'cluster' | 'label' | 'done' | 'error';
   done: number;
   total: number;
   /** Vectors carried over from the previous index (same id, same text). */

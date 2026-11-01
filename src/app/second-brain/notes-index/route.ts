@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export const GET = route(async () => {
-  const notes = await getRecentNotes(1_000_000);
+  const notes = await getRecentNotes(1_000_000, { includeGenerated: true });
   const vaultIds: string[] = [];
   const vaultIndex = new Map<string, number>();
   const rows = notes.map((n): [number, string, number] => {

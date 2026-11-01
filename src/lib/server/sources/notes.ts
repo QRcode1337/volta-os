@@ -3,7 +3,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import type { BrainGraph, BrainGraphNode, RecentNote } from '@/types/sources';
 import { obsidianUrl } from '@/lib/text';
-import { registeredVaults, vaultSnapshot, type VaultSnapshot } from '../vaults';
+import { isGeneratedNote, registeredVaults, vaultSnapshot, type VaultSnapshot } from '../vaults';
 import type { VaultFile } from '../vault-walk';
 import { isEvicted } from '@/lib/server/icloud';
 import { mapLimit } from '@/lib/server/proc';
@@ -39,9 +39,11 @@ async function allNotes(): Promise<NoteFile[]> {
 const titleOf = (rel: string) => path.basename(rel, '.md');
 const folderOf = (rel: string) => (rel.includes('/') ? rel.split('/')[0] : '(root)');
 
-export async function getRecentNotes(limit = 36): Promise<RecentNote[]> {
+/** Most recently edited notes. Generated notes (isGeneratedNote) are left out unless `includeGenerated` (the search index). */
+export async function getRecentNotes(limit = 36, { includeGenerated = false } = {}): Promise<RecentNote[]> {
   const notes = await allNotes();
-  return [...notes]
+  return notes
+    .filter((n) => includeGenerated || !isGeneratedNote(n.rel))
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
     .slice(0, limit)
     .map((n) => ({

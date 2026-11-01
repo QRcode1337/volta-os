@@ -65,8 +65,9 @@ async function loadCore(): Promise<Core> {
     claudeMem(ctx, cmem),
     ltmDaemon(ctx, ltm),
     ollama(ctx, oll, honchoDeps),
-    llmsterSvc,
-    lmsSvc,
+    // LM Studio and llmster are kept off (Ollama serves every local model, to keep CPU down), so they only show up
+    // when one is running again.
+    ...[llmsterSvc, lmsSvc].filter((s) => s.status !== 'down'),
     volta(ctx, self, VOLTA_PORT),
   ];
 

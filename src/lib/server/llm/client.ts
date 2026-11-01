@@ -2,7 +2,7 @@ import 'server-only';
 import { redactSecrets } from '../redact';
 import { LlmError, type Answerer, type ChatRequest, type ChatResult, type ChatUsage, type StreamEvent } from './types';
 
-// Minimal OpenAI-compatible chat client (OmniRoute at :20128/v1, LM Studio at :1234/v1).
+// Minimal OpenAI-compatible chat client (OmniRoute at :20128/v1, Ollama at :11434/v1).
 //   POST {baseUrl}/chat/completions   Authorization: Bearer <key>   { model, messages, max_tokens, stream }
 // Every failure is an LlmError whose message is redacted (secret masker + the literal key) and short; the
 // request body (prompts) and the key are never part of an error or a log line.

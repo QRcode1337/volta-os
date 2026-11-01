@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "_about": "VOLTA task -> OmniRoute combo routing. The key in OMNIROUTE_API_KEY ('volta-os') is scoped inside OmniRoute to OAuth subscription connections plus the free/local ones, so an API-billed provider (xai, gemini, nous-research, ...) can never be selected by these calls even when a combo lists it. A task tries its chain in order (first failure moves to the next); 'local' (LM Studio) is always the last resort and is appended when a chain does not list it.",
+  "_about": "VOLTA task -> OmniRoute combo routing. The key in OMNIROUTE_API_KEY ('volta-os') is scoped inside OmniRoute to OAuth subscription connections plus the free/local ones, so an API-billed provider (xai, gemini, nous-research, ...) can never be selected by these calls even when a combo lists it. A task tries its chain in order (first failure moves to the next); 'local' (Ollama) is always the last resort and is appended when a chain does not list it.",
   "gateway": {
     "baseUrl": "http://127.0.0.1:20128/v1",
     "keyEnv": "OMNIROUTE_API_KEY",
     "baseUrlEnv": "OMNIROUTE_BASE_URL"
   },
   "local": {
-    "baseUrl": "http://127.0.0.1:1234/v1",
-    "model": "qwen/qwen3.5-9b",
+    "baseUrl": "http://127.0.0.1:11434/v1",
+    "model": "qwen3.5:latest",
     "timeoutMs": 150000,
     "minMaxTokens": 1024
   },

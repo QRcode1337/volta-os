@@ -22,6 +22,8 @@ export interface FeedQuery {
   q: string;
   needsAction: boolean;
   unread: boolean;
+  /** false shows every run instead of folding repeats. */
+  merge: boolean;
 }
 
 export function listUrl(f: FeedQuery, opts: { cursor?: string | null; limit?: number; refresh?: boolean } = {}): string {
@@ -30,6 +32,7 @@ export function listUrl(f: FeedQuery, opts: { cursor?: string | null; limit?: nu
   if (f.q.trim()) p.set('q', f.q.trim());
   if (f.needsAction) p.set('needsAction', '1');
   if (f.unread) p.set('unread', '1');
+  if (!f.merge) p.set('merge', '0');
   if (opts.cursor) p.set('cursor', opts.cursor);
   if (opts.limit) p.set('limit', String(opts.limit));
   if (opts.refresh) p.set('refresh', '1');

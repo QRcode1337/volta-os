@@ -153,7 +153,7 @@ const claudeCli: Backend = async (req) => {
 
 // ───────────── backend: OmniRoute gateway (src/lib/server/llm, config/llm-routes.json) ─────────────
 
-/** Task→combo routing lives in config/llm-routes.json; the helper itself ends in local LM Studio. No live web search. */
+/** Task→combo routing lives in config/llm-routes.json; the helper itself ends in local Ollama. No live web search. */
 const omniRoute = (task: LlmTask): Backend => async (req) => {
   const r = await omniComplete({
     task,

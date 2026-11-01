@@ -1,5 +1,5 @@
 import 'server-only';
-// VOLTA's LLM helper: route a task through the OmniRoute gateway (config/llm-routes.json), local LM Studio last.
+// VOLTA's LLM helper: route a task through the OmniRoute gateway (config/llm-routes.json), local Ollama last.
 //   import { complete } from '@/lib/server/llm';
 //   const r = await complete({ task: 'quick', messages: [{ role: 'user', content: '…' }] });
 export { complete, completeStream, llmHttp, TaskError, validateMessages } from './router';

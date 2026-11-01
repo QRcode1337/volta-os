@@ -32,7 +32,17 @@ export interface FeedItem {
   triageConfidence: number | null;
 }
 
-export type FeedListItem = Omit<FeedItem, 'body'> & { excerpt: string };
+export type FeedListItem = Omit<FeedItem, 'body'> & {
+  excerpt: string;
+  /** How many times this came up (1 when it did not repeat or merging is off). */
+  repeat: number;
+  /** Oldest occurrence in the group. */
+  firstAt: string;
+  /** Every item folded into this row; read marks apply to all of them. */
+  memberIds: string[];
+  /** Source labels that reported it. */
+  from: string[];
+};
 
 export interface FeedSource {
   id: string;
@@ -62,6 +72,10 @@ export interface FeedListResponse {
   jev: FeedJevState;
   readStore: { persisted: boolean; path: string; reason?: string };
   refreshedAt: string;
+  /** Repeats folded into one row (the default); off shows every run. */
+  merged: boolean;
+  /** Task-list updates left out of the merged view because Tasks already shows them. */
+  hiddenTaskUpdates: number;
   /** Sources that could not be read this time (the rest of the feed still loads). */
   warnings: string[];
 }

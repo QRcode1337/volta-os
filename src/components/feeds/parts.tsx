@@ -41,7 +41,14 @@ export const ItemRow = memo(function ItemRow({ it, active, now, onSelect }: { it
         <span className="flex items-center gap-2">
           {!it.read ? <CircleDot className="h-3 w-3 shrink-0 text-orange" aria-label="Unread" /> : <span className="h-3 w-3 shrink-0" />}
           <StatusDot status={it.status} />
-          <span className="min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.06em] text-muted">{it.sourceLabel}</span>
+          <span className="min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.06em] text-muted" title={it.from.join(', ')}>
+            {it.from.join(' + ')}
+          </span>
+          {it.repeat > 1 && (
+            <span className="shrink-0 rounded-full bg-orange/15 px-1.5 font-mono text-[9.5px] font-semibold text-orange" title={`Came up ${it.repeat} times since ${new Date(it.firstAt).toLocaleDateString()}`}>
+              x{it.repeat}
+            </span>
+          )}
           <span className="ml-auto shrink-0 font-mono text-[10px] text-muted" title={new Date(it.ranAt).toLocaleString()}>
             {ago(it.ranAt, now)}
           </span>

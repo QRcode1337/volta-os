@@ -1,6 +1,7 @@
 'use client';
 // VOLTA Feeds: a reader for what the agent cron jobs produced (OpenClaw/ErisMorn jobs, memory logs, Hermes briefings).
-// Left: sources with unread counts. Centre: item list with triage badges. Right: the rendered item.
+// Left: sources with unread counts. Centre: one list where repeats are folded into a single row with an xN count
+// (the server merges them; "Every run" turns that off). Right: the rendered item.
 // Data comes from /api/feeds (read-only over the job stores, masked server-side); "read" marks persist on the Windsor drive.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, Check, CheckCheck, Copy, Inbox, Loader2, RefreshCw, Search, Sparkles, X } from 'lucide-react';
@@ -28,6 +29,7 @@ export function FeedsApp() {
   const [source, setSource] = useState<string | null>(null);
   const [needsAction, setNeedsAction] = useState(false);
   const [unreadOnly, setUnreadOnly] = useState(false);
+  const [everyRun, setEveryRun] = useState(false);
   const [items, setItems] = useState<FeedListItem[]>([]);
   const [meta, setMeta] = useState<Omit<FeedListResponse, 'items'> | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -44,7 +46,7 @@ export function FeedsApp() {
   const itemsRef = useRef<FeedListItem[]>([]);
   itemsRef.current = items;
 
-  const query = useMemo<FeedQuery>(() => ({ source, q, needsAction, unread: unreadOnly }), [source, q, needsAction, unreadOnly]);
+  const query = useMemo<FeedQuery>(() => ({ source, q, needsAction, unread: unreadOnly, merge: !everyRun }), [source, q, needsAction, unreadOnly, everyRun]);
   const queryRef = useRef(query);
   queryRef.current = query;
 
@@ -158,6 +160,8 @@ export function FeedsApp() {
       const idSet = new Set(ids);
       const touched = itemsRef.current.filter((i) => idSet.has(i.id) && i.read !== read);
       if (!touched.length) return;
+      // a merged row stands for several items: mark them all
+      const memberIds = [...new Set(touched.flatMap((t) => t.memberIds))];
       const delta = read ? -1 : 1;
       const patchMeta = (sign: number) =>
         setMeta((m) =>
@@ -179,7 +183,7 @@ export function FeedsApp() {
       patchMeta(1);
       setDetail((d) => (d && idSet.has(d.id) ? { ...d, read } : d));
       try {
-        const res = await postRead({ ids, read });
+        const res = await postRead({ ids: memberIds, read });
         if (!res.persisted && !warnedPersist.current) {
           warnedPersist.current = true;
           push(res.reason ?? 'Read marks could not be saved to the Windsor drive.', { tone: 'error', ttl: 9000 });
@@ -384,6 +388,9 @@ export function FeedsApp() {
               <Chip active={unreadOnly} onClick={() => setUnreadOnly((v) => !v)} tone="orange">
                 Unread
               </Chip>
+              <Chip active={everyRun} onClick={() => setEveryRun((v) => !v)} tone="orange">
+                Every run
+              </Chip>
               {source && activeSource && (
                 <button type="button" onClick={() => setSource(null)} className="inline-flex h-8 items-center gap-1 rounded-full border border-orange bg-orange/10 px-3 text-[12px] font-medium text-paper">
                   {activeSource.label} <X className="h-3 w-3" />
@@ -402,6 +409,15 @@ export function FeedsApp() {
             <p className="font-mono text-[10px] uppercase tracking-[0.05em] text-muted">
               {meta ? `${meta.matched} item${meta.matched === 1 ? '' : 's'}` : 'Loading'}
               {q && ` matching "${q}"`}
+              {meta?.merged && ' · repeats folded'}
+              {meta?.merged && meta.hiddenTaskUpdates > 0 && (
+                <>
+                  {' · '}
+                  <a href="/apps/tasks" className="text-secondary underline-offset-2 hover:text-paper hover:underline" title="Action Capture / Orchestrate / Digest updates are left out here because Tasks shows the same items. Failed runs still show.">
+                    {meta.hiddenTaskUpdates} task updates in Tasks
+                  </a>
+                </>
+              )}
             </p>
           </div>
 
@@ -451,6 +467,7 @@ export function FeedsApp() {
           {detail && (
             <Reader
               item={detail}
+              row={items.find((i) => i.id === detail.id)}
               onBack={() => setSelectedId(null)}
               onToggleRead={() => void setRead([detail.id], !detail.read)}
               onCopy={async () => push((await copyText(detail.link ?? '')) ? 'Path copied.' : 'Copy failed.', { tone: 'success' })}
@@ -485,7 +502,7 @@ function Chip({ active, onClick, tone, children }: { active: boolean; onClick: (
   );
 }
 
-function Reader({ item, onBack, onToggleRead, onCopy }: { item: FeedItem; onBack: () => void; onToggleRead: () => void; onCopy: () => void }) {
+function Reader({ item, row, onBack, onToggleRead, onCopy }: { item: FeedItem; row?: FeedListItem; onBack: () => void; onToggleRead: () => void; onCopy: () => void }) {
   const dur = fmtDuration(item.durationMs);
   return (
     <div className="mx-auto max-w-3xl px-6 pb-24 pt-5">
@@ -510,6 +527,20 @@ function Reader({ item, onBack, onToggleRead, onCopy }: { item: FeedItem; onBack
       <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-[11px] text-muted">
         <dt>Ran</dt>
         <dd className="text-secondary">{fullDate(item.ranAt)}</dd>
+        {row && row.repeat > 1 && (
+          <>
+            <dt>Repeats</dt>
+            <dd className="text-orange">
+              x{row.repeat} since {fullDate(row.firstAt)}
+            </dd>
+          </>
+        )}
+        {row && row.from.length > 1 && (
+          <>
+            <dt>Also in</dt>
+            <dd className="text-secondary">{row.from.slice(1).join(', ')}</dd>
+          </>
+        )}
         <dt>Job</dt>
         <dd className="truncate text-secondary">
           {item.job}

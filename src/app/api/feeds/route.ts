@@ -4,7 +4,7 @@ import { listFeeds } from '@/lib/server/feeds';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-/** GET /api/feeds?source=&q=&needsAction=1&unread=1&cursor=&limit=&refresh=1  (localhost only; every string is secret-masked) */
+/** GET /api/feeds?source=&q=&needsAction=1&unread=1&cursor=&limit=&refresh=1&merge=0  (localhost only; every string is secret-masked) */
 export const GET = route(async ({ url }) => {
   const p = url.searchParams;
   const limit = Number(p.get('limit'));
@@ -16,5 +16,6 @@ export const GET = route(async ({ url }) => {
     cursor: p.get('cursor') || undefined,
     limit: Number.isFinite(limit) && limit > 0 ? limit : undefined,
     refresh: p.get('refresh') === '1',
+    merge: p.get('merge') !== '0',
   });
 });

@@ -2,6 +2,7 @@ import 'server-only';
 import { cached } from '../sources/cache';
 import { REFRESH_TTL_MS } from './config';
 import { loadFileItems } from './files';
+import { mergeFeed } from './merge';
 import { loadCronRuns } from './openclaw';
 import { labelOf, pruneOld, readState, triageState } from './store';
 import { jevState, scheduleTriage } from './triage';
@@ -67,8 +68,15 @@ async function overlay(s: Store): Promise<FeedItem[]> {
   return out;
 }
 
-const cursorOf = (i: FeedItem) => `${i.ranAt}|${i.id}`;
-const toListItem = ({ body, ...rest }: FeedItem): FeedListItem => ({ ...rest, excerpt: excerptOf(body) });
+const cursorOf = (i: { ranAt: string; id: string }) => `${i.ranAt}|${i.id}`;
+const toListItem = ({ body, ...rest }: FeedItem, m?: { repeat: number; firstAt: string; memberIds: string[]; from: string[] }): FeedListItem => ({
+  ...rest,
+  excerpt: excerptOf(body),
+  repeat: m?.repeat ?? 1,
+  firstAt: m?.firstAt ?? rest.ranAt,
+  memberIds: m?.memberIds ?? [rest.id],
+  from: m?.from ?? [rest.sourceLabel],
+});
 
 export interface ListQuery {
   source?: string;
@@ -78,6 +86,8 @@ export interface ListQuery {
   cursor?: string;
   limit?: number;
   refresh?: boolean;
+  /** Fold repeats into one row with a count (default on). */
+  merge?: boolean;
 }
 
 export async function listFeeds(query: ListQuery): Promise<FeedListResponse> {
@@ -98,24 +108,36 @@ export async function listFeeds(query: ListQuery): Promise<FeedListResponse> {
   const q = query.q?.trim().toLowerCase();
   let rows = all;
   if (query.source) rows = rows.filter((i) => i.source === query.source);
-  if (query.needsAction) rows = rows.filter((i) => i.triage === 'needs-action');
-  if (query.unread) rows = rows.filter((i) => !i.read);
   if (q) rows = rows.filter((i) => `${i.title}\n${i.body}\n${i.job}\n${i.sourceLabel}`.toLowerCase().includes(q));
+
+  const merge = query.merge !== false;
+  // Filters that depend on read/triage run after merging, on the merged row's state.
+  const { rows: merged, hiddenTaskUpdates } = merge ? mergeFeed(rows) : { rows: rows.map((item) => ({ item, repeat: 1, firstAt: item.ranAt, memberIds: [item.id], from: [item.sourceLabel] })), hiddenTaskUpdates: 0 };
+  const visible = merge ? (rows === all ? merged : mergeFeed(all).rows).map((r) => r.item) : all;
+  let list = merged;
+  if (query.needsAction) list = list.filter((r) => r.item.triage === 'needs-action');
+  if (query.unread) list = list.filter((r) => !r.item.read);
 
   const limit = Math.min(Math.max(query.limit ?? 40, 1), 100);
   let start = 0;
   if (query.cursor) {
-    const idx = rows.findIndex((i) => cursorOf(i) < query.cursor!);
-    start = idx < 0 ? rows.length : idx;
+    const idx = list.findIndex((r) => cursorOf(r.item) < query.cursor!);
+    start = idx < 0 ? list.length : idx;
   }
-  const page = rows.slice(start, start + limit);
+  const page = list.slice(start, start + limit);
   const readMeta = readState();
   return {
-    items: page.map(toListItem),
-    nextCursor: start + limit < rows.length && page.length ? cursorOf(page[page.length - 1]) : null,
-    matched: rows.length,
+    items: page.map((r) => toListItem(r.item, r)),
+    nextCursor: start + limit < list.length && page.length ? cursorOf(page[page.length - 1].item) : null,
+    matched: list.length,
     sources: srcList,
-    totals: { total: all.length, unread: all.filter((i) => !i.read).length, needsAction: all.filter((i) => !i.read && i.triage === 'needs-action').length },
+    totals: {
+      total: visible.length,
+      unread: visible.filter((i) => !i.read).length,
+      needsAction: visible.filter((i) => !i.read && i.triage === 'needs-action').length,
+    },
+    merged: merge,
+    hiddenTaskUpdates,
     jev: await jevState(all),
     readStore: { persisted: readMeta.persisted, path: readMeta.file, reason: readMeta.reason },
     refreshedAt: new Date(s.refreshedAt).toISOString(),

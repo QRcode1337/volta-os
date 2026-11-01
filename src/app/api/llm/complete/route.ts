@@ -8,7 +8,7 @@ export const maxDuration = 600;
 
 /**
  * POST /api/llm/complete  { task, messages: [{role, content}], maxTokens?, temperature?, timeoutMs?, stream? }
- * Routes the task through OmniRoute combos (config/llm-routes.json) with LM Studio as the last resort.
+ * Routes the task through OmniRoute combos (config/llm-routes.json) with local Ollama as the last resort.
  * JSON reply: { task, text, route: {target, via, model, provider, …}, usage, latencyMs, webGrounded, attempts }.
  * stream:true replies as Server-Sent Events: `meta`, `delta`*, `done` (or a final `error`) as JSON data lines.
  */

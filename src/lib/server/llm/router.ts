@@ -17,7 +17,7 @@ import {
 } from './types';
 
 // Task router. A VOLTA task (config/llm-routes.json) maps to a chain of OmniRoute combos; the first target that
-// answers wins and the local LM Studio model is the last resort. Selecting a combo = sending its name as the
+// answers wins and the local Ollama model is the last resort. Selecting a combo = sending its name as the
 // OpenAI `model`. OmniRoute does the per-member fallback inside a combo; this layer only moves on when the whole
 // combo failed (or timed out / answered empty).
 
@@ -194,7 +194,7 @@ export async function complete(req: CompleteRequest): Promise<CompleteResult> {
       return {
         task: p.task,
         text: res.text,
-        route: { target, via: r.via, model: r.via === 'local' ? (res.model ?? p.cfg.local.model) : res.model, provider: r.via === 'local' ? 'lm-studio' : res.provider, connection: res.connection, requestId: res.requestId, fallbackAttempts: res.fallbackAttempts },
+        route: { target, via: r.via, model: r.via === 'local' ? (res.model ?? p.cfg.local.model) : res.model, provider: r.via === 'local' ? 'ollama-local' : res.provider, connection: res.connection, requestId: res.requestId, fallbackAttempts: res.fallbackAttempts },
         usage: res.usage,
         finishReason: res.finishReason,
         latencyMs: Date.now() - t0,
@@ -250,7 +250,7 @@ export async function* completeStream(req: CompleteRequest): AsyncGenerator<Comp
             ttfbMs: ev.ttfbMs,
             webGrounded: p.route.liveWeb === true,
             model: r.via === 'local' ? (ev.model ?? p.cfg.local.model) : ev.model,
-            provider: r.via === 'local' ? 'lm-studio' : ev.provider,
+            provider: r.via === 'local' ? 'ollama-local' : ev.provider,
             connection: ev.connection,
             requestId: ev.requestId,
             fallbackAttempts: ev.fallbackAttempts,

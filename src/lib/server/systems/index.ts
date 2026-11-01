@@ -71,7 +71,9 @@ async function loadCore(): Promise<Core> {
     volta(ctx, self, VOLTA_PORT),
   ];
 
-  const models = [oll.runtime, llm.runtime, lms.runtime];
+  // Same for the model list: an LM Studio runtime appears only while it is running, and llmster only when it (not
+  // the LM Studio app) owns :1234.
+  const models = [oll.runtime, ...[llm.runtime, lms.runtime].filter((r) => r.status !== 'down' && (r.id !== 'llmster' || r.servedBy === 'llmster'))];
   const counts = { up: 0, degraded: 0, down: 0, unknown: 0 };
   for (const s of services) counts[s.status]++;
 

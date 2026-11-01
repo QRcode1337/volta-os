@@ -531,7 +531,8 @@ export function ollama(ctx: Ctx, p: RuntimeProbe, deps: HonchoLlmDeps): ServiceC
 
 export function lmStudioService(ctx: Ctx, p: RuntimeProbe, sibling: RuntimeProbe, deps: HonchoLlmDeps): ServiceCheck {
   const isLlmster = p.runtime.id === 'llmster';
-  const s = base(p.runtime.id, isLlmster ? 'llmster (headless LM Studio)' : 'LM Studio API', 'local models', isLlmster);
+  // Optional: Ollama serves every local model, so LM Studio / llmster being off is never a fault.
+  const s = base(p.runtime.id, isLlmster ? 'llmster (headless LM Studio)' : 'LM Studio API', 'local models', false);
   if (isLlmster) s.launchAgents = agents(ctx, 'llmster');
   const pathName = p.runtime.endpoint?.replace(/^[^/]+/, '') ?? '/v1/models';
   http(s, ctx, p.runtime.port, pathName, p.http);

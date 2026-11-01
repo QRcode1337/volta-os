@@ -39,8 +39,12 @@ const RETRY_DELAYS_MS = [1_500, 3_000];
  * Debounced (200 ms) search. Every new query aborts the request in flight, so a stale answer never lands.
  * When the server says a source was still warming (`retry`), asks again up to twice.
  */
-export function useSearch(query: string, opts: { limit: number; enabled?: boolean; debounceMs?: number }): SearchState {
+export function useSearch(
+  query: string,
+  opts: { limit: number; enabled?: boolean; debounceMs?: number; sources?: readonly SearchSourceId[] },
+): SearchState {
   const { limit, enabled = true, debounceMs = 200 } = opts;
+  const sources = opts.sources?.join(',') ?? '';
   const [state, setState] = useState<SearchState>({ data: null, loading: false, error: null });
 
   useEffect(() => {
@@ -53,7 +57,7 @@ export function useSearch(query: string, opts: { limit: number; enabled?: boolea
     let timer: ReturnType<typeof setTimeout> | undefined;
     setState((s) => ({ ...s, loading: true, error: null }));
     const run = (attempt: number) => {
-      fetch(`/api/search?${new URLSearchParams({ q, limit: String(limit) })}`, { signal: ac.signal, cache: 'no-store' })
+      fetch(`/api/search?${new URLSearchParams({ q, limit: String(limit), ...(sources ? { sources } : {}) })}`, { signal: ac.signal, cache: 'no-store' })
         .then(async (r) => {
           const body = (await r.json().catch(() => ({}))) as SearchResponse & { error?: string };
           if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
@@ -75,7 +79,7 @@ export function useSearch(query: string, opts: { limit: number; enabled?: boolea
       clearTimeout(timer);
       ac.abort();
     };
-  }, [query, limit, enabled, debounceMs]);
+  }, [query, limit, enabled, debounceMs, sources]);
 
   return state;
 }

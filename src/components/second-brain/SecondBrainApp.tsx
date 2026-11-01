@@ -16,6 +16,7 @@ import { TimelineView } from './TimelineView';
 import { RoutinesAnalyticsView } from './RoutinesAnalyticsView';
 import { SkillsAnalyticsView } from './SkillsAnalyticsView';
 import { ApplicationsView } from './ApplicationsView';
+import { AgentMemoryDock, MemorySourcesRail, useMemoryToggles } from './MemoryPanels';
 import { VIEWS, isViewId, type ViewId } from './shared';
 import { matchGraphNodes, noteMatches, relTime, stubNode, vaultColor, type GraphModel, type GraphNode } from './graph-model';
 import { useBrainGraph, useElapsed, useLastIndex, useLtmStatus, useNotesIndex, useNow, useVaults, type NotesIndex } from './graph-data';
@@ -334,6 +335,7 @@ export function SecondBrainApp() {
     return () => window.removeEventListener('keydown', onKey);
   }, [switchView]);
 
+  const memoryToggles = useMemoryToggles();
   const showInspector = !!selected && SEARCH_VIEWS.includes(view);
   const insetLeft = showInspector ? INSPECTOR_INSET.left : 0;
   const insetRight = showInspector ? INSPECTOR_INSET.right : 0;
@@ -560,57 +562,66 @@ export function SecondBrainApp() {
 
       {/* ── Active view ── */}
       <main className="relative min-h-0 flex-1">
-        {(view === 'orb' || view === 'map') &&
-          (model ? (
-            model.nodes.length > 0 ? (
-              view === 'orb' ? (
-                <Orb3DView
-                  model={model}
-                  matches={matches}
-                  selectedId={selectedId}
-                  onSelect={selectNode}
-                  insetLeft={insetLeft}
-                  insetRight={insetRight}
-                  focusId={pendingFocus && model.byId.has(pendingFocus) ? pendingFocus : null}
-                  onFocused={clearFocus}
-                />
-              ) : (
-                <Map2DView
-                  model={model}
-                  matches={matches}
-                  selectedId={selectedId}
-                  onSelect={selectNode}
-                  insetLeft={insetLeft}
-                  insetRight={insetRight}
-                  focusId={pendingFocus && model.byId.has(pendingFocus) ? pendingFocus : null}
-                  onFocused={clearFocus}
-                />
-              )
-            ) : (
-              <GraphNotice
-                icon={<HardDrive size={18} />}
-                title="No notes found"
-                body="None of the Obsidian vaults registered on this Mac contain Markdown notes VOLTA can read. Open a vault in Obsidian and reload."
-              />
-            )
-          ) : graph.status === 'error' ? (
-            <GraphNotice
-              icon={<TriangleAlert size={18} />}
-              title="Couldn't build the vault graph"
-              body={`/api/brain/graph failed: ${graph.message}`}
-              action={
-                <button
-                  type="button"
-                  onClick={retry}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-orange bg-orange px-3.5 font-mono text-[10.5px] font-semibold text-obsidian hover:brightness-110"
-                >
-                  <RotateCw size={12} /> RETRY
-                </button>
-              }
-            />
-          ) : (
-            <GraphLoading elapsed={elapsed} vaults={vaultList} lastNotes={lastIndex?.notes ?? null} lastVaults={lastIndex?.vaults ?? null} />
-          ))}
+        {(view === 'orb' || view === 'map') && (
+          <div className="flex h-full flex-col">
+            <div className="flex min-h-0 flex-1">
+              <div className="relative min-w-0 flex-1">
+              {model ? (
+                  model.nodes.length > 0 ? (
+                    view === 'orb' ? (
+                      <Orb3DView
+                        model={model}
+                        matches={matches}
+                        selectedId={selectedId}
+                        onSelect={selectNode}
+                        insetLeft={insetLeft}
+                        insetRight={insetRight}
+                        focusId={pendingFocus && model.byId.has(pendingFocus) ? pendingFocus : null}
+                        onFocused={clearFocus}
+                      />
+                    ) : (
+                      <Map2DView
+                        model={model}
+                        matches={matches}
+                        selectedId={selectedId}
+                        onSelect={selectNode}
+                        insetLeft={insetLeft}
+                        insetRight={insetRight}
+                        focusId={pendingFocus && model.byId.has(pendingFocus) ? pendingFocus : null}
+                        onFocused={clearFocus}
+                      />
+                    )
+                  ) : (
+                    <GraphNotice
+                      icon={<HardDrive size={18} />}
+                      title="No notes found"
+                      body="None of the Obsidian vaults registered on this Mac contain Markdown notes VOLTA can read. Open a vault in Obsidian and reload."
+                    />
+                  )
+                ) : graph.status === 'error' ? (
+                  <GraphNotice
+                    icon={<TriangleAlert size={18} />}
+                    title="Couldn't build the vault graph"
+                    body={`/api/brain/graph failed: ${graph.message}`}
+                    action={
+                      <button
+                        type="button"
+                        onClick={retry}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-orange bg-orange px-3.5 font-mono text-[10.5px] font-semibold text-obsidian hover:brightness-110"
+                      >
+                        <RotateCw size={12} /> RETRY
+                      </button>
+                    }
+                  />
+                ) : (
+                  <GraphLoading elapsed={elapsed} vaults={vaultList} lastNotes={lastIndex?.notes ?? null} lastVaults={lastIndex?.vaults ?? null} />
+                )}
+              </div>
+              <MemorySourcesRail toggles={memoryToggles} nowMs={nowMs} onRefreshAll={retry} className={cn('max-lg:hidden', showInspector && 'hidden')} />
+            </div>
+            <AgentMemoryDock toggles={memoryToggles} nowMs={nowMs} />
+          </div>
+        )}
         {view === 'timeline' && <TimelineView nodes={NO_NODES} query={query} onSelectNode={selectNode} ltm={ltm} />}
         {view === 'routines' && (
           <RoutinesAnalyticsView

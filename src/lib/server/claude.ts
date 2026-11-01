@@ -8,9 +8,9 @@ import { logUsage } from './llm/usage-log';
 import { redactSecrets } from './redact';
 
 // Every way VOLTA hands work to Claude Code:
-// - handoffToClaude: an *interactive* session in a new Terminal window on the Mac (Systems "Fix with agent", Tasks
-//   "Solve with agent"), with the shared ground rules appended and every handoff logged. Your normal permission
-//   prompts apply, so nothing runs unattended.
+// - handoffToClaude: an *interactive* `/goal` session in a new Ghostty window on the Mac (Terminal if Ghostty is
+//   missing) for Systems "Fix with agent", Tasks "Solve with agent", with the shared ground rules appended and every
+//   handoff logged. Your permission mode still applies.
 // - runClaudeCli: a headless `claude -p` call (podcast fallback, skills/run live mode) on the Max plan, logged to the
 //   LLM usage log like the gateway calls.
 
@@ -19,6 +19,8 @@ const STATE_DIR = path.join(os.homedir(), 'Library', 'Application Support', 'VOL
 const PROMPTS_DIR = path.join(STATE_DIR, 'agent-prompts');
 const HANDOFF_LOG = path.join(STATE_DIR, 'agent-log.jsonl');
 const OSASCRIPT = '/usr/bin/osascript';
+const OPEN = '/usr/bin/open';
+const GHOSTTY = '/Applications/Ghostty.app';
 const KEEP = 50;
 
 const stamp = () => new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '').replace('T', '-');
@@ -45,9 +47,13 @@ function openClaudeInTerminal(prompt: string, opts: { cwd: string; tag: string; 
   // so non-ASCII paths in the command survive.
   const flags = (opts.flags ?? []).map((f) => `${shQuote(f)} `).join('');
   const shell = `cd ${shQuote(opts.cwd)} && claude ${flags}"$(cat ${shQuote(file)})"`;
-  const args = ['-e', `tell application "Terminal" to do script ${asString(shell)}`, '-e', 'tell application "Terminal" to activate'];
+  // Ghostty when installed (an interactive login zsh so mise's claude is on PATH; the shell stays open after claude
+  // exits, like Terminal's do script). Ghostty ignores --working-directory here, hence the `cd` in `shell`.
+  const [cmd, args] = fs.existsSync(GHOSTTY)
+    ? [OPEN, ['-na', GHOSTTY, '--args', '-e', '/bin/zsh', '-lic', `${shell}; exec /bin/zsh -l`]]
+    : [OSASCRIPT, ['-e', `tell application "Terminal" to do script ${asString(shell)}`, '-e', 'tell application "Terminal" to activate']];
   return new Promise((resolve) => {
-    execFile(OSASCRIPT, args, { timeout: 10_000 }, (err, _stdout, stderr) => {
+    execFile(cmd, args, { timeout: 10_000 }, (err, _stdout, stderr) => {
       resolve(err ? { opened: false, error: redactSecrets((stderr || err.message).trim()).slice(0, 300) } : { opened: true, error: null });
     });
   });
@@ -61,7 +67,7 @@ export interface Handoff {
 
 /**
  * Build a Claude Code prompt from an item-specific `body` plus the shared ground rules (and any task-specific `rules`).
- * With `open`, also start it in Terminal (only possible on the Mac itself). Every opened handoff is logged.
+ * With `open`, also start it in Ghostty (only possible on the Mac itself). Every opened handoff is logged.
  */
 export async function handoffToClaude(opts: {
   tag: string;
@@ -74,7 +80,8 @@ export async function handoffToClaude(opts: {
   /** Extra fields for the handoff log (item ids, titles). */
   log?: Record<string, unknown>;
 }): Promise<Handoff> {
-  const prompt = `${opts.body.trim()}\n\n${groundRules(opts.rules)}`;
+  // `/goal` makes the session keep working toward the brief instead of stopping to ask after each step.
+  const prompt = `/goal ${opts.body.trim()}\n\n${groundRules(opts.rules)}`;
   if (!opts.open) return { prompt, opened: false, error: null };
   const res = await openClaudeInTerminal(prompt, { cwd: opts.cwd, tag: opts.tag, flags: opts.flags });
   try {

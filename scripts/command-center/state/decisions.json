@@ -34,5 +34,17 @@
   "area": "VOLTA",
   "since": "2026-10-28",
   "source": "Priorities"
+ },
+ {
+  "item": "Allow cron Run-now/Pause in VOLTA?",
+  "area": "VOLTA",
+  "since": "2026-10-28",
+  "source": "Priorities"
+ },
+ {
+  "item": "Should Editor lessons write to live ~/.claude/skills?",
+  "area": "VOLTA",
+  "since": "2026-10-28",
+  "source": "Priorities"
  }
 ]

@@ -19,9 +19,10 @@ Handle conflicts to confirm: Notion lists TikTok "volta.ai" and Instagram voltam
 ## The Strangest Times
 - **Concept:** cinematic essays on UAP, ancient mysteries, Gnostic texts and AI — "the real files behind the strangest stories", one named document per video. [Notion WhoAmI, OMNI_VEO plan]
 - **Library:** 12 long episodes in the Notion archive (e.g. Sumerian AI, CIA Mars Gateway, Navy Warp Patents, Aliens and Angels, Five Ancient Temples). [1 src: Notion TST README, 2026-09-18]
+- **Done:** TST-04 *The Rulers* ("The Voice That Told God He Was Mistaken", 15:26, Volta voice) uploaded and scheduled for 2026-11-02 11:00 ET; URL not yet recorded. [Notion Video Board, 2026-11-02]
 - **In production:** VIDEO_1 — 18 storyboard frames done, Patrick recording narration himself, one clip licence to clear. [Notion Ledger, claude-mem]
 - **Shorts:** Shorts Batch 1 (15 topics, 20 scripts) [1 src: Notion]; TikTok "Four Files, One Sky" 74 s trailer approved (2026-10-20, reconfirmed 2026-10-30), not built yet; plan at ~/Documents/PROJECTS/tiktok-four-files/PLAN.md. [Pieces, claude-mem]
-- **Series ideas:** Internet Lore (Ep 1–4), EPSILON YouTube packet (THE RULERS, THE OTHER SEVEN), Unseen Realm / Aliens & Angels ("The Rulers v3" render stalled). [Notion, claude-mem]
+- **Series ideas:** Internet Lore (Ep 1–4), EPSILON YouTube packet (THE RULERS, THE OTHER SEVEN), Unseen Realm / Aliens & Angels. The Rulers shipped 2026-11-02 (see Done). [Notion, claude-mem]
 
 ### Monetisation path: ads + sponsors
 1. **Publish consistently** (OMNI_VEO plan, 2026-10-20): YouTube first; 1 Short a day + 1 long episode a week; Sunday batch of scripts. TikTok from month 2, Instagram Reels from month 3. [1 src: Notion OMNI_VEO]

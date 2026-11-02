@@ -37,9 +37,18 @@ function chunkLooksKey(c: string, min: number): boolean {
   return digitAndLetter || innerUpper;
 }
 
-/** A 20+ char run (separators ignored) that reads as random: not hex (hashes, UUIDs), not a slug, not camelCase. */
+const CREDENTIAL_WORD_RE = /^(?:live|test|key|keys|apikey|api|secret|token|pat|sk|pk|rk)$/i;
+
+/**
+ * A 20+ char run that reads as random: not hex (hashes, UUIDs), not a slug, not camelCase. Pieces between separators
+ * that are words, numbers or hex are left out first, so ids and file names glued from readable parts
+ * ("openclaw-<uuid>", "Video-Production-<hex page id>", "HHRG-118-GO12-…-20241113") are not scored as one random blob.
+ */
 export function looksRandom(run: string, minBoundaries = 4, minEntropy = 3.9): boolean {
-  const s = run.replace(/[-_\s]/g, '');
+  const pieces = run.split(/[-_\s]+/);
+  // …except a long hex piece right after a credential word: that is a hex API key ("agnt_live_<hex>", "apikey_<hex>").
+  if (pieces.some((p, i) => i > 0 && p.length >= 16 && /^[0-9a-f]+$/i.test(p) && CREDENTIAL_WORD_RE.test(pieces[i - 1]))) return true;
+  const s = pieces.filter((piece) => !(piece.length >= 4 && /^[0-9a-f]+$/i.test(piece)) && chunkLooksKey(piece, 1)).join('');
   if (s.length < 16) return false;
   if (/^[0-9a-f]+$/i.test(s) || !/\d/.test(s) || !/\p{L}/u.test(s)) return false;
   return digitLetterBoundaries(s) >= minBoundaries && entropy(s) >= minEntropy;

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -H 127.0.0.1 -p 50000",
     "serve": "NEXT_DIST_DIR=.next-prod next build && NEXT_DIST_DIR=.next-prod next start -H 127.0.0.1 -p 50000",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --conditions=react-server --test scripts/*.test.mjs"
   },
   "dependencies": {
     "@react-three/fiber": "^9.8.2",

@@ -24,15 +24,19 @@ const SEARCH_ID: Partial<Record<MemorySource['id'], SearchSourceId>> = {
   notion: 'notion',
 };
 
+/** `color` at `pct`% opacity (works for CSS variables, unlike hex-alpha suffixes). */
+const alpha = (color: string, pct: number) => `color-mix(in srgb, ${color} ${pct}%, transparent)`;
+
+/** Theme tokens (globals.css), so the panels follow the rest of the OS. */
 const SOURCE_COLOR: Record<MemorySource['id'], string> = {
-  ltm: '#FF5500',
-  honcho: '#14B8A6',
-  'claude-mem': '#F5A623',
-  'pieces-vault': '#C084FC',
-  obsidian: '#A855F7',
-  notion: '#E8E4DA',
-  calendar: '#3B82F6',
-  youtube: '#EF4444',
+  ltm: 'var(--accent-orange)',
+  honcho: 'var(--accent-teal)',
+  'claude-mem': 'var(--accent-amber)',
+  'pieces-vault': 'var(--dept-apps)',
+  obsidian: 'var(--accent-purple)',
+  notion: 'var(--text-paper)',
+  calendar: 'var(--dept-product)',
+  youtube: 'var(--dept-content)',
 };
 
 const TOGGLES_KEY = 'volta.secondBrain.memoryToggles.v1';
@@ -153,12 +157,12 @@ export function MemorySourcesRail({
         {sources.map((s) => {
           const sid = SEARCH_ID[s.id];
           const on = !!sid && !toggles.off.has(s.id);
-          const color = SOURCE_COLOR[s.id] ?? '#8A877F';
+          const color = SOURCE_COLOR[s.id] ?? 'var(--text-muted)';
           return (
             <li key={s.id} className="group flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-panel-hover/60">
               <span
                 className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-subtle font-doto text-[13px] font-bold"
-                style={{ background: `${color}1f`, color }}
+                style={{ background: alpha(color, 12), color }}
                 aria-hidden
               >
                 {s.name.slice(0, 1).toUpperCase()}
@@ -232,7 +236,7 @@ export function MemorySourcesRail({
 
 // ───────── Bottom dock: agent memory ─────────
 
-const AGENT_TINT = ['#14B8A6', '#A855F7', '#F5A623', '#3B82F6', '#FF5500'];
+const AGENT_TINT = ['var(--accent-teal)', 'var(--accent-purple)', 'var(--accent-amber)', 'var(--dept-product)', 'var(--accent-orange)'];
 
 function useDockOpen(): [boolean, () => void] {
   const [open, setOpen] = useState(true);
@@ -345,16 +349,16 @@ export function AgentMemoryDock({ toggles, nowMs }: { toggles: MemoryToggles; no
                     key={a.id}
                     className="rounded-xl border border-subtle p-3"
                     style={{
-                      background: `linear-gradient(140deg, ${tint}14, transparent 65%), var(--bg-panel-elevated)`,
+                      background: `linear-gradient(140deg, ${alpha(tint, 8)}, transparent 65%), var(--bg-panel-elevated)`,
                     }}
                   >
                     <div className="flex items-center gap-2">
                       <span
                         className="flex h-8 w-8 items-center justify-center rounded-full border font-doto text-[13px] font-bold"
                         style={{
-                          borderColor: `${tint}80`,
+                          borderColor: alpha(tint, 50),
                           color: tint,
-                          background: `${tint}1a`,
+                          background: alpha(tint, 10),
                         }}
                       >
                         {a.id.slice(0, 1).toUpperCase()}
@@ -377,12 +381,12 @@ export function AgentMemoryDock({ toggles, nowMs }: { toggles: MemoryToggles; no
                             <button
                               type="button"
                               onClick={() =>
-                                router.push(`/apps/honcho?${new URLSearchParams({ w: a.id, session: l.session, message: l.id, at: l.at })}`)
+                                router.push(`/apps/honcho?${new URLSearchParams({ w: a.id, session: l.sessionId, message: l.id, at: l.at })}`)
                               }
                               className="flex w-full gap-2 rounded px-1 py-0.5 text-left hover:bg-panel-hover/60"
                               title={`${l.peer} · ${new Date(l.at).toLocaleString()}`}
                             >
-                              <span className="mt-px shrink-0 rounded px-1 font-mono text-[9.5px] text-paper" style={{ background: `${tint}33` }}>
+                              <span className="mt-px shrink-0 rounded px-1 font-mono text-[9.5px] text-paper" style={{ background: alpha(tint, 20) }}>
                                 {clock(l.at, nowMs)}
                               </span>
                               <span className="line-clamp-2 text-[11.5px] leading-snug text-secondary">

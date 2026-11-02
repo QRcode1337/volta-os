@@ -9,9 +9,12 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // "Everything your agents heard": per Honcho workspace (one per agent: Hermes, openclaw, pi…), the latest few
-// messages across its most recent sessions. Read-only, secret-masked, cached 30s.
+// messages across its most recently active sessions. Read-only, secret-masked, cached 30s.
+// Honcho lists sessions by creation time only, so the newest SESSIONS_SCANNED are read and ranked by their latest
+// message; a session created before those that is still chatting can be missed.
 
-const SESSIONS_PER_AGENT = 3;
+const SESSIONS_SCANNED = 12;
+const WORKSPACE_PAGE = 100;
 const MESSAGES_PER_AGENT = 3;
 const SNIPPET_CHARS = 180;
 
@@ -20,7 +23,7 @@ export interface AgentLine {
   at: string;
   peer: string;
   text: string;
-  session: string;
+  sessionId: string;
 }
 
 export interface AgentCard {
@@ -53,14 +56,14 @@ const errText = (err: unknown) => (err instanceof Error ? err.message : 'request
 
 async function loadAgent(id: string): Promise<AgentCard> {
   try {
-    const sessions = await listSessions(id, 1, SESSIONS_PER_AGENT);
-    const pages = await Promise.all(sessions.items.map((s) => sessionMessages(id, s.id, { order: 'desc', size: MESSAGES_PER_AGENT })));
+    const sessions = await listSessions(id, 1, SESSIONS_SCANNED);
+    const pages = await mapLimit(sessions.items, 6, (s) => sessionMessages(id, s.id, { order: 'desc', size: MESSAGES_PER_AGENT }));
     const msgs: HonchoMessage[] = pages.flatMap((p) => p.items);
     msgs.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
     const lines = msgs
       .filter((m) => m.content.trim())
       .slice(0, MESSAGES_PER_AGENT)
-      .map((m) => ({ id: m.id, at: m.created_at, peer: m.peer_id, text: snippet(m.content), session: m.session_id }));
+      .map((m) => ({ id: m.id, at: m.created_at, peer: m.peer_id, text: snippet(m.content), sessionId: m.session_id }));
     return { id, sessions: sessions.total, lastActive: lines[0]?.at ?? null, lines };
   } catch (err) {
     if (err instanceof HonchoOfflineError) throw err; // whole service down → reported as offline, not "no messages"
@@ -71,8 +74,13 @@ async function loadAgent(id: string): Promise<AgentCard> {
 async function loadAgents(): Promise<AgentsPayload> {
   const fetchedAt = new Date().toISOString();
   try {
-    const workspaces = await listWorkspaces();
-    const agents = await mapLimit(workspaces.items, 4, (w) => loadAgent(w.id));
+    const ids: string[] = [];
+    for (let page = 1; ; page++) {
+      const p = await listWorkspaces(page, WORKSPACE_PAGE);
+      ids.push(...p.items.map((w) => w.id));
+      if (page >= p.pages) break;
+    }
+    const agents = await mapLimit(ids, 4, loadAgent);
     agents.sort((a, b) => Date.parse(b.lastActive ?? '0') - Date.parse(a.lastActive ?? '0'));
     return redactDeep({ online: true, agents, fetchedAt });
   } catch (err) {
